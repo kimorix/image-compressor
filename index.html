@@ -6,7 +6,7 @@
 <title>图片压缩 - 100% 本地处理</title>
 <meta name="description" content="免费开源的图片压缩工具，所有处理均在浏览器本地完成，图片不会上传到任何服务器。">
 <style>
-  :root { --bg: #f4f5f7; --card: #fff; --text: #17181c; --muted: #6b7280; --border: #e5e7eb; --accent: #2563eb; --accent-hover: #1d4ed8; --green: #15803d; --radius: 14px; }
+  :root { --bg: #f4f5f7; --card: #fff; --text: #17181c; --muted: #6b7280; --border: #e5e7eb; --accent: #2563eb; --accent-hover: #1d4ed8; --green: #15803d; --radius: 14px; --radius-sm: 10px; --shadow: 0 1px 3px rgba(0,0,0,.05); --ease: cubic-bezier(.4,0,.2,1); --fade: .35s; }
   * { box-sizing: border-box; }
   body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
   header { max-width: 920px; margin: 0 auto; padding: 36px 16px 4px; display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
@@ -24,14 +24,11 @@
   #dropzone strong { font-size: 18px; }
   .settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
   .field label { display: block; font-size: 14px; margin-bottom: 6px; color: var(--muted); }
-  .field select, .field input[type="number"] { width: 100%; padding: 9px 10px; font-size: 15px; border: 1px solid var(--border); border-radius: 9px; background: #fff; }
+  .field select, .field input[type="number"] { width: 100%; padding: 10px 12px; font-size: 16px; border: 1px solid var(--border); border-radius: 9px; background: #fff; }
   .field input[type="range"] { width: 100%; accent-color: var(--accent); }
   .field .value { font-size: 14px; color: var(--text); font-weight: 600; }
-  .presets { display: flex; gap: 8px; margin-top: 8px; }
-  .presets button { padding: 5px 12px; font-size: 13px; border-radius: 999px; }
-  .presets button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
   .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
-  button { padding: 10px 18px; font-size: 15px; border-radius: 9px; border: 1px solid var(--border); background: #fff; cursor: pointer; }
+  button { padding: 10px 18px; font-size: 15px; min-height: 44px; border-radius: 9px; border: 1px solid var(--border); background: #fff; cursor: pointer; }
   button:hover:not(:disabled) { border-color: #9ca3af; }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
   button.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
@@ -40,10 +37,30 @@
   #summary b { color: var(--green); }
   .item { display: flex; gap: 16px; align-items: center; padding: 16px 0; border-top: 1px solid var(--border); }
   .item:first-child { border-top: none; }
-  .thumb { position: relative; flex-shrink: 0; cursor: default; }
+  .thumb { position: relative; width: 104px; height: 104px; flex-shrink: 0; cursor: default; overflow: hidden; border-radius: var(--radius-sm); background: #f1f5f9; }
   .thumb.clickable { cursor: pointer; }
-  .thumb img { width: 104px; height: 104px; object-fit: cover; border-radius: 10px; background: #f1f5f9; display: block; transition: opacity .25s ease; }
-  .thumb .tag { position: absolute; left: 6px; bottom: 6px; background: rgba(0,0,0,.65); color: #fff; font-size: 12px; padding: 1px 7px; border-radius: 999px; }
+  .thumb img.layer { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity var(--fade) var(--ease); will-change: opacity; -webkit-transform: translateZ(0); }
+  .thumb img.layer.top { opacity: 1; z-index: 1; }
+  .thumb .tag { position: absolute; left: 6px; bottom: 6px; z-index: 2; background: rgba(0,0,0,.65); color: #fff; font-size: 12px; padding: 1px 7px; border-radius: 999px; }
+  .item-actions { display: flex; gap: 10px; flex-shrink: 0; align-items: center; }
+  .nw { white-space: nowrap; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (max-width: 600px) {
+    header { padding: 24px 16px 0; }
+    header h1 { font-size: 26px; }
+    main { padding: 16px 12px 40px; }
+    .card { padding: 16px; }
+    #dropzone { padding: 28px 16px; }
+    .item { display: grid; grid-template-columns: 84px 1fr; grid-template-areas: "thumb meta" "thumb actions"; gap: 6px 12px; align-items: start; }
+    .thumb { grid-area: thumb; width: 84px; height: 84px; }
+    .item .meta { grid-area: meta; }
+    .item-actions { grid-area: actions; gap: 8px; }
+    .item-actions button { padding: 8px 14px; font-size: 14px; min-height: 40px; }
+    .item .sizes { font-size: 14px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .thumb img.layer { transition: none; }
+  }
   .item .meta { flex: 1; min-width: 0; }
   .item .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .item .sizes { color: var(--muted); font-size: 14px; margin-top: 4px; }
@@ -97,11 +114,6 @@
       <div class="field">
         <label for="quality">质量 <span class="value" id="qualityValue">80%</span></label>
         <input type="range" id="quality" min="10" max="100" value="80">
-        <div class="presets">
-          <button data-q="90" type="button">高清 90%</button>
-          <button data-q="80" type="button" class="active">均衡 80%</button>
-          <button data-q="60" type="button">极限 60%</button>
-        </div>
       </div>
       <div class="field">
         <label for="maxSize">最长边（像素，0 = 不缩放）</label>
@@ -161,10 +173,6 @@ function syncQualityState() {
   // PNG 为无损格式，质量滑杆不起作用；目标体积模式下质量由工具自动调节
   qualityInput.disabled = (f === 'image/png') || target;
   qualityValue.textContent = qualityInput.value + '%';
-  document.querySelectorAll('.presets button').forEach(b => {
-    b.classList.toggle('active', +b.dataset.q === +qualityInput.value);
-    b.disabled = target;
-  });
 }
 qualityInput.addEventListener('input', () => { syncQualityState(); recompressAll(); });
 formatSel.addEventListener('change', () => { syncQualityState(); recompressAll(); });
@@ -176,11 +184,6 @@ function recompressDebounced() { clearTimeout(recompressTimer); recompressTimer 
 maxSizeInput.addEventListener('input', recompressDebounced);
 maxSizeInput.addEventListener('change', () => { clearTimeout(recompressTimer); recompressAll(); });
 noUpscaleInput.addEventListener('change', recompressAll);
-document.querySelectorAll('.presets button').forEach(b => b.addEventListener('click', () => {
-  qualityInput.value = b.dataset.q;
-  syncQualityState();
-  recompressAll();
-}));
 syncQualityState();
 
 dropzone.addEventListener('click', () => fileInput.click());
@@ -345,7 +348,7 @@ function render() {
     const orig = items.reduce((s, i) => s + i.file.size, 0);
     const comp = done.reduce((s, i) => s + i.outSize, 0);
     const saved = orig > 0 ? Math.max(0, Math.round((1 - comp / orig) * 100)) : 0;
-    summaryEl.innerHTML = `共 ${items.length} 张，已完成 ${done.length} 张 · 原始 ${fmtSize(orig)} → 压缩后 ${fmtSize(comp)} · <b>节省 ${saved}%</b>`;
+    summaryEl.innerHTML = `共 ${items.length} 张，已完成 ${done.length} 张 · 原始 <span class="nw">${fmtSize(orig)}</span> → 压缩后 <span class="nw">${fmtSize(comp)}</span> · <b>节省 ${saved}%</b>`;
   }
   listEl.innerHTML = '';
   for (const item of items) {
@@ -354,29 +357,40 @@ function render() {
     const thumbWrap = document.createElement('div');
     thumbWrap.className = 'thumb' + (item.done ? ' clickable' : '');
     thumbWrap.title = item.done ? '点击切换原图 / 压缩后预览' : '';
-    const thumb = document.createElement('img');
-    thumb.src = (item.done && item.view === 'comp') ? item.outUrl : item.url;
-    thumb.alt = item.file.name;
+    // 双层交叉淡化：两张图都预加载好叠在一起，切换时只交叉淡入淡出，旧图一直垫底，
+    // 不会出现换图瞬间的空白帧，也不再重建整列表
+    const layerA = document.createElement('img');
+    layerA.className = 'layer top';
+    layerA.src = (item.done && item.view === 'comp') ? item.outUrl : item.url;
+    layerA.alt = item.file.name;
+    thumbWrap.appendChild(layerA);
+    if (item.done) {
+      const layerB = document.createElement('img');
+      layerB.className = 'layer';
+      layerB.src = item.view === 'comp' ? item.url : item.outUrl;
+      layerB.alt = '';
+      thumbWrap.appendChild(layerB);
+    }
     const tag = document.createElement('span');
     tag.className = 'tag';
     tag.textContent = item.done ? (item.view === 'comp' ? '压缩后' : '原图') : '原图';
-    thumbWrap.appendChild(thumb);
     thumbWrap.appendChild(tag);
     if (item.done) thumbWrap.addEventListener('click', () => {
-      // 淡出→换图→淡入，且只更新当前这一张，不整列表重建，避免切换时下面内容闪烁
       if (thumbWrap.dataset.switching) return;
       thumbWrap.dataset.switching = '1';
-      const imgEl = thumbWrap.querySelector('img');
+      const layers = thumbWrap.querySelectorAll('img.layer');
       const tagEl = thumbWrap.querySelector('.tag');
-      const finish = () => { imgEl.style.opacity = '1'; delete thumbWrap.dataset.switching; };
-      imgEl.style.opacity = '0';
+      item.view = item.view === 'comp' ? 'orig' : 'comp';
+      const top = thumbWrap.querySelector('img.layer.top');
+      const bottom = top === layers[0] ? layers[1] : layers[0];
+      bottom.style.opacity = '1';
+      top.style.opacity = '0';
+      tagEl.textContent = item.view === 'comp' ? '压缩后' : '原图';
       setTimeout(() => {
-        item.view = item.view === 'comp' ? 'orig' : 'comp';
-        imgEl.onload = finish;
-        imgEl.src = item.view === 'comp' ? item.outUrl : item.url;
-        tagEl.textContent = item.view === 'comp' ? '压缩后' : '原图';
-        setTimeout(finish, 500); // 兜底：onload 未触发时也能恢复显示
-      }, 220);
+        top.classList.remove('top');
+        bottom.classList.add('top');
+        delete thumbWrap.dataset.switching;
+      }, 380);
     });
     const meta = document.createElement('div');
     meta.className = 'meta';
@@ -390,7 +404,7 @@ function render() {
       sizes.innerHTML = `<span class="error">${item.error}</span>`;
     } else if (item.done) {
       const saved = item.file.size > 0 ? Math.max(0, Math.round((1 - item.outSize / item.file.size) * 100)) : 0;
-      sizes.innerHTML = `${fmtSize(item.file.size)} → ${fmtSize(item.outSize)} · <b>节省 ${saved}%</b>`;
+      sizes.innerHTML = `<span class="nw">${fmtSize(item.file.size)}</span> → <span class="nw">${fmtSize(item.outSize)}</span> · <b>节省 ${saved}%</b>`;
     } else {
       sizes.textContent = fmtSize(item.file.size) + ' · 处理中…';
     }
@@ -421,6 +435,8 @@ function render() {
     }
     row.appendChild(thumbWrap);
     row.appendChild(meta);
+    const actions = document.createElement('div');
+    actions.className = 'item-actions';
     if (item.done) {
       const a = document.createElement('a');
       a.href = item.outUrl;
@@ -428,7 +444,7 @@ function render() {
       const btn = document.createElement('button');
       btn.textContent = '下载';
       a.appendChild(btn);
-      row.appendChild(a);
+      actions.appendChild(a);
     }
     const rm = document.createElement('button');
     rm.textContent = '移除';
@@ -438,7 +454,8 @@ function render() {
       if (item.outUrl) URL.revokeObjectURL(item.outUrl);
       render();
     });
-    row.appendChild(rm);
+    actions.appendChild(rm);
+    row.appendChild(actions);
     listEl.appendChild(row);
   }
 }
