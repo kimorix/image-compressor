@@ -1,5 +1,17 @@
 <template>
   <div class="settings">
+    <div class="presets">
+      <span class="presets-label">{{ t('presetLabel') }}</span>
+      <button
+        v-for="p in PRESETS"
+        :key="p.id"
+        type="button"
+        class="preset-btn"
+        :data-preset="p.id"
+        :class="{ active: activePreset === p.id }"
+        @click="emit('update', p.patch, true)"
+      >{{ t('preset_' + p.id) }}</button>
+    </div>
     <div class="field">
       <label for="format">{{ t('fmtLabel') }}</label>
       <select id="format" :value="settings.format" @change="onFormat(($event.target as HTMLSelectElement).value)">
@@ -9,6 +21,8 @@
         <option value="image/webp">{{ t('fmtWebp') }}</option>
         <option value="image/avif">{{ t('fmtAvif') }}</option>
       </select>
+      <label class="check" v-show="settings.format === 'image/png'"><input type="checkbox" id="quantize" :checked="settings.quantize" @change="onQuantize(($event.target as HTMLInputElement).checked)" /> <span>{{ t('quantizeLabel') }}</span></label>
+      <label class="check" v-show="settings.format === 'image/jpeg'"><input type="checkbox" id="keepExif" :checked="settings.keepExif" @change="onKeepExif(($event.target as HTMLInputElement).checked)" /> <span>{{ t('keepExifLabel') }}</span></label>
     </div>
     <div class="field">
       <label for="mode">{{ t('modeLabel') }}</label>
@@ -22,21 +36,19 @@
       <input type="number" id="targetSize" min="10" max="51200" :value="settings.targetSize" @input="onTargetDebounced(($event.target as HTMLInputElement).value)" />
     </div>
     <div class="field" id="qualityField" v-show="settings.mode !== 'target'">
-      <label for="quality"><span>{{ t('qualityLabel') }}</span> <span class="value" id="qualityValue">{{ qualityShown }}%</span></label>
+      <label for="quality" class="qlabel"><span>{{ t('qualityLabel') }}</span> <span class="value" id="qualityValue">{{ qualityShown }}%</span></label>
       <input type="range" id="quality" min="10" max="100" :value="qualityShown" :disabled="qualityLocked" @input="onQuality(($event.target as HTMLInputElement).value)" />
-      <div class="field-hint" id="qualityHint" v-show="showPngHint">{{ t('pngHint') }}</div>
-      <div class="field-hint" id="quantHint" v-show="showQuantHint">{{ t('pngQuantHint') }}</div>
-    </div>
-    <div class="field" v-show="settings.format === 'image/png'">
-      <label><input type="checkbox" id="quantize" :checked="settings.quantize" @change="onQuantize(($event.target as HTMLInputElement).checked)" /> <span>{{ t('quantizeLabel') }}</span></label>
     </div>
     <div class="field">
       <label for="maxSize">{{ t('maxLabel') }}</label>
       <input type="number" id="maxSize" min="0" max="20000" :value="settings.maxSize" @input="onMaxDebounced(($event.target as HTMLInputElement).value)" />
+      <label class="check"><input type="checkbox" id="noUpscale" :checked="settings.noUpscale" @change="onNoUpscale(($event.target as HTMLInputElement).checked)" /> <span>{{ t('noUpscale') }}</span></label>
     </div>
-    <div class="field">
-      <label><input type="checkbox" id="noUpscale" :checked="settings.noUpscale" @change="onNoUpscale(($event.target as HTMLInputElement).checked)" /> <span>{{ t('noUpscale') }}</span></label>
-    </div>
+    <!-- PNG notes live in their own full-width row below the grid, not
+    inside a field cell: toggling quantization used to change the quality
+    cell's height and push every field below it down mid-interaction. -->
+    <div class="settings-note" id="qualityHint" v-show="showPngHint">{{ t('pngHint') }}</div>
+    <div class="settings-note" id="quantHint" v-show="showQuantHint">{{ t('pngQuantHint') }}</div>
   </div>
 </template>
 
@@ -51,6 +63,24 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update', patch: Partial<Settings>, immediate: boolean): void
 }>()
+
+// One-tap scenes: WeChat chat images (JPEG, 1920), WeChat article images
+// (JPEG, 900px body width), ID photos (target mode, 200KB cap).
+const PRESETS: { id: string; patch: Partial<Settings> }[] = [
+  { id: 'wechat', patch: { format: 'image/jpeg', mode: 'quality', quality: 85, maxSize: 1920 } },
+  { id: 'article', patch: { format: 'image/jpeg', mode: 'quality', quality: 85, maxSize: 900 } },
+  { id: 'idphoto', patch: { format: 'image/jpeg', mode: 'target', targetSize: 200 } },
+]
+const activePreset = computed(() => {
+  const s = props.settings
+  for (const p of PRESETS) {
+    if (p.id === 'idphoto') {
+      if (s.mode === 'target' && s.targetSize === 200 && s.format === 'image/jpeg') return p.id
+    } else if (s.mode === 'quality' && s.format === p.patch.format
+      && s.quality === p.patch.quality && s.maxSize === p.patch.maxSize) return p.id
+  }
+  return null
+})
 
 // Quality slider: the % label follows the drag immediately, but the actual
 // recompress is debounced 300ms so dragging doesn't recompress every frame.
@@ -86,4 +116,5 @@ function onTargetDebounced(v: string) { debounce({ targetSize: parseInt(v, 10) |
 function onMaxDebounced(v: string) { debounce({ maxSize: parseInt(v, 10) || 0 }) }
 function onNoUpscale(v: boolean) { emit('update', { noUpscale: v }, true) }
 function onQuantize(v: boolean) { emit('update', { quantize: v }, true) }
+function onKeepExif(v: boolean) { emit('update', { keepExif: v }, true) }
 </script>

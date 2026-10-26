@@ -16,6 +16,9 @@ export interface CompressItem {
   done: boolean
   targetNote: string | null
   typeNote: string | null
+  // Per-image overrides of the global settings (quality / format only).
+  // Survives recompress because replaceItem spreads the old item first.
+  override?: { format?: string; quality?: number }
 }
 
 export interface Settings {
@@ -26,6 +29,7 @@ export interface Settings {
   maxSize: number
   noUpscale: boolean
   quantize: boolean
+  keepExif: boolean
 }
 
 export function newItem(file: File): CompressItem {

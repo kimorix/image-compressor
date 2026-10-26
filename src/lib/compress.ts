@@ -1,4 +1,5 @@
 import { baseName, extOf } from './format'
+import { restoreExif } from './exif'
 import type { CompressItem, Settings } from '../types'
 import {
   decodeHeicToPngBlob,
@@ -181,6 +182,14 @@ export async function compressItem(item: CompressItem, s: Settings, t: T): Promi
     } else {
       const quality = s.quality / 100
       blob = await encodeAt(width, height, outType === 'image/png' && !s.quantize ? undefined : quality)
+    }
+    // Optional EXIF preservation (JPEG only): re-encoding strips metadata,
+    // so copy the original EXIF block back into the compressed JPEG.
+    // Runs before the never-bigger check, so injected bytes count: if the
+    // EXIF block pushes it over the original, already-best still wins
+    // (and the original keeps its EXIF anyway).
+    if (s.keepExif && outType === 'image/jpeg' && item.file.type === 'image/jpeg') {
+      blob = await restoreExif(item.file, blob!)
     }
     // Never output something bigger than the input: re-encoding an already
     // compressed JPG (or PNG -> PNG) often grows the file.

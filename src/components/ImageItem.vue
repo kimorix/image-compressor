@@ -8,103 +8,164 @@
     >
       <img ref="layerA" class="layer top" :alt="item.file.name" />
       <img v-if="item.done" ref="layerB" class="layer" alt="" />
-      <span class="tag">{{ item.done ? (item.view === 'comp' ? t('tagComp') : t('tagOrig')) : t('tagOrig') }}</span>
+      <!-- No badge in the default (compressed) state: it only marks the
+      original view, which is now switched from the preview overlay. -->
+      <span v-if="item.done && item.view === 'orig'" class="tag">{{ t('tagOrig') }}</span>
     </div>
     <div class="meta">
       <div class="name" :title="item.file.name">{{ shortName(item.file.name) }}</div>
       <div class="sizes">
         <span v-if="item.error" class="error">{{ item.error }}</span>
-        <span v-else-if="item.done" v-html="t('sizes', fmtSize(item.file.size), fmtSize(item.outSize), savedPct)"></span>
+        <span v-else-if="item.done" v-html="t('sizes', fmtSize(item.file.size), fmtSize(item.outSize))"></span>
         <span v-else>{{ fmtSize(item.file.size) }} · {{ t('processing') }}</span>
       </div>
+      <span v-if="item.done && !item.error && savedPct > 0" class="save-tag">−{{ savedPct }}%</span>
+      <span v-if="isAlreadyBest" class="best-tag">{{ t('alreadyBest') }}</span>
       <template v-if="item.done && item.origW">
-        <div class="dims">{{ dimsText }}</div>
-        <div class="hint">{{ t('thumbHint') }}</div>
-        <div v-if="item.targetNote" class="dims">{{ item.targetNote }}</div>
+        <div class="dims" :class="{ warn: upscaled }">{{ dimsText }}</div>
+        <div v-if="item.targetNote && !isAlreadyBest" class="dims">{{ item.targetNote }}</div>
         <div v-if="item.typeNote" class="dims">{{ item.typeNote }}</div>
       </template>
     </div>
     <div class="item-actions">
-      <button v-if="item.done" @click="$emit('preview', item)">{{ t('btnPreview') }}</button>
-      <a v-if="item.done && item.outUrl" :href="item.outUrl" :download="item.outName ?? undefined"><button>{{ t('btnDownload') }}</button></a>
-      <button @click="$emit('remove', item)">{{ t('btnRemove') }}</button>
+      <button class="gear-btn" :class="{ active: !!item.override }" :title="t('overrideAria')" :aria-label="t('overrideAria')" @click="showPanel = !showPanel">⚙</button>
+      <a v-if="item.done && item.outUrl" class="dl-icon" :href="item.outUrl" :download="item.outName ?? undefined" :title="t('btnDownload')" :aria-label="t('btnDownload')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></a>
+      <button class="remove-btn" :title="t('btnRemove')" :aria-label="t('btnRemove')" @click="$emit('remove', item)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 7V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2m-8 0l1 13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-13"/></svg></button>
+    </div>
+    <div v-if="showPanel" class="override-panel">
+      <div class="field">
+        <label>{{ t('fmtLabel') }}</label>
+        <select class="ov-format" :value="item.override?.format ?? settings.format" @change="onOvFormat(($event.target as HTMLSelectElement).value)">
+          <option value="original">{{ t('fmtOriginal') }}</option>
+          <option value="image/jpeg">{{ t('fmtJpeg') }}</option>
+          <option value="image/png">{{ t('fmtPng') }}</option>
+          <option value="image/webp">{{ t('fmtWebp') }}</option>
+          <option value="image/avif">{{ t('fmtAvif') }}</option>
+        </select>
+      </div>
+      <div class="field" v-if="settings.mode !== 'target'">
+        <label class="qlabel"><span>{{ t('qualityLabel') }}</span> <span class="value">{{ ovQualityShown }}%</span></label>
+        <input type="range" class="ov-quality" min="10" max="100" :value="ovQualityShown" @input="onOvQuality(($event.target as HTMLInputElement).value)" />
+      </div>
+      <button v-if="item.override" class="ov-reset" @click="$emit('override', item, null)">{{ t('overrideReset') }}</button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import type { CompressItem } from '../types'
+import type { CompressItem, Settings } from '../types'
 import { fmtSize, shortName } from '../lib/format'
 
 const props = defineProps<{
   item: CompressItem
+  settings: Settings
   t: (key: string, ...args: (string | number)[]) => string
 }>()
 const emit = defineEmits<{
-  (e: 'preview', item: CompressItem): void
   (e: 'remove', item: CompressItem): void
+  (e: 'preview', item: CompressItem): void
   (e: 'view-change', item: CompressItem, view: 'orig' | 'comp'): void
+  (e: 'override', item: CompressItem, patch: { format?: string; quality?: number } | null): void
 }>()
 
 const layerA = ref<HTMLImageElement | null>(null)
 const layerB = ref<HTMLImageElement | null>(null)
-const switching = ref(false)
 
-// Dual-layer crossfade, same as the original: both images are preloaded and stacked,
-// switching only cross-fades them, so there is never a blank frame and no list rebuild.
-// Layer srcs are set imperatively (never bound) so Vue re-renders can't interrupt a fade.
+// Fixed layer mapping: A always holds the compressed image, B the original.
+// initLayers puts the current view's layer on top; view changes crossfade
+// via the watcher below, so the thumbnail always shows the live view.
 function srcFor(view: 'orig' | 'comp'): string {
   return view === 'comp' ? (props.item.outUrl ?? props.item.url) : props.item.url
 }
 
 function initLayers() {
   if (!layerA.value) return
-  layerA.value.src = srcFor(props.item.view)
-  layerA.value.classList.add('top')
-  layerA.value.style.opacity = ''
-  if (layerB.value) {
-    layerB.value.src = srcFor(props.item.view === 'comp' ? 'orig' : 'comp')
-    layerB.value.classList.remove('top')
-    layerB.value.style.opacity = ''
-  }
+  layerA.value.src = srcFor('comp')
+  const top = props.item.view === 'comp' ? layerA.value : layerB.value
+  const bottom = top === layerA.value ? layerB.value : layerA.value
+  if (top) top.classList.add('top')
+  if (bottom) bottom.classList.remove('top')
+  if (top) top.style.opacity = ''
+  if (bottom) bottom.style.opacity = ''
+  if (layerB.value) layerB.value.src = srcFor('orig')
 }
 
 onMounted(initLayers)
-watch(() => props.item.done, async (done) => {
-  if (!done) {
-    // Recompressing: back to a single original layer.
-    await nextTick()
-    initLayers()
-  } else {
-    await nextTick()
-    initLayers()
+watch(() => props.item.done, async () => {
+  // Recompressing or freshly done: rebuild layers from the current view.
+  await nextTick()
+  initLayers()
+})
+
+// The thumbnail no longer toggles on click (it opens the preview overlay);
+// the crossfade now follows view changes, which come from the preview's
+// original/compressed switch. Deriving the target layer from the fixed
+// mapping keeps rapid toggles correct: a toggle arriving mid-fade bumps the
+// generation (cancelling the in-flight fade) and re-animates from the live
+// DOM state instead of corrupting the top layer.
+let swapGen = 0
+watch(() => props.item.view, () => {
+  if (!props.item.done) return
+  const a = layerA.value, b = layerB.value
+  if (!a || !b) return
+  const target = props.item.view === 'comp' ? a : b
+  const other = target === a ? b : a
+  const gen = ++swapGen
+  if (target.classList.contains('top')) {
+    // Already showing the target (toggle arrived mid-fade): snap to it.
+    target.style.opacity = ''
+    other.style.opacity = ''
+    return
   }
+  target.style.opacity = '1'
+  other.style.opacity = '0'
+  setTimeout(() => {
+    if (gen !== swapGen) return
+    other.classList.remove('top')
+    target.classList.add('top')
+    target.style.opacity = ''
+    other.style.opacity = ''
+  }, 380)
 })
 
 function onThumbClick() {
-  if (!props.item.done || switching.value) return
-  const top = layerA.value?.classList.contains('top') ? layerA.value : layerB.value
-  const bottom = top === layerA.value ? layerB.value : layerA.value
-  if (!top || !bottom) return
-  switching.value = true
-  const newView = props.item.view === 'comp' ? 'orig' : 'comp'
-  emit('view-change', props.item, newView)
-  bottom.style.opacity = '1'
-  top.style.opacity = '0'
-  setTimeout(() => {
-    top.classList.remove('top')
-    bottom.classList.add('top')
-    top.style.opacity = ''
-    bottom.style.opacity = ''
-    switching.value = false
-  }, 380)
+  if (!props.item.done) return
+  emit('preview', props.item)
+}
+
+// Per-image override panel: format applies immediately, quality is debounced
+// like the global slider. The slider follows the override when one exists,
+// otherwise the global quality.
+const showPanel = ref(false)
+const ovQualityShown = ref(props.item.override?.quality ?? props.settings.quality)
+watch(() => props.item.override?.quality ?? props.settings.quality, (q) => { ovQualityShown.value = q })
+let ovTimer: ReturnType<typeof setTimeout> | null = null
+function onOvFormat(v: string) {
+  emit('override', props.item, { format: v })
+}
+function onOvQuality(v: string) {
+  const q = parseInt(v, 10) || 80
+  ovQualityShown.value = q
+  if (ovTimer) clearTimeout(ovTimer)
+  ovTimer = setTimeout(() => emit('override', props.item, { quality: q }), 300)
 }
 
 const savedPct = computed(() => {
   if (props.item.file.size <= 0) return 0
   return Math.max(0, Math.round((1 - props.item.outSize / props.item.file.size) * 100))
 })
+
+// Already-best needs no extra state: a normal success always outputs
+// strictly smaller than the input (the never-bigger check guarantees it),
+// so done + outSize >= file.size is exactly the already-best case, and it
+// can never go stale across recompresses.
+const isAlreadyBest = computed(() => props.item.done && props.item.outSize >= props.item.file.size)
+
+// Upscaling only happens with "don't upscale" off: flag it in a warning
+// colour on the dimensions line so a silently enlarged image is visible.
+const upscaled = computed(() => props.item.done
+  && (props.item.outW > props.item.origW || props.item.outH > props.item.origH))
 
 const dimsText = computed(() => {
   const it = props.item

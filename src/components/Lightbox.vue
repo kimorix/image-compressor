@@ -1,67 +1,46 @@
 <template>
-  <div id="lightbox" role="dialog" aria-modal="true" @click.self="close" >
-    <div class="lb-head">
-      <div class="lb-name" id="lbName">{{ item.file.name }}</div>
-      <div class="lb-switch">
-        <button type="button" id="lbOrig" :class="{ active: view === 'orig' }" @click="setView('orig')">{{ t('lbOrig') }}</button>
-        <button type="button" id="lbComp" :class="{ active: view === 'comp' }" @click="setView('comp')">{{ t('lbComp') }}</button>
+  <div class="lb-overlay" @click.self="$emit('close')">
+    <div class="lb-box">
+      <div class="lb-bar">
+        <div class="lb-views">
+          <button class="lb-orig" :class="{ active: item.view === 'orig' }" @click="$emit('view-change', item, 'orig')">{{ t('tagOrig') }}</button>
+          <button class="lb-comp" :class="{ active: item.view === 'comp' }" @click="$emit('view-change', item, 'comp')">{{ t('tagComp') }}</button>
+        </div>
+        <button class="lb-close" :title="t('lbClose')" :aria-label="t('lbClose')" @click="$emit('close')">×</button>
       </div>
-      <button type="button" class="lb-close" id="lbClose" :aria-label="t('lbCloseAria')" @click="close">×</button>
+      <div class="lb-stage" :class="{ zoomed }">
+        <img :src="src" :alt="item.file.name" @click="zoomed = !zoomed" />
+      </div>
+      <div class="lb-hint">{{ t('lbZoomHint') }}</div>
     </div>
-    <div class="lb-body" id="lbBody" @click.self="close">
-      <img
-        id="lbImg"
-        :src="view === 'comp' ? (item.outUrl ?? item.url) : item.url"
-        :alt="item.file.name"
-        :class="{ zoomed }"
-        @click.stop="zoomed = !zoomed"
-      />
-    </div>
-    <div class="lb-foot" id="lbFoot">{{ info }}</div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import type { CompressItem } from '../types'
-import { fmtSize } from '../lib/format'
 
 const props = defineProps<{
   item: CompressItem
-  initialView: 'orig' | 'comp'
   t: (key: string, ...args: (string | number)[]) => string
 }>()
-const emit = defineEmits<{ (e: 'close'): void }>()
+const emit = defineEmits<{
+  (e: 'close'): void
+  (e: 'view-change', item: CompressItem, view: 'orig' | 'comp'): void
+}>()
 
-const view = ref<'orig' | 'comp'>(props.initialView)
+// Same source rule as the row thumbnail: compressed when done, else the
+// original (covers the recompress window, when outUrl is stale).
+const src = computed(() =>
+  props.item.view === 'comp' && props.item.done && props.item.outUrl
+    ? props.item.outUrl
+    : props.item.url,
+)
+
 const zoomed = ref(false)
-
-const info = computed(() => {
-  const it = props.item
-  return view.value === 'comp'
-    ? props.t('lbInfoComp', it.outW, it.outH, fmtSize(it.outSize))
-    : props.t('lbInfoOrig', it.origW, it.origH, fmtSize(it.file.size))
-})
-
-function setView(v: 'orig' | 'comp') {
-  view.value = v
-  zoomed.value = false
-}
-
-function close() {
-  emit('close')
-}
-
 function onKey(e: KeyboardEvent) {
-  if (e.key === 'Escape') close()
+  if (e.key === 'Escape') emit('close')
 }
-
-onMounted(() => {
-  document.body.style.overflow = 'hidden'
-  document.addEventListener('keydown', onKey)
-})
-onUnmounted(() => {
-  document.body.style.overflow = ''
-  document.removeEventListener('keydown', onKey)
-})
+onMounted(() => window.addEventListener('keydown', onKey))
+onUnmounted(() => window.removeEventListener('keydown', onKey))
 </script>

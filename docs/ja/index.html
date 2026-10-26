@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>画像圧縮 - 100% ローカル処理</title>
+<meta name="description" content="無料オープンソースの画像圧縮ツール。すべての処理はブラウザ内で行われ、画像がサーバーに送信されることはありません。">
+<meta name="theme-color" content="#010102">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22512%22%20height%3D%22512%22%20viewBox%3D%220%200%20512%20512%22%3E%0A%20%20%3Crect%20width%3D%22512%22%20height%3D%22512%22%20rx%3D%22112%22%20fill%3D%22%235e6ad2%22%2F%3E%0A%20%20%3Cg%20fill%3D%22none%22%20stroke%3D%22%23ffffff%22%20stroke-width%3D%2228%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%0A%20%20%20%20%3Crect%20x%3D%2296%22%20y%3D%22110%22%20width%3D%22320%22%20height%3D%22220%22%20rx%3D%2224%22%2F%3E%0A%20%20%20%20%3Ccircle%20cx%3D%22172%22%20cy%3D%22186%22%20r%3D%2222%22%20fill%3D%22%23ffffff%22%20stroke%3D%22none%22%2F%3E%0A%20%20%20%20%3Cpath%20d%3D%22M120%20300%20L210%20210%20L282%20282%20L330%20234%20L392%20296%22%2F%3E%0A%20%20%3C%2Fg%3E%0A%20%20%3Cg%20fill%3D%22none%22%20stroke%3D%22%23ffffff%22%20stroke-width%3D%2230%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%0A%20%20%20%20%3Cpath%20d%3D%22M256%20342%20V452%22%2F%3E%0A%20%20%20%20%3Cpath%20d%3D%22M196%20392%20L256%20452%20L316%20392%22%2F%3E%0A%20%20%3C%2Fg%3E%0A%3C%2Fsvg%3E%0A">
+<meta property="og:type" content="website">
+<meta property="og:title" content="画像圧縮 - 100% ローカル処理">
+<meta property="og:description" content="無料オープンソースの画像圧縮ツール。すべての処理はブラウザ内で行われ、画像がサーバーに送信されることはありません。">
+<meta property="og:url" content="https://kimorix.github.io/image-compressor/ja/">
+<meta property="og:image" content="https://kimorix.github.io/image-compressor/icons/icon-512.png">
+<link rel="canonical" href="https://kimorix.github.io/image-compressor/ja/">
+<link rel="alternate" hreflang="zh" href="https://kimorix.github.io/image-compressor/">
+<link rel="alternate" hreflang="en" href="https://kimorix.github.io/image-compressor/en/">
+<link rel="alternate" hreflang="ja" href="https://kimorix.github.io/image-compressor/ja/">
+<link rel="alternate" hreflang="ko" href="https://kimorix.github.io/image-compressor/ko/">
+<link rel="alternate" hreflang="fr" href="https://kimorix.github.io/image-compressor/fr/">
+<link rel="alternate" hreflang="de" href="https://kimorix.github.io/image-compressor/de/">
+<script>try{localStorage.setItem('ic-lang','ja')}catch(e){}</script>
+<script>
+(function () {
+  var LANGS = ['zh', 'en', 'ja', 'ko', 'fr', 'de'];
+  function detectLang() {
+    var l = (navigator.language || '').toLowerCase();
+    for (var i = 0; i < LANGS.length; i++) {
+      if (l.indexOf(LANGS[i]) === 0) return LANGS[i];
+    }
+    return 'en';
+  }
+  try {
+    var t = localStorage.getItem('ic-theme');
+    if (!t) t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    document.documentElement.dataset.theme = t;
+    var lang0 = localStorage.getItem('ic-lang');
+    if (!lang0 || LANGS.indexOf(lang0) < 0) lang0 = detectLang();
+    document.documentElement.dataset.lang = lang0;
+  } catch (e) { document.documentElement.dataset.theme = 'dark'; }
+})();
+</script>
+  <script type="module" crossorigin src="../assets/index-DIOHXFCa.js"></script>
+  <link rel="stylesheet" crossorigin href="../assets/index-Bmz8fM9_.css">
+<link rel="manifest" href="../manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="./registerSW.js"></script></head>
+<body>
+<div id="app"></div>
+</body>
+</html>
