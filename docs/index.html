@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>图片压缩 - 100% 本地处理</title>
+<meta name="description" content="免费开源的图片压缩工具，所有处理均在浏览器本地完成，图片不会上传到任何服务器。">
+<meta name="theme-color" content="#010102">
+<script>
+(function () {
+  var LANGS = ['zh', 'en', 'ja', 'ko', 'fr', 'de'];
+  function detectLang() {
+    var l = (navigator.language || '').toLowerCase();
+    for (var i = 0; i < LANGS.length; i++) {
+      if (l.indexOf(LANGS[i]) === 0) return LANGS[i];
+    }
+    return 'en';
+  }
+  try {
+    var t = localStorage.getItem('ic-theme');
+    if (!t) t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    document.documentElement.dataset.theme = t;
+    var lang0 = localStorage.getItem('ic-lang');
+    if (!lang0 || LANGS.indexOf(lang0) < 0) lang0 = detectLang();
+    document.documentElement.dataset.lang = lang0;
+  } catch (e) { document.documentElement.dataset.theme = 'dark'; }
+})();
+</script>
+  <script type="module" crossorigin src="./assets/index-BooeWs63.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-Csf8sagh.css">
+</head>
+<body>
+<div id="app"></div>
+</body>
+</html>
