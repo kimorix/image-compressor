@@ -67,6 +67,17 @@ main { max-width: 920px; margin: 0 auto; padding: 20px 16px 48px; }
   strong { font-size: 18px; font-weight: 600; letter-spacing: -.2px; }
 }
 .drop-icon { width: 32px; height: 32px; color: var(--subtle); display: block; margin: 0 auto 10px; }
+#dropzone.compact { padding: 14px 16px; }
+#dropzone.compact .add-more { font-size: 14px; }
+// Full-page drop hint: fixed overlay while files are dragged over the page.
+// pointer-events none, so the drop itself still lands on the dropzone or
+// the document handler beneath it.
+.page-drop-hint {
+  position: fixed; inset: 0; z-index: 60; margin: 12px; border: 3px dashed var(--accent);
+  border-radius: 12px; background: var(--accent-soft);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 600; color: var(--text); pointer-events: none;
+}
 .settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
 .field {
   label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--subtle); }
@@ -91,6 +102,7 @@ main { max-width: 920px; margin: 0 auto; padding: 20px 16px 48px; }
   }
 }
 .settings-note { grid-column: 1 / -1; font-size: 13px; color: var(--subtle); }
+.file-hint { margin: 8px 0 0; font-size: 13px; color: var(--subtle); }
 .presets {
   grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
   .presets-label { font-size: 13px; color: var(--subtle); }
@@ -122,12 +134,29 @@ button {
   // idle — toggling it must never reflow the line (the old "updating…" text
   // did exactly that on narrow screens).
   .sum-spin {
-    display: inline-block; width: 12px; height: 12px; margin-left: 6px; vertical-align: -1px;
+    display: inline-block; width: 16px; height: 16px; margin-left: 8px; vertical-align: -2px;
     border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; opacity: 0;
   }
   &.updating .sum-spin { opacity: 1; animation: spin .8s linear infinite; }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+// Floating recompress pill: fixed, fade-only, never intercepts taps.
+.global-loading {
+  position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 40;
+  display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px;
+  background: rgba(20, 20, 20, .85); color: #fff; font-size: 14px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .25); pointer-events: none;
+  opacity: 0; visibility: hidden; transition: opacity .25s var(--ease), visibility .25s;
+  &.show { opacity: 1; visibility: visible; }
+  .gl-spin {
+    width: 18px; height: 18px; border: 2px solid rgba(255, 255, 255, .35); border-top-color: #fff;
+    border-radius: 50%; animation: spin .8s linear infinite;
+  }
+}
+// No double-tap zoom on mobile: manipulation keeps pan and pinch-zoom but
+// drops the double-tap zoom that kept magnifying the page on accidental
+// double taps. Deliberately not user-scalable=no: pinch zoom stays.
+html { touch-action: manipulation; }
 // Desktop: settings are a sticky right sidebar next to upload + results,
 // so tuning never means scrolling past the list to find the controls.
 @media (min-width: 720px) {
@@ -162,17 +191,13 @@ button {
   .sizes {
     color: var(--subtle); font-size: 14px; margin-top: 4px;
   }
-  .save-tag {
-    display: inline-block; margin-top: 5px; padding: 1px 9px; border-radius: 999px;
-    background: var(--green-soft); color: var(--green); font-size: 12px; font-weight: 700;
-  }
+  // Row main line is one line only: sizes + inline saving percent.
+  .save-pct { color: var(--green); font-weight: 700; }
   // 0% is not a success: the already-best badge is grey, not green.
   .best-tag {
-    display: inline-block; margin-top: 6px; padding: 3px 12px; border-radius: 999px;
-    background: var(--surface-2); border: 1px solid var(--border); color: var(--subtle); font-size: 13px; font-weight: 700;
+    display: inline-block; margin-left: 8px; padding: 1px 9px; border-radius: 999px;
+    background: var(--surface-2); border: 1px solid var(--border); color: var(--subtle); font-size: 12px; font-weight: 700;
   }
-  .dims.warn { color: var(--warn); }
-  .dims { color: var(--subtle); font-size: 13px; margin-top: 2px; }
   .error { color: var(--red); font-size: 14px; margin-top: 4px; }
 }
 .thumb {
@@ -183,12 +208,7 @@ button {
     position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0;
     transition: opacity var(--fade) var(--ease); will-change: opacity; -webkit-transform: translateZ(0);
     &.top { opacity: 1; z-index: 1; }
-  }
-  .tag {
-    position: absolute; left: 6px; bottom: 6px; z-index: 2; background: rgba(0,0,0,.65);
-    color: #fff; font-size: 12px; padding: 1px 7px; border-radius: 999px;
-  }
-}
+  }}
 .item-actions { display: flex; gap: 10px; flex-shrink: 0; align-items: center; }
 // Both row icons are flex-centered the same way: the old <button> relied on
 // baseline alignment, which sat the trash icon a pixel or two off the
@@ -210,19 +230,40 @@ button {
   background: rgba(0,0,0,.82); padding: 16px;
 }
 .lb-box { max-width: 94vw; max-height: 94vh; display: flex; flex-direction: column; gap: 10px; }
-.lb-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.lb-views { display: flex; gap: 8px; }
-.lb-views button {
-  min-height: 40px; padding: 8px 16px;
-  &.active { color: var(--accent); border-color: var(--accent); }
-}
+.lb-bar { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
 .lb-close { min-width: 44px; min-height: 44px; padding: 0; font-size: 22px; line-height: 1; }
 .lb-stage {
   overflow: auto; display: flex; align-items: center; justify-content: center;
-  img { max-width: 92vw; max-height: 76vh; object-fit: contain; cursor: zoom-in; }
-  &.zoomed img { max-width: none; max-height: none; cursor: zoom-out; }
+}
+// Compare slider: the wrapper shrink-wraps the base (compressed) image,
+// so the original layer (absolute, inset 0) shares its exact box at any
+// zoom, and scrolling the stage pans both layers together.
+// line-height 0: template whitespace between the layers must not add a
+// line box to the wrapper's height.
+.lb-compare { position: relative; display: inline-block; line-height: 0; }
+.lb-img { display: block; max-width: 92vw; max-height: 76vh; object-fit: contain; cursor: zoom-in; }
+.lb-stage.zoomed .lb-img { max-width: none; max-height: none; cursor: zoom-out; }
+.lb-orig-clip { position: absolute; inset: 0; }
+.lb-orig-clip .lb-img { width: 100%; height: 100%; }
+.lb-divider {
+  position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; z-index: 4;
+  background: #fff; box-shadow: 0 0 6px rgba(0,0,0,.6); cursor: ew-resize;
+}
+.lb-handle {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 40px; height: 40px; border-radius: 50%; background: #fff; color: #111;
+  display: flex; align-items: center; justify-content: center; font-size: 18px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.5); pointer-events: none;
+}
+.lb-side-tag {
+  position: absolute; top: 8px; z-index: 3; background: rgba(0,0,0,.65);
+  color: #fff; font-size: 12px; padding: 1px 7px; border-radius: 999px; pointer-events: none;
+  &.left { left: 8px; }
+  &.right { right: 8px; }
 }
 .lb-hint { text-align: center; color: #bbb; font-size: 13px; }
+.lb-info { text-align: center; color: #bbb; font-size: 13px; }
+.lb-info .warn { color: var(--warn); }
 .nw { white-space: nowrap; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 footer { max-width: 920px; margin: 0 auto; padding: 0 16px 40px; color: var(--subtle); font-size: 13px; line-height: 1.7; }

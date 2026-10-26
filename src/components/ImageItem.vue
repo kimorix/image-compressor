@@ -8,24 +8,14 @@
     >
       <img ref="layerA" class="layer top" :alt="item.file.name" />
       <img v-if="item.done" ref="layerB" class="layer" alt="" />
-      <!-- No badge in the default (compressed) state: it only marks the
-      original view, which is now switched from the preview overlay. -->
-      <span v-if="item.done && item.view === 'orig'" class="tag">{{ t('tagOrig') }}</span>
     </div>
     <div class="meta">
       <div class="name" :title="item.file.name">{{ shortName(item.file.name) }}</div>
       <div class="sizes">
         <span v-if="item.error" class="error">{{ item.error }}</span>
-        <span v-else-if="item.done" v-html="t('sizes', fmtSize(item.file.size), fmtSize(item.outSize))"></span>
+        <span v-else-if="item.done"><span v-html="t('sizes', fmtSize(item.file.size), fmtSize(item.outSize))"></span><span v-if="!isAlreadyBest && savedPct > 0" class="save-pct"> −{{ savedPct }}%</span><span v-if="isAlreadyBest" class="best-tag">{{ t('alreadyBest') }}</span></span>
         <span v-else>{{ fmtSize(item.file.size) }} · {{ t('processing') }}</span>
       </div>
-      <span v-if="item.done && !item.error && savedPct > 0" class="save-tag">−{{ savedPct }}%</span>
-      <span v-if="isAlreadyBest" class="best-tag">{{ t('alreadyBest') }}</span>
-      <template v-if="item.done && item.origW">
-        <div class="dims" :class="{ warn: upscaled }">{{ dimsText }}</div>
-        <div v-if="item.targetNote && !isAlreadyBest" class="dims">{{ item.targetNote }}</div>
-        <div v-if="item.typeNote" class="dims">{{ item.typeNote }}</div>
-      </template>
     </div>
     <div class="item-actions">
       <a v-if="item.done && item.outUrl" class="dl-icon" :href="item.outUrl" :download="item.outName ?? undefined" :title="t('btnDownload')" :aria-label="t('btnDownload')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></a>
@@ -124,17 +114,4 @@ const savedPct = computed(() => {
 // so done + outSize >= file.size is exactly the already-best case, and it
 // can never go stale across recompresses.
 const isAlreadyBest = computed(() => props.item.done && props.item.outSize >= props.item.file.size)
-
-// Upscaling only happens with "don't upscale" off: flag it in a warning
-// colour on the dimensions line so a silently enlarged image is visible.
-const upscaled = computed(() => props.item.done
-  && (props.item.outW > props.item.origW || props.item.outH > props.item.origH))
-
-const dimsText = computed(() => {
-  const it = props.item
-  if (it.origW === it.outW && it.origH === it.outH) {
-    return `${it.origW}×${it.origH} ${props.t('dimsUnchanged')}`
-  }
-  return `${it.origW}×${it.origH} → ${it.outW}×${it.outH}`
-})
 </script>

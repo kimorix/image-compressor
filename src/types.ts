@@ -16,6 +16,11 @@ export interface CompressItem {
   done: boolean
   targetNote: string | null
   typeNote: string | null
+  // Settings snapshot the item's CURRENT result was computed under
+  // (null until its first successful compress). recompressAll compares
+  // each item against its own snapshot, so interleaved runs can't
+  // wrongly skip an item whose displayed result predates the snapshot.
+  lastSettings: Settings | null
 }
 
 export interface Settings {
@@ -46,5 +51,6 @@ export function newItem(file: File): CompressItem {
     done: false,
     targetNote: null,
     typeNote: null,
+    lastSettings: null,
   }
 }

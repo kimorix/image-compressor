@@ -22,11 +22,27 @@ export async function restoreExif(original: Blob, compressed: Blob): Promise<Blo
       return u
     }
     const exifObj = piexif.load(toBinary(origBytes))
-    const hasTags = ['0th', 'Exif', 'GPS', 'Interop', '1st'].some(
+    // Meaningful tags only: GPS and the 1st IFD are stripped below (GPS
+    // for privacy, 1st is the embedded thumbnail), so neither by itself
+    // justifies injecting a block.
+    const hasTags = ['0th', 'Exif', 'Interop'].some(
       (ifd) => exifObj[ifd] && Object.keys(exifObj[ifd]).length > 0,
     )
     // No tags to preserve: injecting an empty EXIF block would only add bytes.
     if (!hasTags) return compressed
+    // The canvas already applied the Orientation rotation, so writing the
+    // original Orientation back would double-rotate the image in viewers.
+    // Normalize it to 1 (normal) before writing back.
+    if (!exifObj['0th']) exifObj['0th'] = {}
+    exifObj['0th'][piexif.ImageIFD.Orientation] = 1
+    // Drop the embedded thumbnail (1st IFD + thumbnail bytes): it costs
+    // tens of KB, and it would show the unrotated original anyway.
+    delete exifObj['1st']
+    delete exifObj['thumbnail']
+    // Drop GPS by default: "keep shooting info" must not leak location.
+    // (A split keep-location toggle could preserve it on request; the
+    // default is to strip.)
+    delete exifObj['GPS']
     const exifBytes = piexif.dump(exifObj)
     const outBinary = piexif.insert(exifBytes, toBinary(compBytes))
     return new Blob([fromBinary(outBinary)], { type: 'image/jpeg' })

@@ -14,7 +14,12 @@
   </header>
   <main>
     <div class="card" id="uploadCard">
-      <DropZone :t="t" @files="addFiles" />
+      <DropZone :t="t" :compact="items.length > 0" @files="addFiles" />
+      <p v-if="fileHint" class="file-hint">{{ fileHint }}</p>
+    </div>
+
+    <div class="card" id="settingsCard">
+      <SettingsPanel :settings="settings" :t="t" @update="onSettingsUpdate" @preset="onPreset" />
     </div>
 
     <div class="card" id="resultCard" v-show="items.length > 0">
@@ -28,7 +33,6 @@
           :t="t"
           @remove="removeItem"
           @preview="lightboxId = $event.id"
-          @view-change="onViewChange"
         />
       </div>
       <div v-if="allAlreadyBest" class="dl-note">{{ t('allBestNote', items.length) }}</div>
@@ -37,17 +41,18 @@
         <button id="clearAll" :class="{ danger: clearConfirm }" :disabled="items.length === 0" @click="onClearClick">{{ clearConfirm ? t('clearConfirm') : t('clearAll') }}</button>
       </div>
     </div>
-
-    <div class="card" id="settingsCard">
-      <SettingsPanel :settings="settings" :t="t" @update="onSettingsUpdate" @preset="onPreset" />
-    </div>
   </main>
-  <Lightbox v-if="lbItem" :item="lbItem" :t="t" @close="lightboxId = null" @view-change="onViewChange" />
+  <!-- Global recompress indicator: the summary spinner is easy to scroll
+  past, so a floating pill shows the same state anywhere on the page.
+  pointer-events none: it must never block taps while a run is in flight. -->
+  <div class="global-loading" :class="{ show: recompressing }" aria-hidden="true"><span class="gl-spin"></span><span>{{ t('processing') }}</span></div>
+  <div v-if="pageDragging" class="page-drop-hint" aria-hidden="true">{{ t('dropAnywhere') }}</div>
+  <Lightbox v-if="lbItem" :item="lbItem" :t="t" @close="lightboxId = null" />
   <footer v-html="t('footer')"></footer>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref, shallowRef } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue'
 import { zipSync } from 'fflate'
 import DropZone from './components/DropZone.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
@@ -56,14 +61,18 @@ import Lightbox from './components/Lightbox.vue'
 import ProgressBar from './components/ProgressBar.vue'
 import { LANGS, initialLang, t as tx, type Lang } from './i18n'
 import { applyTheme, initialTheme, MOON_ICON, SUN_ICON, type Theme } from './lib/theme'
-import { compressItem } from './lib/compress'
+import { CompressPool } from './lib/compress-pool'
 import { fmtSize } from './lib/format'
 import { DEFAULT_SETTINGS, matchPreset, PRESETS } from './lib/presets'
+import { loadSavedSettings, saveSettings } from './lib/settings-store'
 import { newItem, type CompressItem, type Settings } from './types'
 
 const lang = ref<Lang>(initialLang())
 const theme = ref<Theme>(initialTheme())
-const settings = reactive<Settings>({ ...DEFAULT_SETTINGS })
+const settings = reactive<Settings>({ ...DEFAULT_SETTINGS, ...loadSavedSettings() })
+// Remember the last-used settings across visits. Writing storage never
+// mutates settings, so this watcher cannot loop.
+watch(settings, () => saveSettings(settings), { deep: true })
 // shallowRef on purpose: File/Blob objects must never be wrapped by Vue's
 // reactive proxy (it breaks platform brand checks like createObjectURL).
 const items = shallowRef<CompressItem[]>([])
@@ -130,9 +139,10 @@ let runGen = 0
 // spinner while a recompress is in flight over finished items.
 const activeRuns = ref(0)
 const recompressing = computed(() => activeRuns.value > 0 && items.value.length > 0 && items.value.every((i) => i.done))
-// At most 3 images decode/encode at once: throwing 50 phone photos through
-// Promise.all would spike memory and block the main thread.
-const MAX_CONCURRENT = 3
+// Encode workers (2–4 by hardwareConcurrency, see compress-pool): the pool
+// queues the rest, so a 50-photo batch neither spikes memory nor blocks
+// the main thread.
+const pool = new CompressPool()
 // A settings change that lands mid-run must not start a second run on top
 // of it (that was the click-spam freeze: several full encodes burning CPU
 // at once, only the last one's results kept). It just marks a trailing run,
@@ -141,19 +151,17 @@ let pendingRecompress = false
 async function runCompress(list: CompressItem[], g: number, snap: Settings) {
   activeRuns.value++
   try {
-    let idx = 0
-    const workers = Array.from({ length: MAX_CONCURRENT }, async () => {
-      while (idx < list.length) {
-        const item = list[idx++]
-        const res = await compressItem(item, snap, t)
-        if (g !== runGen) {
-          if (res.done) URL.revokeObjectURL(res.outUrl)
-          continue
-        }
-        replaceItem({ ...item, ...res })
+    await Promise.all(list.map(async (item) => {
+      const res = await pool.run(item, snap, lang.value)
+      if (g !== runGen) {
+        if (res.done) URL.revokeObjectURL(res.outUrl)
+        return
       }
-    })
-    await Promise.all(workers)
+      // Only a successful result counts as "computed under snap": a
+      // failed item keeps its displayed (older) result, so its snapshot
+      // must stay at the older settings, not advance to snap.
+      replaceItem({ ...item, ...res, ...(res.done ? { lastSettings: snap } : {}) })
+    }))
   } finally {
     activeRuns.value--
     if (activeRuns.value === 0 && pendingRecompress) {
@@ -178,12 +186,56 @@ function toggleTheme() {
   applyTheme(theme.value)
 }
 
+// Transient note for files skipped by the addFiles funnel (non-images).
+const fileHint = ref<string | null>(null)
+let hintTimer: ReturnType<typeof setTimeout> | null = null
+
 function addFiles(files: File[]) {
-  for (const file of files) items.value.push(newItem(file))
+  // Single funnel for drop, paste and picker. Chrome/Windows often
+  // reports an empty type for HEIC files, so the extension is the
+  // fallback signal (same rule as isHeic in wasm-encoders). Anything
+  // that is not an image is skipped with a visible hint instead of
+  // silently vanishing, which was the old drop/paste behavior.
+  const accepted = files.filter(
+    (f) => f.type.startsWith('image/') || /\.hei[cf]$/i.test(f.name),
+  )
+  const filtered = files.length - accepted.length
+  if (filtered > 0) {
+    fileHint.value = t('filteredNote', filtered)
+    if (hintTimer) clearTimeout(hintTimer)
+    hintTimer = setTimeout(() => { fileHint.value = null }, 5000)
+  }
+  if (!accepted.length) return
+  for (const file of accepted) items.value.push(newItem(file))
   refresh()
   const g = ++runGen
   const snap = { ...settings }
   void runCompress(items.value.filter((i) => !i.done), g, snap)
+}
+
+// "不受影响"的定义，只针对已最优项（它的输出就是原图，UI 上以
+// done && outSize >= file.size 判断）：新设置比上次计算时不更"激进"，
+// 它就必然仍是最优，重压纯属浪费。激进 = 会让输出变小、可能脱离已最优：
+// 格式、模式、quantize 任一变化（跨格式尺寸无序，所以格式变更不能跳）；
+// 质量（质量模式）、目标尺寸（目标模式）降低；尺寸上限真正收紧
+// （maxSize=0 是不限；noUpscale 的影响已折进尺寸里）；keepExif 仅对
+// JPEG 输出有注入，关掉它才会让输出变小。
+// 跳过只会错失一次"可能更小"的结果（仍输出正确原图），不会出错误结果；
+// 所以不确定的方向一律取"重压"（保守），只有确信无影响时才跳过。
+function isUnaffected(item: CompressItem, next: Settings): boolean {
+  if (!item.done || item.outSize < item.file.size) return false
+  const prev = item.lastSettings
+  if (!prev) return false
+  if (prev.format !== next.format || prev.mode !== next.mode || prev.quantize !== next.quantize) return false
+  if (next.mode === 'quality' && next.quality < prev.quality) return false
+  if (next.mode === 'target' && next.targetSize < prev.targetSize) return false
+  const origMax = Math.max(item.origW, item.origH)
+  const dimOf = (s: Settings) => (!s.maxSize ? origMax : (s.noUpscale ? Math.min(origMax, s.maxSize) : s.maxSize))
+  if (dimOf(next) < dimOf(prev)) return false
+  const injectedUnderPrev = prev.keepExif && item.file.type === 'image/jpeg'
+    && (prev.format === 'image/jpeg' || prev.format === 'original')
+  if (injectedUnderPrev && !next.keepExif) return false
+  return true
 }
 
 async function recompressAll() {
@@ -198,7 +250,7 @@ async function recompressAll() {
   // flashes the whole result card (progress bar, 0 B / 100% summary, thumbs
   // flipping to original) on every settings click. Old results stay visible
   // and downloadable until the new run's result replaces them.
-  await runCompress(items.value, g, snap)
+  await runCompress(items.value.filter((item) => !isUnaffected(item, snap)), g, snap)
 }
 
 function onSettingsUpdate(patch: Partial<Settings>) {
@@ -228,10 +280,6 @@ function onPreset(id: string) {
     Object.assign(settings, p.patch)
   }
   void recompressAll()
-}
-
-function onViewChange(item: CompressItem, view: 'orig' | 'comp') {
-  replaceItem({ ...item, view })
 }
 
 function removeItem(item: CompressItem) {
@@ -316,16 +364,63 @@ function onClearClick() {
 }
 
 function onPaste(e: ClipboardEvent) {
-  const files = [...(e.clipboardData?.files ?? [])].filter((f) => f.type.startsWith('image/'))
+  const files = [...(e.clipboardData?.files ?? [])]
   if (files.length) addFiles(files)
+}
+
+// Full-page drop: files dropped anywhere on the page are accepted, not
+// just on the dropzone. dragenter/dragleave balance via a counter (child
+// boundaries fire both, so a boolean would flicker); the hint only shows
+// for real file drags (types includes 'Files'), not for dragged images
+// or text. Drops on the dropzone itself are left to its own handler.
+const pageDragging = ref(false)
+let dragDepth = 0
+function onDocDragEnter(e: DragEvent) {
+  if (!e.dataTransfer?.types.includes('Files')) return
+  dragDepth++
+  pageDragging.value = true
+}
+function onDocDragLeave(e: DragEvent) {
+  if (!e.dataTransfer?.types.includes('Files')) return
+  dragDepth = Math.max(0, dragDepth - 1)
+  if (dragDepth === 0) pageDragging.value = false
+}
+function onDocDragEnd() {
+  dragDepth = 0
+  pageDragging.value = false
+}
+function onDocDragOver(e: DragEvent) {
+  // Allow drops anywhere on the page (the drop handler decides).
+  e.preventDefault()
+}
+function onDocDrop(e: DragEvent) {
+  dragDepth = 0
+  pageDragging.value = false
+  const target = e.target as HTMLElement | null
+  if (target?.closest?.('#dropzone')) return
+  const files = [...(e.dataTransfer?.files ?? [])]
+  if (!files.length) return
+  // Without this the browser would navigate away to the dropped file.
+  e.preventDefault()
+  addFiles(files)
 }
 
 onMounted(() => {
   applyTheme(theme.value)
   setLang(lang.value)
   document.addEventListener('paste', onPaste)
+  document.addEventListener('dragenter', onDocDragEnter)
+  document.addEventListener('dragleave', onDocDragLeave)
+  document.addEventListener('dragend', onDocDragEnd)
+  document.addEventListener('dragover', onDocDragOver)
+  document.addEventListener('drop', onDocDrop)
 })
 onUnmounted(() => {
   document.removeEventListener('paste', onPaste)
+  document.removeEventListener('dragenter', onDocDragEnter)
+  document.removeEventListener('dragleave', onDocDragLeave)
+  document.removeEventListener('dragend', onDocDragEnd)
+  document.removeEventListener('dragover', onDocDragOver)
+  document.removeEventListener('drop', onDocDrop)
 })
 </script>

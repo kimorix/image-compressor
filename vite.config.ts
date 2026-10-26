@@ -12,10 +12,21 @@ export default defineConfig({
       // injectRegister defaults to 'auto': no virtual:pwa-register import in
       // main.ts, so the plugin injects the registration script itself.
       workbox: {
-        // avif_enc.wasm is ~3.5MB, above workbox's 2MB default precache cap.
+        // avif_enc.wasm used to force this cap up; it no longer precaches
+        // (see below), but mozjpeg stays precached, so keep headroom.
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         // Default patterns omit wasm; encoder binaries must work offline too.
         globPatterns: ['**/*.{js,css,html,png,svg,wasm}'],
+        // First-visit weight: the avif/webp encoder payloads (wasm
+        // binaries plus their emscripten JS glue) and the heic2any chunk
+        // (~1.3MB) are only needed when the user actually picks those
+        // paths, so they stay OUT of the precache and are cached on first
+        // use instead (CacheFirst below). The worker chunk itself stays
+        // precached: every compression needs it, and only its lazy
+        // payloads move out. The JS glue must be excluded too: it matches
+        // the precache's js pattern, and leaving it in silently defeats
+        // the exclusion (suite19 caught exactly that: 3 glue files).
+        globIgnores: ['**/avif_enc*.wasm', '**/avif_enc*.js', '**/heic2any*.js', '**/webp_enc*.wasm', '**/webp_enc*.js'],
         // The plugin defaults every navigation to the precached index.html
         // (SPA fallback). This app has no client routing, and the language
         // shells are real files: restrict the fallback to the root page only,
@@ -27,7 +38,17 @@ export default defineConfig({
         navigateFallbackAllowlist: [/^(https?:\/\/[^/]+)?(\/image-compressor)?\/$/],
         // Language shells (docs/en/ etc.) are generated after the build, so
         // they are not precached; cache them on first visit for offline use.
+        // Lazy heavy assets excluded from the precache above: cache them
+        // on first use so they still work offline afterwards. Hashed
+        // filenames make old entries harmless orphans, bounded by maxEntries.
         runtimeCaching: [{
+          urlPattern: /\/(avif_enc|webp_enc)[^/]*\.(wasm|js)$|\/heic2any[^/]*\.js$/,
+          handler: 'CacheFirst',
+          options: {
+            cacheName: 'lazy-assets',
+            expiration: { maxEntries: 20, maxAgeSeconds: 30 * 24 * 60 * 60 },
+          },
+        }, {
           urlPattern: ({ request }) => request.mode === 'navigate',
           handler: 'NetworkFirst',
           options: { cacheName: 'pages', networkTimeoutSeconds: 3 },
@@ -55,5 +76,10 @@ export default defineConfig({
   build: {
     outDir: 'docs',
     emptyOutDir: true,
+  },
+  // Module workers with dynamic imports (lazy encoders, heic2any, piexifjs)
+  // need code-splitting, which the default iife worker format forbids.
+  worker: {
+    format: 'es',
   },
 })
