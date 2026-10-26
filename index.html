@@ -69,6 +69,22 @@
   .item .dims { color: var(--muted); font-size: 13px; margin-top: 2px; }
   .item .error { color: #dc2626; font-size: 14px; margin-top: 4px; }
   .item .hint { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  #lightbox { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.88); display: flex; flex-direction: column; }
+  #lightbox[hidden] { display: none; }
+  .lb-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px; color: #fff; }
+  .lb-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 15px; }
+  .lb-switch { display: flex; gap: 6px; flex-shrink: 0; }
+  .lb-switch button { background: transparent; color: #d1d5db; border-color: rgba(255,255,255,.3); min-height: 40px; padding: 8px 14px; }
+  .lb-switch button.active { background: #fff; color: #17181c; border-color: #fff; }
+  .lb-close { background: transparent; color: #fff; border-color: rgba(255,255,255,.3); font-size: 18px; min-height: 40px; padding: 8px 14px; flex-shrink: 0; }
+  .lb-body { flex: 1; overflow: auto; display: flex; padding: 8px 12px 12px; }
+  .lb-body img { margin: auto; display: block; max-width: 94vw; max-height: calc(100vh - 170px); max-height: calc(100dvh - 170px); object-fit: contain; cursor: zoom-in; }
+  .lb-body img.zoomed { max-width: none; max-height: none; cursor: zoom-out; }
+  .lb-foot { text-align: center; color: #d1d5db; font-size: 13px; padding: 0 16px 16px; }
+  @media (max-width: 600px) {
+    .lb-head { flex-wrap: wrap; padding: 12px; }
+    .lb-name { flex-basis: 100%; }
+  }
   footer { text-align: center; color: var(--muted); font-size: 13px; padding-bottom: 32px; line-height: 1.8; }
   footer a { color: var(--accent); }
 </style>
@@ -112,7 +128,7 @@
         <label for="targetSize">目标体积（KB / 每张）</label>
         <input type="number" id="targetSize" min="10" max="51200" value="200">
       </div>
-      <div class="field">
+      <div class="field" id="qualityField">
         <label for="quality">质量 <span class="value" id="qualityValue">80%</span></label>
         <input type="range" id="quality" min="10" max="100" value="80">
         <div class="field-hint" id="qualityHint" hidden></div>
@@ -172,15 +188,13 @@ const baseName = (name) => name.replace(/\.[^.]+$/, '');
 function syncQualityState() {
   const f = formatSel.value;
   const target = modeSel.value === 'target';
-  // PNG 为无损格式，质量滑杆不起作用；目标体积模式下质量由工具自动调节
+  // PNG 为无损格式，质量滑杆不起作用；目标体积模式下质量整行隐藏（由工具自动调节）
   qualityInput.disabled = (f === 'image/png') || target;
   qualityValue.textContent = qualityInput.value + '%';
+  document.getElementById('qualityField').hidden = target;
   const qualityHint = document.getElementById('qualityHint');
-  if (f === 'image/png') {
+  if (f === 'image/png' && !target) {
     qualityHint.textContent = 'PNG 为无损格式，画质参数不起作用，滑杆已锁定';
-    qualityHint.hidden = false;
-  } else if (target) {
-    qualityHint.textContent = '目标体积模式下质量由工具自动调节，滑杆已锁定';
     qualityHint.hidden = false;
   } else {
     qualityHint.hidden = true;
@@ -351,6 +365,65 @@ async function recompressAll() {
   await compressAll();
 }
 
+// 全屏预览（lightbox）：原图 / 压缩后可切换，点击图片放大到原始尺寸
+const lightbox = document.createElement('div');
+lightbox.id = 'lightbox';
+lightbox.hidden = true;
+lightbox.setAttribute('role', 'dialog');
+lightbox.setAttribute('aria-modal', 'true');
+lightbox.innerHTML = `
+  <div class="lb-head">
+    <div class="lb-name" id="lbName"></div>
+    <div class="lb-switch">
+      <button type="button" id="lbOrig">原图</button>
+      <button type="button" id="lbComp">压缩后</button>
+    </div>
+    <button type="button" class="lb-close" id="lbClose" aria-label="关闭预览">×</button>
+  </div>
+  <div class="lb-body" id="lbBody"><img id="lbImg" alt=""></div>
+  <div class="lb-foot" id="lbFoot"></div>`;
+document.body.appendChild(lightbox);
+const lbImg = lightbox.querySelector('#lbImg');
+const lbName = lightbox.querySelector('#lbName');
+const lbFoot = lightbox.querySelector('#lbFoot');
+const lbBody = lightbox.querySelector('#lbBody');
+const lbOrigBtn = lightbox.querySelector('#lbOrig');
+const lbCompBtn = lightbox.querySelector('#lbComp');
+let lbItem = null;
+let lbView = 'comp';
+function lbInfo() {
+  if (!lbItem) return '';
+  return lbView === 'comp'
+    ? `压缩后 ${lbItem.outW}×${lbItem.outH} · ${fmtSize(lbItem.outSize)}`
+    : `原图 ${lbItem.origW}×${lbItem.origH} · ${fmtSize(lbItem.file.size)}`;
+}
+function setLbView(v) {
+  lbView = v;
+  lbImg.classList.remove('zoomed');
+  lbImg.src = v === 'comp' ? lbItem.outUrl : lbItem.url;
+  lbOrigBtn.classList.toggle('active', v === 'orig');
+  lbCompBtn.classList.toggle('active', v === 'comp');
+  lbFoot.textContent = lbInfo();
+}
+function openLightbox(item) {
+  lbItem = item;
+  lbName.textContent = item.file.name;
+  lightbox.hidden = false;
+  document.body.style.overflow = 'hidden';
+  setLbView(item.view === 'orig' ? 'orig' : 'comp');
+}
+function closeLightbox() {
+  lightbox.hidden = true;
+  document.body.style.overflow = '';
+  lbItem = null;
+}
+lbOrigBtn.addEventListener('click', () => setLbView('orig'));
+lbCompBtn.addEventListener('click', () => setLbView('comp'));
+lightbox.querySelector('#lbClose').addEventListener('click', closeLightbox);
+lbImg.addEventListener('click', (e) => { e.stopPropagation(); lbImg.classList.toggle('zoomed'); });
+lightbox.addEventListener('click', (e) => { if (e.target === lightbox || e.target === lbBody) closeLightbox(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !lightbox.hidden) closeLightbox(); });
+
 function render() {
   const done = items.filter(i => i.done);
   resultCard.hidden = items.length === 0;
@@ -450,6 +523,10 @@ function render() {
     const actions = document.createElement('div');
     actions.className = 'item-actions';
     if (item.done) {
+      const pv = document.createElement('button');
+      pv.textContent = '预览';
+      pv.addEventListener('click', () => openLightbox(item));
+      actions.appendChild(pv);
       const a = document.createElement('a');
       a.href = item.outUrl;
       a.download = item.outName;
