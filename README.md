@@ -1,5 +1,7 @@
 # 图片压缩 / Image Compressor
 
+在线体验：https://kimorix.github.io/image-compressor/
+
 免费开源的图片压缩 Web 工具，单文件、无后端、无依赖。
 
 A free and open-source image compression web tool. Single HTML file, no backend, no dependencies.

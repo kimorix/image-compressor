@@ -6,47 +6,62 @@
 <title>图片压缩 - 100% 本地处理</title>
 <meta name="description" content="免费开源的图片压缩工具，所有处理均在浏览器本地完成，图片不会上传到任何服务器。">
 <style>
-  :root { --bg: #f6f7f9; --card: #fff; --text: #1a1a1a; --muted: #666; --border: #e5e7eb; --accent: #2563eb; --accent-hover: #1d4ed8; --green: #15803d; }
+  :root { --bg: #f4f5f7; --card: #fff; --text: #17181c; --muted: #6b7280; --border: #e5e7eb; --accent: #2563eb; --accent-hover: #1d4ed8; --green: #15803d; --radius: 14px; }
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); }
-  header { text-align: center; padding: 40px 16px 8px; }
-  header h1 { margin: 0; font-size: 30px; }
-  header p { color: var(--muted); margin: 10px 0 0; }
-  main { max-width: 880px; margin: 0 auto; padding: 24px 16px 64px; }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
-  #dropzone { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 40px 20px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
+  header { max-width: 920px; margin: 0 auto; padding: 36px 16px 4px; display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 30px; letter-spacing: .5px; }
+  header p { color: var(--muted); margin: 8px 0 0; }
+  .badge { display: inline-block; background: #dcfce7; color: var(--green); font-size: 13px; padding: 2px 10px; border-radius: 999px; margin-left: 8px; vertical-align: middle; }
+  .gh-btn { display: inline-block; padding: 9px 16px; border: 1px solid var(--border); border-radius: 999px; background: #fff; color: var(--text); text-decoration: none; font-size: 14px; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+  .gh-btn:hover { border-color: var(--accent); color: var(--accent); }
+  main { max-width: 920px; margin: 0 auto; padding: 20px 16px 48px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+  #dropzone { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 42px 20px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s; }
+  #dropzone:hover { border-color: #93c5fd; }
   #dropzone.dragover { border-color: var(--accent); background: #eff6ff; }
   #dropzone p { margin: 6px 0; color: var(--muted); }
-  #dropzone strong { font-size: 18px; color: var(--text); }
+  #dropzone strong { font-size: 18px; }
   .settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
   .field label { display: block; font-size: 14px; margin-bottom: 6px; color: var(--muted); }
-  .field select, .field input[type="number"] { width: 100%; padding: 8px 10px; font-size: 15px; border: 1px solid var(--border); border-radius: 8px; }
-  .field input[type="range"] { width: 100%; }
-  .field .value { font-size: 14px; color: var(--text); }
-  .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
-  button { padding: 10px 18px; font-size: 15px; border-radius: 8px; border: 1px solid var(--border); background: #fff; cursor: pointer; }
+  .field select, .field input[type="number"] { width: 100%; padding: 9px 10px; font-size: 15px; border: 1px solid var(--border); border-radius: 9px; background: #fff; }
+  .field input[type="range"] { width: 100%; accent-color: var(--accent); }
+  .field .value { font-size: 14px; color: var(--text); font-weight: 600; }
+  .presets { display: flex; gap: 8px; margin-top: 8px; }
+  .presets button { padding: 5px 12px; font-size: 13px; border-radius: 999px; }
+  .presets button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+  button { padding: 10px 18px; font-size: 15px; border-radius: 9px; border: 1px solid var(--border); background: #fff; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: #9ca3af; }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  button.primary:hover { background: var(--accent-hover); }
+  button.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
   button:disabled { opacity: .5; cursor: not-allowed; }
   #summary { font-size: 15px; }
   #summary b { color: var(--green); }
-  .item { display: flex; gap: 16px; align-items: center; padding: 14px 0; border-top: 1px solid var(--border); }
+  .item { display: flex; gap: 16px; align-items: center; padding: 16px 0; border-top: 1px solid var(--border); }
   .item:first-child { border-top: none; }
-  .item img { width: 96px; height: 96px; object-fit: cover; border-radius: 8px; background: #f1f5f9; flex-shrink: 0; }
+  .thumb { position: relative; flex-shrink: 0; cursor: default; }
+  .thumb.clickable { cursor: pointer; }
+  .thumb img { width: 104px; height: 104px; object-fit: cover; border-radius: 10px; background: #f1f5f9; display: block; }
+  .thumb .tag { position: absolute; left: 6px; bottom: 6px; background: rgba(0,0,0,.65); color: #fff; font-size: 12px; padding: 1px 7px; border-radius: 999px; }
   .item .meta { flex: 1; min-width: 0; }
   .item .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .item .sizes { color: var(--muted); font-size: 14px; margin-top: 4px; }
   .item .sizes b { color: var(--green); }
+  .item .dims { color: var(--muted); font-size: 13px; margin-top: 2px; }
   .item .error { color: #dc2626; font-size: 14px; margin-top: 4px; }
-  .item .dl { flex-shrink: 0; }
-  footer { text-align: center; color: var(--muted); font-size: 13px; padding-bottom: 32px; }
-  footer a { color: var(--muted); }
+  .item .hint { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  footer { text-align: center; color: var(--muted); font-size: 13px; padding-bottom: 32px; line-height: 1.8; }
+  footer a { color: var(--accent); }
 </style>
 </head>
 <body>
 <header>
-  <h1>图片压缩</h1>
-  <p>100% 本地处理 · 图片不会上传到任何服务器 · 支持批量</p>
+  <div>
+    <h1>图片压缩<span class="badge">100% 本地处理</span></h1>
+    <p>图片不会上传到任何服务器 · 支持批量 · 开源免费</p>
+  </div>
+  <a class="gh-btn" href="https://github.com/kimorix/image-compressor" target="_blank" rel="noopener">GitHub 开源 ↗</a>
 </header>
 <main>
   <div class="card">
@@ -71,6 +86,11 @@
       <div class="field">
         <label for="quality">质量 <span class="value" id="qualityValue">80%</span></label>
         <input type="range" id="quality" min="10" max="100" value="80">
+        <div class="presets">
+          <button data-q="90" type="button">高清 90%</button>
+          <button data-q="80" type="button" class="active">均衡 80%</button>
+          <button data-q="60" type="button">极限 60%</button>
+        </div>
       </div>
       <div class="field">
         <label for="maxSize">最长边（像素，0 = 不缩放）</label>
@@ -92,7 +112,8 @@
   </div>
 </main>
 <footer>
-  开源项目 · 所有压缩均在你的浏览器内完成，不经过任何服务器<br>
+  开源项目：<a href="https://github.com/kimorix/image-compressor" target="_blank" rel="noopener">github.com/kimorix/image-compressor</a>（MIT 协议，欢迎 Star / 提 Issue）<br>
+  所有压缩均在你的浏览器内完成，不经过任何服务器<br>
   注意：GIF 动图压缩后只保留首帧；JPEG 不支持透明通道，透明部分会填充白色。
 </footer>
 
@@ -110,7 +131,7 @@ const resultCard = document.getElementById('resultCard');
 const summaryEl = document.getElementById('summary');
 const listEl = document.getElementById('list');
 
-let items = []; // { id, file, url, outUrl, outName, outSize, error, done }
+let items = []; // { id, file, url, outUrl, outName, outSize, origW, origH, outW, outH, view, error, done }
 
 const fmtSize = (n) => {
   if (n < 1024) return n + ' B';
@@ -125,11 +146,17 @@ function syncQualityState() {
   // PNG 为无损格式，质量滑杆不起作用
   qualityInput.disabled = (f === 'image/png');
   qualityValue.textContent = qualityInput.value + '%';
+  document.querySelectorAll('.presets button').forEach(b => b.classList.toggle('active', +b.dataset.q === +qualityInput.value));
 }
 qualityInput.addEventListener('input', () => { syncQualityState(); recompressAll(); });
 formatSel.addEventListener('change', () => { syncQualityState(); recompressAll(); });
 maxSizeInput.addEventListener('change', recompressAll);
 noUpscaleInput.addEventListener('change', recompressAll);
+document.querySelectorAll('.presets button').forEach(b => b.addEventListener('click', () => {
+  qualityInput.value = b.dataset.q;
+  syncQualityState();
+  recompressAll();
+}));
 syncQualityState();
 
 dropzone.addEventListener('click', () => fileInput.click());
@@ -146,7 +173,7 @@ document.addEventListener('paste', (e) => {
 function addFiles(files) {
   for (const file of files) {
     const id = Date.now() + '-' + Math.random().toString(36).slice(2, 8);
-    items.push({ id, file, url: URL.createObjectURL(file), outUrl: null, outName: null, outSize: 0, error: null, done: false });
+    items.push({ id, file, url: URL.createObjectURL(file), outUrl: null, outName: null, outSize: 0, origW: 0, origH: 0, outW: 0, outH: 0, view: 'orig', error: null, done: false });
   }
   render();
   compressAll();
@@ -165,15 +192,16 @@ function loadImage(file) {
 async function compressItem(item) {
   try {
     const img = await loadImage(item.file);
-    let { width, height } = img;
+    item.origW = img.naturalWidth;
+    item.origH = img.naturalHeight;
+    let width = item.origW, height = item.origH;
     const max = parseInt(maxSizeInput.value, 10) || 0;
     if (max > 0 && Math.max(width, height) > max) {
       const scale = max / Math.max(width, height);
       width = Math.round(width * scale);
       height = Math.round(height * scale);
-    } else if (noUpscaleInput.checked && max > 0 && Math.max(width, height) < max) {
-      // 不放大：保持原尺寸
     }
+    // 不放大：小于上限时保持原尺寸（上面已天然满足）
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
@@ -188,7 +216,10 @@ async function compressItem(item) {
     if (item.outUrl) URL.revokeObjectURL(item.outUrl);
     item.outUrl = URL.createObjectURL(blob);
     item.outSize = blob.size;
+    item.outW = width;
+    item.outH = height;
     item.outName = baseName(item.file.name) + '-compressed.' + extOf(outType);
+    item.view = 'comp';
     item.done = true;
     item.error = null;
   } catch (err) {
@@ -197,13 +228,13 @@ async function compressItem(item) {
   }
 }
 
+// 逐张完成、逐张刷新，不用等全部跑完
 async function compressAll() {
-  await Promise.all(items.map(compressItem));
-  render();
+  await Promise.all(items.map(item => compressItem(item).then(render)));
 }
 async function recompressAll() {
   if (!items.length) return;
-  items.forEach(i => { i.done = false; i.error = null; });
+  items.forEach(i => { i.done = false; i.error = null; i.view = 'orig'; });
   render();
   await compressAll();
 }
@@ -223,9 +254,21 @@ function render() {
   for (const item of items) {
     const row = document.createElement('div');
     row.className = 'item';
+    const thumbWrap = document.createElement('div');
+    thumbWrap.className = 'thumb' + (item.done ? ' clickable' : '');
+    thumbWrap.title = item.done ? '点击切换原图 / 压缩后预览' : '';
     const thumb = document.createElement('img');
-    thumb.src = item.done ? item.outUrl : item.url;
+    thumb.src = (item.done && item.view === 'comp') ? item.outUrl : item.url;
     thumb.alt = item.file.name;
+    const tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.textContent = item.done ? (item.view === 'comp' ? '压缩后' : '原图') : '原图';
+    thumbWrap.appendChild(thumb);
+    thumbWrap.appendChild(tag);
+    if (item.done) thumbWrap.addEventListener('click', () => {
+      item.view = item.view === 'comp' ? 'orig' : 'comp';
+      render();
+    });
     const meta = document.createElement('div');
     meta.className = 'meta';
     const name = document.createElement('div');
@@ -243,14 +286,25 @@ function render() {
       sizes.textContent = fmtSize(item.file.size) + ' · 处理中…';
     }
     meta.appendChild(sizes);
-    row.appendChild(thumb);
+    if (item.done && item.origW) {
+      const dims = document.createElement('div');
+      dims.className = 'dims';
+      dims.textContent = (item.origW === item.outW && item.origH === item.outH)
+        ? `${item.origW}×${item.origH}（尺寸未变）`
+        : `${item.origW}×${item.origH} → ${item.outW}×${item.outH}`;
+      meta.appendChild(dims);
+      const hint = document.createElement('div');
+      hint.className = 'hint';
+      hint.textContent = '点击左侧预览可切换原图 / 压缩后对比';
+      meta.appendChild(hint);
+    }
+    row.appendChild(thumbWrap);
     row.appendChild(meta);
     if (item.done) {
       const a = document.createElement('a');
       a.href = item.outUrl;
       a.download = item.outName;
       const btn = document.createElement('button');
-      btn.className = 'dl';
       btn.textContent = '下载';
       a.appendChild(btn);
       row.appendChild(a);
