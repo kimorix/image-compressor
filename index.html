@@ -125,7 +125,7 @@
 <footer>
   开源项目：<a href="https://github.com/kimorix/image-compressor" target="_blank" rel="noopener">github.com/kimorix/image-compressor</a>（MIT 协议，欢迎 Star / 提 Issue）<br>
   所有压缩均在你的浏览器内完成，不经过任何服务器<br>
-  目标体积模式：对每张图自动二分调节质量，取不超过目标的最高画质；PNG 无损格式不适用。<br>
+  目标体积模式：先按质量、再按尺寸自动调节，直到装进目标；浏览器不支持 WebP 编码时会自动改用 JPEG。<br>
   注意：GIF 动图压缩后只保留首帧；JPEG 不支持透明通道，透明部分会填充白色。
 </footer>
 
@@ -225,47 +225,89 @@ async function compressItem(item) {
       width = Math.round(width * scale);
       height = Math.round(height * scale);
     }
-    // 不放大：小于上限时保持原尺寸（上面已天然满足）
     const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
+    // 每次编码都重画：尺寸搜索需要反复换尺寸
+    const encodeAt = (w, h, type, q) => new Promise((res) => {
+      canvas.width = w;
+      canvas.height = h;
+      const c = canvas.getContext('2d');
+      if (type === 'image/jpeg') { c.fillStyle = '#fff'; c.fillRect(0, 0, w, h); }
+      c.drawImage(img, 0, 0, w, h);
+      canvas.toBlob(res, type, type === 'image/png' ? undefined : q);
+    });
     let outType = formatSel.value === 'original' ? item.file.type : formatSel.value;
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(outType)) outType = 'image/png';
-    if (outType === 'image/jpeg') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, width, height); }
-    ctx.drawImage(img, 0, 0, width, height);
-    const toBlobAt = (q) => new Promise((res) => canvas.toBlob(res, outType, outType === 'image/png' ? undefined : q));
-    let blob;
     item.targetNote = null;
-    if (modeSel.value === 'target' && outType !== 'image/png') {
-      // 目标体积模式：二分找不超过目标的最高质量
-      const targetBytes = (parseInt(targetSizeInput.value, 10) || 200) * 1024;
-      const q100 = await toBlobAt(1);
-      if (!q100) throw new Error('浏览器不支持输出该格式');
-      if (q100.size <= targetBytes) {
-        blob = q100;
-        item.targetNote = '已是最高画质，仍小于目标';
+    item.typeNote = null;
+
+    // 关键修复：浏览器可能悄悄换编码格式——Safari 不支持 WebP 编码时 toBlob 不报错、
+    // 而是静默回退成 PNG，且 PNG 会忽略质量参数。这正是“切了目标模式也没变化”的根源：
+    // 每次编码都返回同一份 PNG，质量二分搜不到任何变化。先探一次，核对实际格式。
+    const probeQ = modeSel.value === 'target' ? 0.8 : (qualityInput.value / 100);
+    const probe = await encodeAt(width, height, outType, outType === 'image/png' ? undefined : probeQ);
+    if (!probe) throw new Error('浏览器不支持输出该格式');
+    if (probe.type !== outType) {
+      if (outType === 'image/webp') {
+        // WebP 编码不可用时改用 JPEG（Safari 支持 JPEG 编码且质量有效），
+        // 而不是拿 PNG 冒充 WebP（扩展名与内容不符）
+        outType = 'image/jpeg';
+        item.typeNote = '当前浏览器不支持 WebP 编码，已自动改用 JPEG';
       } else {
-        let lo = 10, hi = 100, bestBlob = null, bestQ = 10;
-        while (lo <= hi) {
-          const mid = Math.floor((lo + hi) / 2);
-          const b = await toBlobAt(mid / 100);
-          if (!b) throw new Error('浏览器不支持输出该格式');
-          if (b.size <= targetBytes) { bestQ = mid; bestBlob = b; lo = mid + 1; }
-          else hi = mid - 1;
-        }
-        if (!bestBlob) {
-          blob = await toBlobAt(0.1);
-          item.targetNote = '已是最低画质，仍超目标';
+        outType = probe.type; // 其他回退：以实际格式为准
+      }
+    }
+
+    let blob;
+    if (modeSel.value === 'target') {
+      const targetBytes = (parseInt(targetSizeInput.value, 10) || 200) * 1024;
+      let fitted = false;
+      if (outType !== 'image/png') {
+        // 第一步：在当前尺寸下二分找不超过目标的最高质量
+        const q100 = await encodeAt(width, height, outType, 1);
+        if (!q100) throw new Error('浏览器不支持输出该格式');
+        if (q100.size <= targetBytes) {
+          blob = q100; item.targetNote = '已是最高画质，仍小于目标'; fitted = true;
         } else {
-          blob = bestBlob;
-          item.targetNote = `自动质量 ${bestQ}%`;
+          let lo = 10, hi = 100, bestBlob = null, bestQ = 10;
+          while (lo <= hi) {
+            const mid = Math.floor((lo + hi) / 2);
+            const b = await encodeAt(width, height, outType, mid / 100);
+            if (!b) throw new Error('浏览器不支持输出该格式');
+            if (b.size <= targetBytes) { bestQ = mid; bestBlob = b; lo = mid + 1; }
+            else hi = mid - 1;
+          }
+          if (bestBlob) { blob = bestBlob; item.targetNote = `自动质量 ${bestQ}%`; fitted = true; }
+        }
+      }
+      if (!fitted) {
+        // 第二步：质量压到底仍超目标（或 PNG 无损格式）→ 缩尺寸找能装进目标的最大尺寸
+        const q = outType === 'image/png' ? undefined : 0.1;
+        const full = outType === 'image/png' ? await encodeAt(width, height, outType, q) : null;
+        if (full && full.size <= targetBytes) {
+          blob = full; item.targetNote = '已小于目标';
+        } else {
+          let lo = 0.1, hi = 1, best = null, bestW = width, bestH = height;
+          for (let i = 0; i < 7; i++) {
+            const s = (lo + hi) / 2;
+            const w = Math.max(1, Math.round(width * s)), h = Math.max(1, Math.round(height * s));
+            const b = await encodeAt(w, h, outType, q);
+            if (!b) throw new Error('浏览器不支持输出该格式');
+            if (b.size <= targetBytes) { best = b; bestW = w; bestH = h; lo = s; }
+            else hi = s;
+          }
+          if (best) {
+            blob = best; width = bestW; height = bestH;
+            item.targetNote = outType === 'image/png' ? `自动尺寸 ${width}×${height}` : `自动尺寸 ${width}×${height}（最低画质）`;
+          } else {
+            width = Math.max(1, Math.round(width * 0.1)); height = Math.max(1, Math.round(height * 0.1));
+            blob = await encodeAt(width, height, outType, q);
+            item.targetNote = '已缩到最小，仍超目标';
+          }
         }
       }
     } else {
-      if (modeSel.value === 'target') item.targetNote = 'PNG 无损格式无法按目标调节';
       const quality = qualityInput.value / 100;
-      blob = await toBlobAt(quality);
+      blob = await encodeAt(width, height, outType, outType === 'image/png' ? undefined : quality);
       if (!blob) throw new Error('浏览器不支持输出该格式');
     }
     if (item.outUrl) URL.revokeObjectURL(item.outUrl);
@@ -357,6 +399,12 @@ function render() {
         tn.className = 'dims';
         tn.textContent = item.targetNote;
         meta.appendChild(tn);
+      }
+      if (item.typeNote) {
+        const yn = document.createElement('div');
+        yn.className = 'dims';
+        yn.textContent = item.typeNote;
+        meta.appendChild(yn);
       }
     }
     row.appendChild(thumbWrap);
