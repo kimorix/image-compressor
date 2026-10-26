@@ -1,5 +1,15 @@
 import { baseName, extOf } from './format'
 import type { CompressItem, Settings } from '../types'
+import {
+  decodeHeicToPngBlob,
+  encodeAvif,
+  encodeMozjpeg,
+  encodePng,
+  encodePngQuantized,
+  encodeWebp,
+  isHeic,
+  type RgbaImage,
+} from './wasm-encoders'
 
 type T = (key: string, ...args: (string | number)[]) => string
 
@@ -25,10 +35,10 @@ export interface CompressFailure {
 
 export type CompressResult = CompressSuccess | CompressFailure
 
-function loadImage(file: File, t: T): Promise<HTMLImageElement> {
+function loadImage(blob: Blob, t: T): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image()
-    const url = URL.createObjectURL(file)
+    const url = URL.createObjectURL(blob)
     img.onload = () => { URL.revokeObjectURL(url); resolve(img) }
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(t('decodeError'))) }
     img.src = url
@@ -38,12 +48,24 @@ function loadImage(file: File, t: T): Promise<HTMLImageElement> {
 // Pure with respect to shared state: it never mutates the item, it returns the
 // result for the caller to apply. Callers snapshot the settings and guard with a
 // generation counter, so a stale concurrent run can neither mix settings nor
-// overwrite a newer run's result. Logic mirrors the original single-file version:
-// probe the real encoder output first (Safari silently falls back WebP -> PNG),
-// then quality mode or target mode (binary-search quality, then shrink dimensions).
+// overwrite a newer run's result.
+//
+// Encoding is WASM-first: MozJPEG for JPEG, libwebp (method 6) for WebP, aom
+// for AVIF, Rust png for lossless PNG, libimagequant for palette PNG. If a
+// WASM encoder fails to load, the browser canvas encoder is the fallback for
+// JPEG/WebP/PNG (Safari's canvas silently falls back WebP -> PNG, so the
+// canvas path keeps the old WebP -> JPEG probe). AVIF has no reliable canvas
+// fallback, so an AVIF failure surfaces as an error instead of silently
+// changing the output format.
 export async function compressItem(item: CompressItem, s: Settings, t: T): Promise<CompressResult> {
   try {
-    const img = await loadImage(item.file, t)
+    // iPhone photos arrive as HEIC, which Chrome cannot decode: decode them
+    // to a PNG first, then run the normal pipeline on the decoded pixels.
+    // Sizes and names still refer to the original HEIC file.
+    const source: Blob = isHeic(item.file)
+      ? await decodeHeicToPngBlob(item.file)
+      : item.file
+    const img = await loadImage(source, t)
     const origW = img.naturalWidth
     const origH = img.naturalHeight
     let width = origW
@@ -63,30 +85,53 @@ export async function compressItem(item: CompressItem, s: Settings, t: T): Promi
       }
     }
     const canvas = document.createElement('canvas')
-    const encodeAt = (w: number, h: number, type: string, q?: number): Promise<Blob | null> =>
-      new Promise((res) => {
-        canvas.width = w
-        canvas.height = h
-        const c = canvas.getContext('2d')!
-        if (type === 'image/jpeg') { c.fillStyle = '#fff'; c.fillRect(0, 0, w, h) }
-        c.drawImage(img, 0, 0, w, h)
-        canvas.toBlob(res, type, type === 'image/png' ? undefined : q)
-      })
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })!
 
     let outType = s.format === 'original' ? item.file.type : s.format
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(outType)) outType = 'image/png'
+    if (isHeic(item.file) && s.format === 'original') outType = 'image/jpeg'
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/avif'].includes(outType)) outType = 'image/png'
     let targetNote: string | null = null
     let typeNote: string | null = null
 
-    const probeQ = s.mode === 'target' ? 0.8 : s.quality / 100
-    const probe = await encodeAt(width, height, outType, outType === 'image/png' ? undefined : probeQ)
-    if (!probe) throw new Error(t('formatError'))
-    if (probe.type !== outType) {
-      if (outType === 'image/webp') {
-        outType = 'image/jpeg'
-        typeNote = t('typeNoteWebp')
-      } else {
-        outType = probe.type
+    const canvasEncode = (type: string, q?: number): Promise<Blob | null> =>
+      new Promise((res) => {
+        canvas.toBlob(res, type, type === 'image/png' ? undefined : q)
+      })
+
+    // Draw at (w, h), read pixels, encode. Mutates outType/typeNote only on
+    // the canvas fallback path (Safari WebP -> JPEG).
+    const encodeAt = async (w: number, h: number, q?: number): Promise<Blob> => {
+      canvas.width = w
+      canvas.height = h
+      if (outType === 'image/jpeg') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h) }
+      ctx.drawImage(img, 0, 0, w, h)
+      const pixels: RgbaImage = ctx.getImageData(0, 0, w, h)
+      try {
+        let buf: ArrayBuffer
+        if (outType === 'image/jpeg') buf = await encodeMozjpeg(pixels, Math.round((q ?? 0.8) * 100))
+        else if (outType === 'image/webp') buf = await encodeWebp(pixels, Math.round((q ?? 0.8) * 100))
+        else if (outType === 'image/avif') buf = await encodeAvif(pixels, Math.round((q ?? 0.8) * 100))
+        else if (s.quantize) buf = await encodePngQuantized(pixels, Math.round((q ?? 0.8) * 100))
+        else buf = await encodePng(pixels)
+        return new Blob([buf], { type: outType })
+      } catch (err) {
+        // WASM unavailable: canvas fallback for the formats canvas can do.
+        // A warning, not silence: a fallback that nobody can see is a bug
+        // that never gets fixed.
+        console.warn(`[image-compressor] ${outType} WASM encode failed, canvas fallback:`, err)
+        const fallback = await canvasEncode(outType, outType === 'image/png' ? undefined : q)
+        if (!fallback) throw new Error(t('formatError'))
+        if (fallback.type !== outType) {
+          if (outType === 'image/webp') {
+            outType = 'image/jpeg'
+            typeNote = t('typeNoteWebp')
+            const jpeg = await canvasEncode('image/jpeg', q)
+            if (!jpeg) throw new Error(t('formatError'))
+            return jpeg
+          }
+          throw new Error(t('formatError'))
+        }
+        return fallback
       }
     }
 
@@ -94,17 +139,15 @@ export async function compressItem(item: CompressItem, s: Settings, t: T): Promi
     if (s.mode === 'target') {
       const targetBytes = (s.targetSize || 200) * 1024
       let fitted = false
-      if (outType !== 'image/png') {
-        const q100 = await encodeAt(width, height, outType, 1)
-        if (!q100) throw new Error(t('formatError'))
+      if (outType !== 'image/png' || s.quantize) {
+        const q100 = await encodeAt(width, height, 1)
         if (q100.size <= targetBytes) {
           blob = q100; targetNote = t('targetBest'); fitted = true
         } else {
           let lo = 10, hi = 100, bestBlob: Blob | null = null, bestQ = 10
           while (lo <= hi) {
             const mid = Math.floor((lo + hi) / 2)
-            const b = await encodeAt(width, height, outType, mid / 100)
-            if (!b) throw new Error(t('formatError'))
+            const b = await encodeAt(width, height, mid / 100)
             if (b.size <= targetBytes) { bestQ = mid; bestBlob = b; lo = mid + 1 }
             else hi = mid - 1
           }
@@ -112,8 +155,8 @@ export async function compressItem(item: CompressItem, s: Settings, t: T): Promi
         }
       }
       if (!fitted) {
-        const q = outType === 'image/png' ? undefined : 0.1
-        const full = outType === 'image/png' ? await encodeAt(width, height, outType, q) : null
+        const q = outType === 'image/png' && !s.quantize ? undefined : 0.1
+        const full = outType === 'image/png' ? await encodeAt(width, height, q) : null
         if (full && full.size <= targetBytes) {
           blob = full; targetNote = t('targetUnder')
         } else {
@@ -121,28 +164,26 @@ export async function compressItem(item: CompressItem, s: Settings, t: T): Promi
           for (let i = 0; i < 7; i++) {
             const sc = (lo + hi) / 2
             const w = Math.max(1, Math.round(width * sc)), h = Math.max(1, Math.round(height * sc))
-            const b = await encodeAt(w, h, outType, q)
-            if (!b) throw new Error(t('formatError'))
+            const b = await encodeAt(w, h, q)
             if (b.size <= targetBytes) { best = b; bestW = w; bestH = h; lo = sc }
             else hi = sc
           }
           if (best) {
             blob = best; width = bestW; height = bestH
-            targetNote = outType === 'image/png' ? t('targetAutoSize', width, height) : t('targetAutoSizeLow', width, height)
+            targetNote = outType === 'image/png' && !s.quantize ? t('targetAutoSize', width, height) : t('targetAutoSizeLow', width, height)
           } else {
             width = Math.max(1, Math.round(width * 0.1)); height = Math.max(1, Math.round(height * 0.1))
-            blob = await encodeAt(width, height, outType, q)
+            blob = await encodeAt(width, height, q)
             targetNote = t('targetMin')
           }
         }
       }
     } else {
       const quality = s.quality / 100
-      blob = await encodeAt(width, height, outType, outType === 'image/png' ? undefined : quality)
-      if (!blob) throw new Error(t('formatError'))
+      blob = await encodeAt(width, height, outType === 'image/png' && !s.quantize ? undefined : quality)
     }
     // Never output something bigger than the input: re-encoding an already
-    // compressed JPG (or PNG -> PNG) through canvas often grows the file.
+    // compressed JPG (or PNG -> PNG) often grows the file.
     // In that case return the original file itself and mark it already optimal.
     // A fresh object URL is used so callers can revoke it without touching item.url.
     if (blob!.size >= item.file.size) {

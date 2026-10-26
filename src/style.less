@@ -17,6 +17,9 @@
   --card-shadow: 0 1px 3px rgba(0,0,0,.06); --accent-soft: rgba(94,106,210,.08);
   color-scheme: light;
 }
+// Custom select chevron: the native arrow sits hard against the border, so
+// selects hide it and draw their own, 12px off the right edge.
+@chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%238a8f98' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
 * { box-sizing: border-box; }
 body {
   margin: 0;
@@ -44,8 +47,10 @@ header {
   svg { width: 18px; height: 18px; display: block; }
 }
 .lang-select {
-  padding: 9px 12px; font-size: 14px; font-weight: 500; min-height: 44px; border-radius: 8px;
+  padding: 9px 32px 9px 12px; font-size: 14px; font-weight: 500; min-height: 44px; border-radius: 8px;
   border: 1px solid var(--border); background: var(--surface-2); color: var(--text); cursor: pointer;
+  appearance: none; -webkit-appearance: none;
+  background-image: @chevron; background-repeat: no-repeat; background-position: right 10px center; background-size: 12px 8px;
   &:hover { border-color: var(--border-strong); }
 }
 main { max-width: 920px; margin: 0 auto; padding: 20px 16px 48px; }
@@ -65,7 +70,13 @@ main { max-width: 920px; margin: 0 auto; padding: 20px 16px 48px; }
 .settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
 .field {
   label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--subtle); }
-  select, input[type="number"] {
+  select {
+    width: 100%; padding: 10px 36px 10px 12px; font-size: 14px; border: 1px solid var(--border);
+    border-radius: 8px; background: var(--surface-2); color: var(--text); cursor: pointer;
+    appearance: none; -webkit-appearance: none;
+    background-image: @chevron; background-repeat: no-repeat; background-position: right 12px center; background-size: 12px 8px;
+  }
+  input[type="number"] {
     width: 100%; padding: 10px 12px; font-size: 16px; border: 1px solid var(--border);
     border-radius: 8px; background: var(--surface-2); color: var(--text);
   }

@@ -25,6 +25,7 @@ export interface Settings {
   quality: number
   maxSize: number
   noUpscale: boolean
+  quantize: boolean
 }
 
 export function newItem(file: File): CompressItem {

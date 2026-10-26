@@ -75,6 +75,7 @@ const settings = reactive<Settings>({
   quality: 80,
   maxSize: 1920,
   noUpscale: true,
+  quantize: true,
 })
 // shallowRef on purpose: File/Blob objects must never be wrapped by Vue's
 // reactive proxy (it breaks platform brand checks like createObjectURL).
@@ -94,9 +95,17 @@ const finishedCount = computed(() => items.value.filter((i) => i.done || i.error
 const summaryHtml = computed(() => {
   if (!items.value.length) return ''
   const orig = items.value.reduce((s, i) => s + i.file.size, 0)
-  const comp = items.value.filter((i) => i.done).reduce((s, i) => s + i.outSize, 0)
-  const saved = orig > 0 ? Math.max(0, Math.round((1 - comp / orig) * 100)) : 0
-  return t('summary', items.value.length, doneCount.value, fmtSize(orig), fmtSize(comp), saved)
+  const doneItems = items.value.filter((i) => i.done)
+  const comp = doneItems.reduce((s, i) => s + i.outSize, 0)
+  // Saved % is computed over finished items only: with nothing finished yet,
+  // "0 B -> 100% saved" would be a lie, so it reads 0% until work lands.
+  const doneOrig = doneItems.reduce((s, i) => s + i.file.size, 0)
+  const saved = doneOrig > 0 ? Math.max(0, Math.round((1 - comp / doneOrig) * 100)) : 0
+  const base = t('summary', items.value.length, doneCount.value, fmtSize(orig), fmtSize(comp), saved)
+  // A recompress keeps old results visible (no flash), so a slow one
+  // (AVIF, PNG target search) would otherwise look dead: a quiet
+  // "updating" note in the same summary line is the only signal.
+  return recompressing.value ? `${base} · ${t('updating')}` : base
 })
 
 function refresh() {
@@ -121,23 +130,32 @@ function replaceItem(updated: CompressItem) {
 // Generation guard: settings changes and file adds can overlap in-flight runs.
 // Only the latest run's results are applied; a stale run's blob is revoked.
 let runGen = 0
+// Runs currently encoding (fresh or recompress). The summary shows an
+// "updating" note while a recompress is in flight over finished items.
+const activeRuns = ref(0)
+const recompressing = computed(() => activeRuns.value > 0 && items.value.length > 0 && items.value.every((i) => i.done))
 // At most 3 images decode/encode at once: throwing 50 phone photos through
 // Promise.all would spike memory and block the main thread.
 const MAX_CONCURRENT = 3
 async function runCompress(list: CompressItem[], g: number, snap: Settings) {
-  let idx = 0
-  const workers = Array.from({ length: MAX_CONCURRENT }, async () => {
-    while (idx < list.length) {
-      const item = list[idx++]
-      const res = await compressItem(item, snap, t)
-      if (g !== runGen) {
-        if (res.done) URL.revokeObjectURL(res.outUrl)
-        continue
+  activeRuns.value++
+  try {
+    let idx = 0
+    const workers = Array.from({ length: MAX_CONCURRENT }, async () => {
+      while (idx < list.length) {
+        const item = list[idx++]
+        const res = await compressItem(item, snap, t)
+        if (g !== runGen) {
+          if (res.done) URL.revokeObjectURL(res.outUrl)
+          continue
+        }
+        replaceItem({ ...item, ...res })
       }
-      replaceItem({ ...item, ...res })
-    }
-  })
-  await Promise.all(workers)
+    })
+    await Promise.all(workers)
+  } finally {
+    activeRuns.value--
+  }
 }
 
 function setLang(l: Lang) {
@@ -167,12 +185,10 @@ async function recompressAll() {
   if (!items.value.length) return
   const g = ++runGen
   const snap = { ...settings }
-  items.value = items.value.map((i) => {
-    const next = { ...i, done: false, error: null, view: 'orig' as const }
-    if (lightboxItem.value?.id === next.id) lightboxItem.value = next
-    return next
-  })
-  refresh()
+  // Do NOT reset finished items first: blanking them back to "processing"
+  // flashes the whole result card (progress bar, 0 B / 100% summary, thumbs
+  // flipping to original) on every settings click. Old results stay visible
+  // and downloadable until the new run's result replaces them.
   await runCompress(items.value, g, snap)
 }
 

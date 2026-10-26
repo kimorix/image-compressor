@@ -5,7 +5,7 @@ export function fmtSize(n: number): string {
 }
 
 export function extOf(type: string): string {
-  return ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' } as Record<string, string>)[type] || 'png'
+  return ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/avif': 'avif' } as Record<string, string>)[type] || 'png'
 }
 
 export function baseName(name: string): string {

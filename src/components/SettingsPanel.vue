@@ -7,6 +7,7 @@
         <option value="image/jpeg">{{ t('fmtJpeg') }}</option>
         <option value="image/png">{{ t('fmtPng') }}</option>
         <option value="image/webp">{{ t('fmtWebp') }}</option>
+        <option value="image/avif">{{ t('fmtAvif') }}</option>
       </select>
     </div>
     <div class="field">
@@ -24,6 +25,10 @@
       <label for="quality"><span>{{ t('qualityLabel') }}</span> <span class="value" id="qualityValue">{{ qualityShown }}%</span></label>
       <input type="range" id="quality" min="10" max="100" :value="qualityShown" :disabled="qualityLocked" @input="onQuality(($event.target as HTMLInputElement).value)" />
       <div class="field-hint" id="qualityHint" v-show="showPngHint">{{ t('pngHint') }}</div>
+      <div class="field-hint" id="quantHint" v-show="showQuantHint">{{ t('pngQuantHint') }}</div>
+    </div>
+    <div class="field" v-show="settings.format === 'image/png'">
+      <label><input type="checkbox" id="quantize" :checked="settings.quantize" @change="onQuantize(($event.target as HTMLInputElement).checked)" /> <span>{{ t('quantizeLabel') }}</span></label>
     </div>
     <div class="field">
       <label for="maxSize">{{ t('maxLabel') }}</label>
@@ -59,9 +64,12 @@ function onQuality(v: string) {
   qualityTimer = setTimeout(() => emit('update', { quality: q }, true), 300)
 }
 
-// PNG is lossless: the quality slider does nothing, so it is locked (not a bug).
-const qualityLocked = computed(() => props.settings.format === 'image/png' || props.settings.mode === 'target')
-const showPngHint = computed(() => props.settings.format === 'image/png' && props.settings.mode !== 'target')
+// PNG is lossless when quantization is off: the quality slider does nothing,
+// so it is locked (not a bug). With quantization on, the slider controls the
+// palette quality and is live.
+const qualityLocked = computed(() => (props.settings.format === 'image/png' && !props.settings.quantize) || props.settings.mode === 'target')
+const showPngHint = computed(() => props.settings.format === 'image/png' && !props.settings.quantize && props.settings.mode !== 'target')
+const showQuantHint = computed(() => props.settings.format === 'image/png' && props.settings.quantize && props.settings.mode !== 'target')
 
 let timer: ReturnType<typeof setTimeout> | null = null
 function debounce(patch: Partial<Settings>) {
@@ -77,4 +85,5 @@ function onMode(v: string) { emit('update', { mode: v as Settings['mode'] }, tru
 function onTargetDebounced(v: string) { debounce({ targetSize: parseInt(v, 10) || 200 }) }
 function onMaxDebounced(v: string) { debounce({ maxSize: parseInt(v, 10) || 0 }) }
 function onNoUpscale(v: boolean) { emit('update', { noUpscale: v }, true) }
+function onQuantize(v: boolean) { emit('update', { quantize: v }, true) }
 </script>
