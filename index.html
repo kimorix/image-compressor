@@ -84,6 +84,17 @@
         </select>
       </div>
       <div class="field">
+        <label for="mode">压缩模式</label>
+        <select id="mode">
+          <option value="quality" selected>按质量（手动调画质）</option>
+          <option value="target">按目标体积（自动调画质）</option>
+        </select>
+      </div>
+      <div class="field" id="targetField" hidden>
+        <label for="targetSize">目标体积（KB / 每张）</label>
+        <input type="number" id="targetSize" min="10" max="51200" value="200">
+      </div>
+      <div class="field">
         <label for="quality">质量 <span class="value" id="qualityValue">80%</span></label>
         <input type="range" id="quality" min="10" max="100" value="80">
         <div class="presets">
@@ -114,6 +125,7 @@
 <footer>
   开源项目：<a href="https://github.com/kimorix/image-compressor" target="_blank" rel="noopener">github.com/kimorix/image-compressor</a>（MIT 协议，欢迎 Star / 提 Issue）<br>
   所有压缩均在你的浏览器内完成，不经过任何服务器<br>
+  目标体积模式：对每张图自动二分调节质量，取不超过目标的最高画质；PNG 无损格式不适用。<br>
   注意：GIF 动图压缩后只保留首帧；JPEG 不支持透明通道，透明部分会填充白色。
 </footer>
 
@@ -121,6 +133,8 @@
 const dropzone = document.getElementById('dropzone');
 const fileInput = document.getElementById('fileInput');
 const formatSel = document.getElementById('format');
+const modeSel = document.getElementById('mode');
+const targetSizeInput = document.getElementById('targetSize');
 const qualityInput = document.getElementById('quality');
 const qualityValue = document.getElementById('qualityValue');
 const maxSizeInput = document.getElementById('maxSize');
@@ -143,13 +157,19 @@ const baseName = (name) => name.replace(/\.[^.]+$/, '');
 
 function syncQualityState() {
   const f = formatSel.value;
-  // PNG 为无损格式，质量滑杆不起作用
-  qualityInput.disabled = (f === 'image/png');
+  const target = modeSel.value === 'target';
+  // PNG 为无损格式，质量滑杆不起作用；目标体积模式下质量由工具自动调节
+  qualityInput.disabled = (f === 'image/png') || target;
   qualityValue.textContent = qualityInput.value + '%';
-  document.querySelectorAll('.presets button').forEach(b => b.classList.toggle('active', +b.dataset.q === +qualityInput.value));
+  document.querySelectorAll('.presets button').forEach(b => {
+    b.classList.toggle('active', +b.dataset.q === +qualityInput.value);
+    b.disabled = target;
+  });
 }
 qualityInput.addEventListener('input', () => { syncQualityState(); recompressAll(); });
 formatSel.addEventListener('change', () => { syncQualityState(); recompressAll(); });
+modeSel.addEventListener('change', () => { document.getElementById('targetField').hidden = modeSel.value !== 'target'; syncQualityState(); recompressAll(); });
+targetSizeInput.addEventListener('change', recompressAll);
 maxSizeInput.addEventListener('change', recompressAll);
 noUpscaleInput.addEventListener('change', recompressAll);
 document.querySelectorAll('.presets button').forEach(b => b.addEventListener('click', () => {
@@ -210,9 +230,40 @@ async function compressItem(item) {
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(outType)) outType = 'image/png';
     if (outType === 'image/jpeg') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, width, height); }
     ctx.drawImage(img, 0, 0, width, height);
-    const quality = qualityInput.value / 100;
-    const blob = await new Promise((res) => canvas.toBlob(res, outType, outType === 'image/png' ? undefined : quality));
-    if (!blob) throw new Error('浏览器不支持输出该格式');
+    const toBlobAt = (q) => new Promise((res) => canvas.toBlob(res, outType, outType === 'image/png' ? undefined : q));
+    let blob;
+    item.targetNote = null;
+    if (modeSel.value === 'target' && outType !== 'image/png') {
+      // 目标体积模式：二分找不超过目标的最高质量
+      const targetBytes = (parseInt(targetSizeInput.value, 10) || 200) * 1024;
+      const q100 = await toBlobAt(1);
+      if (!q100) throw new Error('浏览器不支持输出该格式');
+      if (q100.size <= targetBytes) {
+        blob = q100;
+        item.targetNote = '已是最高画质，仍小于目标';
+      } else {
+        let lo = 10, hi = 100, bestBlob = null, bestQ = 10;
+        while (lo <= hi) {
+          const mid = Math.floor((lo + hi) / 2);
+          const b = await toBlobAt(mid / 100);
+          if (!b) throw new Error('浏览器不支持输出该格式');
+          if (b.size <= targetBytes) { bestQ = mid; bestBlob = b; lo = mid + 1; }
+          else hi = mid - 1;
+        }
+        if (!bestBlob) {
+          blob = await toBlobAt(0.1);
+          item.targetNote = '已是最低画质，仍超目标';
+        } else {
+          blob = bestBlob;
+          item.targetNote = `自动质量 ${bestQ}%`;
+        }
+      }
+    } else {
+      if (modeSel.value === 'target') item.targetNote = 'PNG 无损格式无法按目标调节';
+      const quality = qualityInput.value / 100;
+      blob = await toBlobAt(quality);
+      if (!blob) throw new Error('浏览器不支持输出该格式');
+    }
     if (item.outUrl) URL.revokeObjectURL(item.outUrl);
     item.outUrl = URL.createObjectURL(blob);
     item.outSize = blob.size;
@@ -297,6 +348,12 @@ function render() {
       hint.className = 'hint';
       hint.textContent = '点击左侧预览可切换原图 / 压缩后对比';
       meta.appendChild(hint);
+      if (item.targetNote) {
+        const tn = document.createElement('div');
+        tn.className = 'dims';
+        tn.textContent = item.targetNote;
+        meta.appendChild(tn);
+      }
     }
     row.appendChild(thumbWrap);
     row.appendChild(meta);
