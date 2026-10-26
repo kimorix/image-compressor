@@ -1,36 +1,48 @@
-# 图片压缩 / Image Compressor
+# 图片压缩 Image Compressor
 
-在线体验：https://kimorix.github.io/image-compressor/
+免费开源的图片压缩工具。所有处理均在浏览器本地完成，图片不会上传到任何服务器。
 
-免费开源的图片压缩 Web 工具，单文件、无后端、无依赖。
+在线使用：https://kimorix.github.io/image-compressor/
 
-A free and open-source image compression web tool. Single HTML file, no backend, no dependencies.
+## 功能
 
-## 特性 / Features
+- 拖拽、点击选择、Ctrl+V 粘贴、批量处理
+- 输出格式：保持原格式、JPEG、PNG、WebP（默认 WebP）
+- 两种压缩模式：按质量（滑杆 10%–100%）；按目标体积（先二分搜最高质量、再缩尺寸兜底，直到装进目标）
+- 最长边默认 1920px，可设 0 不缩放；默认不放大
+- 每张图显示原体积 → 压缩后体积、节省百分比、原尺寸 → 输出尺寸、下载、移除
+- 压缩前后对比：点缩略图交叉淡化切换，点预览进全屏（可切原图/压缩后、点图放大）
+- 批量处理进度条；全部下载、清空列表；长文件名截短显示
+- 白天 / 黑夜主题（跟随系统，可手动切换并记住）
+- 界面语言下拉选择：中文、English、日本語、한국어、Français、Deutsch；默认跟随浏览器语言，手动选过后记住选择
+- Safari 兼容：浏览器不支持 WebP 编码时自动改用 JPEG 并提示（而不是静默出 PNG）
 
-- **100% 本地处理**：所有压缩都在浏览器内完成，图片不会上传到任何服务器
-- **批量处理**：拖拽、点击选择、Ctrl+V 粘贴，支持多张图片同时压缩
-- **输出格式**：保持原格式 / JPEG / PNG / WebP（推荐 WebP，体积小且保真）
-- **质量调节**：10%–100% 质量滑杆，实时重新压缩
-- **目标体积模式**：输入目标体积（如 200KB），先按质量、再按尺寸自动调节，直到装进目标；浏览器不支持 WebP 编码（如 Safari）时自动改用 JPEG
-- **尺寸缩放**：按最长边缩放，默认 1920px，可选不放大
-- **前后对比**：每张图显示原始体积 → 压缩后体积及节省百分比；点击缩略图可在原图/压缩后预览间切换，点击「预览」可全屏放大查看，支持原图/压缩后切换、点击图片缩放到原始尺寸
-- **批量下载**：一键下载全部压缩结果
-- **中英双语**：右上角可切换中文 / English 界面，切换后自动记住
-- **处理进度**：批量处理时顶部显示进度条，逐张完成推进
+## 已知限制
 
-## 使用 / Usage
-
-直接打开 `index.html` 即可使用，或访问 GitHub Pages 部署地址。
-
-Just open `index.html` in a browser, no build step required.
-
-## 注意事项 / Notes
-
-- GIF 动图压缩后只保留首帧（Canvas API 限制）
+- GIF 动图压缩后只保留首帧
 - JPEG 不支持透明通道，透明部分会填充白色
-- PNG 为无损格式，质量滑杆对 PNG 不起作用
+- PNG 为无损格式，画质参数不起作用，滑杆会锁定（不是 bug）
 
-## License
+## 技术栈
 
-MIT
+Vue 3 + Vite + TypeScript，组件化、模块化：
+
+- `src/App.vue`：页面结构与状态编排（上传 → 结果 → 设置）
+- `src/components/`：DropZone、SettingsPanel、ImageItem、Lightbox、ProgressBar
+- `src/lib/compress.ts`：Canvas 压缩核心（质量二分、尺寸兜底、WebP 回退探测）
+- `src/lib/format.ts`：体积格式化、文件名处理
+- `src/lib/theme.ts`：白天 / 黑夜主题
+- `src/i18n/`：六语词典与浏览器语言检测
+- `src/types.ts`：共享类型
+
+## 本地开发
+
+```bash
+npm install
+npm run dev      # 开发服务器
+npm run build    # 构建到 docs/
+```
+
+## 部署
+
+GitHub Pages 的源设为 `main` 分支的 `/docs` 文件夹，构建产物提交后即自动发布。

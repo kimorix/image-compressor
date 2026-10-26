@@ -1,0 +1,1 @@
+{"compilerOptions":{"module":"ESNext","moduleResolution":"bundler","skipLibCheck":true,"strict":true,"target":"ES2020","types":["vite/client"]},"include":["src","vite.config.ts"]}
