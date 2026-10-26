@@ -169,8 +169,12 @@ function syncQualityState() {
 qualityInput.addEventListener('input', () => { syncQualityState(); recompressAll(); });
 formatSel.addEventListener('change', () => { syncQualityState(); recompressAll(); });
 modeSel.addEventListener('change', () => { document.getElementById('targetField').hidden = modeSel.value !== 'target'; syncQualityState(); recompressAll(); });
-targetSizeInput.addEventListener('change', recompressAll);
-maxSizeInput.addEventListener('change', recompressAll);
+targetSizeInput.addEventListener('input', recompressDebounced);
+targetSizeInput.addEventListener('change', () => { clearTimeout(recompressTimer); recompressAll(); });
+let recompressTimer = null;
+function recompressDebounced() { clearTimeout(recompressTimer); recompressTimer = setTimeout(recompressAll, 500); }
+maxSizeInput.addEventListener('input', recompressDebounced);
+maxSizeInput.addEventListener('change', () => { clearTimeout(recompressTimer); recompressAll(); });
 noUpscaleInput.addEventListener('change', recompressAll);
 document.querySelectorAll('.presets button').forEach(b => b.addEventListener('click', () => {
   qualityInput.value = b.dataset.q;
