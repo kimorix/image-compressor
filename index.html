@@ -5,40 +5,69 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>图片压缩 - 100% 本地处理</title>
 <meta name="description" content="免费开源的图片压缩工具，所有处理均在浏览器本地完成，图片不会上传到任何服务器。">
+<meta name="theme-color" content="#010102">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('ic-theme');
+    if (!t) t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    document.documentElement.dataset.theme = t;
+  } catch (e) { document.documentElement.dataset.theme = 'dark'; }
+})();
+</script>
 <style>
-  :root { --bg: #f4f5f7; --card: #fff; --text: #17181c; --muted: #6b7280; --border: #e5e7eb; --accent: #2563eb; --accent-hover: #1d4ed8; --green: #15803d; --radius: 14px; --radius-sm: 10px; --shadow: 0 1px 3px rgba(0,0,0,.05); --ease: cubic-bezier(.4,0,.2,1); --fade: .35s; }
+  :root {
+    --bg: #010102; --card: #0f1011; --surface-2: #141516;
+    --text: #f7f8f8; --muted: #d0d6e0; --subtle: #8a8f98;
+    --border: #23252a; --border-strong: #34343a;
+    --accent: #5e6ad2; --accent-hover: #828fff; --green: #27a644; --red: #f87171;
+    --radius: 12px; --radius-sm: 8px; --ease: cubic-bezier(.4,0,.2,1); --fade: .35s;
+    --card-shadow: inset 0 1px 0 rgba(255,255,255,.04); --accent-soft: rgba(94,106,210,.12);
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #f5f6f6; --card: #ffffff; --surface-2: #f5f6f6;
+    --text: #17181c; --muted: #52525b; --subtle: #6b7280;
+    --border: #e5e7eb; --border-strong: #d4d4d8;
+    --green: #15803d; --red: #dc2626;
+    --card-shadow: 0 1px 3px rgba(0,0,0,.06); --accent-soft: rgba(94,106,210,.08);
+    color-scheme: light;
+  }
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; letter-spacing: -.05px; }
   header { max-width: 920px; margin: 0 auto; padding: 36px 16px 4px; display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-  header h1 { margin: 0; font-size: 30px; letter-spacing: .5px; }
-  header p { color: var(--muted); margin: 8px 0 0; }
-  .badge { display: inline-block; background: #dcfce7; color: var(--green); font-size: 13px; padding: 2px 10px; border-radius: 999px; margin-left: 8px; vertical-align: middle; }
-  .gh-btn { display: inline-block; padding: 9px 16px; border: 1px solid var(--border); border-radius: 999px; background: #fff; color: var(--text); text-decoration: none; font-size: 14px; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
-  .gh-btn:hover { border-color: var(--accent); color: var(--accent); }
+  header h1 { margin: 0; font-size: 30px; font-weight: 600; letter-spacing: -.6px; }
+  header p { color: var(--subtle); margin: 8px 0 0; font-size: 14px; }
+  .badge { display: inline-block; background: var(--surface-2); color: var(--muted); font-size: 12px; padding: 2px 8px; border-radius: 999px; margin-left: 8px; vertical-align: middle; }
+  .header-actions { display: flex; gap: 10px; align-items: center; }
+  .gh-btn { display: inline-block; padding: 9px 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); text-decoration: none; font-size: 14px; font-weight: 500; }
+  .gh-btn:hover { border-color: var(--border-strong); }
   main { max-width: 920px; margin: 0 auto; padding: 20px 16px 48px; }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
-  #dropzone { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 42px 20px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s; }
-  #dropzone:hover { border-color: #93c5fd; }
-  #dropzone.dragover { border-color: var(--accent); background: #eff6ff; }
-  #dropzone p { margin: 6px 0; color: var(--muted); }
-  #dropzone strong { font-size: 18px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 16px; box-shadow: var(--card-shadow); }
+  #dropzone { border: 2px dashed var(--border-strong); border-radius: 12px; padding: 42px 20px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s; }
+  #dropzone:hover { border-color: var(--accent); }
+  #dropzone.dragover { border-color: var(--accent); background: var(--accent-soft); }
+  #dropzone p { margin: 6px 0; color: var(--subtle); }
+  #dropzone strong { font-size: 18px; font-weight: 600; letter-spacing: -.2px; }
+  .drop-icon { width: 32px; height: 32px; color: var(--subtle); display: block; margin: 0 auto 10px; }
   .settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
-  .field label { display: block; font-size: 14px; margin-bottom: 6px; color: var(--muted); }
-  .field select, .field input[type="number"] { width: 100%; padding: 10px 12px; font-size: 16px; border: 1px solid var(--border); border-radius: 9px; background: #fff; }
+  .field label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--subtle); }
+  .field select, .field input[type="number"] { width: 100%; padding: 10px 12px; font-size: 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); }
   .field input[type="range"] { width: 100%; accent-color: var(--accent); }
+  .field input[type="checkbox"] { accent-color: var(--accent); }
   .field .value { font-size: 14px; color: var(--text); font-weight: 600; }
-  .field-hint { font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .field-hint { font-size: 13px; color: var(--subtle); margin-top: 6px; }
   .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
-  button { padding: 10px 18px; font-size: 15px; min-height: 44px; border-radius: 9px; border: 1px solid var(--border); background: #fff; cursor: pointer; }
-  button:hover:not(:disabled) { border-color: #9ca3af; }
+  button { padding: 10px 18px; font-size: 14px; font-weight: 500; min-height: 44px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--border-strong); }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
   button.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
   button:disabled { opacity: .5; cursor: not-allowed; }
   #summary { font-size: 15px; }
   #summary b { color: var(--green); }
-  .item { display: flex; gap: 16px; align-items: center; padding: 16px 0; border-top: 1px solid var(--border); }
+  .item { display: flex; gap: 16px; align-items: center; padding: 18px 0; border-top: 1px solid var(--border); }
   .item:first-child { border-top: none; }
-  .thumb { position: relative; width: 104px; height: 104px; flex-shrink: 0; cursor: default; overflow: hidden; border-radius: var(--radius-sm); background: #f1f5f9; }
+  .thumb { position: relative; width: 104px; height: 104px; flex-shrink: 0; cursor: default; overflow: hidden; border-radius: 8px; background: var(--surface-2); }
   .thumb.clickable { cursor: pointer; }
   .thumb img.layer { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity var(--fade) var(--ease); will-change: opacity; -webkit-transform: translateZ(0); }
   .thumb img.layer.top { opacity: 1; z-index: 1; }
@@ -46,6 +75,25 @@
   .item-actions { display: flex; gap: 10px; flex-shrink: 0; align-items: center; }
   .nw { white-space: nowrap; }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .item .meta { flex: 1; min-width: 0; }
+  .item .name { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .sizes { color: var(--subtle); font-size: 14px; margin-top: 4px; }
+  .item .sizes b { color: var(--green); }
+  .item .dims { color: var(--subtle); font-size: 13px; margin-top: 2px; }
+  .item .error { color: var(--red); font-size: 14px; margin-top: 4px; }
+  .item .hint { color: var(--subtle); font-size: 12px; margin-top: 2px; }
+  #lightbox { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.88); display: flex; flex-direction: column; }
+  #lightbox[hidden] { display: none; }
+  .lb-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px; color: #fff; }
+  .lb-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 15px; }
+  .lb-switch { display: flex; gap: 6px; flex-shrink: 0; }
+  .lb-switch button { background: transparent; color: #d1d5db; border-color: rgba(255,255,255,.3); min-height: 40px; padding: 8px 14px; }
+  .lb-switch button.active { background: #fff; color: #17181c; border-color: #fff; }
+  .lb-close { background: transparent; color: #fff; border-color: rgba(255,255,255,.3); font-size: 18px; min-height: 40px; padding: 8px 14px; flex-shrink: 0; }
+  .lb-body { flex: 1; overflow: auto; display: flex; padding: 8px 12px 12px; }
+  .lb-body img { margin: auto; display: block; max-width: 94vw; max-height: calc(100vh - 170px); max-height: calc(100dvh - 170px); object-fit: contain; cursor: zoom-in; }
+  .lb-body img.zoomed { max-width: none; max-height: none; cursor: zoom-out; }
+  .lb-foot { text-align: center; color: #d0d6e0; font-size: 13px; padding: 0 16px 16px; }
   @media (max-width: 600px) {
     header { padding: 24px 16px 0; }
     header h1 { font-size: 26px; }
@@ -58,35 +106,12 @@
     .item-actions { grid-area: actions; gap: 8px; }
     .item-actions button { padding: 8px 14px; font-size: 14px; min-height: 40px; }
     .item .sizes { font-size: 14px; }
+    .lb-head { flex-wrap: wrap; padding: 12px; }
+    .lb-name { flex-basis: 100%; }
   }
   @media (prefers-reduced-motion: reduce) {
     .thumb img.layer { transition: none; }
   }
-  .item .meta { flex: 1; min-width: 0; }
-  .item .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .item .sizes { color: var(--muted); font-size: 14px; margin-top: 4px; }
-  .item .sizes b { color: var(--green); }
-  .item .dims { color: var(--muted); font-size: 13px; margin-top: 2px; }
-  .item .error { color: #dc2626; font-size: 14px; margin-top: 4px; }
-  .item .hint { color: var(--muted); font-size: 12px; margin-top: 2px; }
-  #lightbox { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.88); display: flex; flex-direction: column; }
-  #lightbox[hidden] { display: none; }
-  .lb-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px; color: #fff; }
-  .lb-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 15px; }
-  .lb-switch { display: flex; gap: 6px; flex-shrink: 0; }
-  .lb-switch button { background: transparent; color: #d1d5db; border-color: rgba(255,255,255,.3); min-height: 40px; padding: 8px 14px; }
-  .lb-switch button.active { background: #fff; color: #17181c; border-color: #fff; }
-  .lb-close { background: transparent; color: #fff; border-color: rgba(255,255,255,.3); font-size: 18px; min-height: 40px; padding: 8px 14px; flex-shrink: 0; }
-  .lb-body { flex: 1; overflow: auto; display: flex; padding: 8px 12px 12px; }
-  .lb-body img { margin: auto; display: block; max-width: 94vw; max-height: calc(100vh - 170px); max-height: calc(100dvh - 170px); object-fit: contain; cursor: zoom-in; }
-  .lb-body img.zoomed { max-width: none; max-height: none; cursor: zoom-out; }
-  .lb-foot { text-align: center; color: #d1d5db; font-size: 13px; padding: 0 16px 16px; }
-  @media (max-width: 600px) {
-    .lb-head { flex-wrap: wrap; padding: 12px; }
-    .lb-name { flex-basis: 100%; }
-  }
-  footer { text-align: center; color: var(--muted); font-size: 13px; padding-bottom: 32px; line-height: 1.8; }
-  footer a { color: var(--accent); }
 </style>
 </head>
 <body>
@@ -95,11 +120,15 @@
     <h1>图片压缩<span class="badge">100% 本地处理</span></h1>
     <p>图片不会上传到任何服务器 · 支持批量 · 开源免费</p>
   </div>
-  <a class="gh-btn" href="https://github.com/kimorix/image-compressor" target="_blank" rel="noopener">GitHub 开源 ↗</a>
+  <div class="header-actions">
+    <button class="gh-btn" id="themeBtn" type="button" title="切换到白天模式">☀️ 白天</button>
+    <a class="gh-btn" href="https://github.com/kimorix/image-compressor" target="_blank" rel="noopener">GitHub 开源 ↗</a>
+  </div>
 </header>
 <main>
   <div class="card">
     <div id="dropzone" tabindex="0" role="button" aria-label="选择图片">
+      <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4m0 0L8 8m4-4l4 4"/><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
       <strong>拖拽图片到这里，或点击选择</strong>
       <p>支持 JPG、PNG、WebP、GIF（首帧）、BMP、SVG 等常见格式，也可直接 Ctrl+V 粘贴</p>
       <input type="file" id="fileInput" accept="image/*" multiple hidden>
@@ -175,6 +204,21 @@ const resultCard = document.getElementById('resultCard');
 const summaryEl = document.getElementById('summary');
 const listEl = document.getElementById('list');
 
+// 白天 / 黑夜切换：优先读 localStorage，否则跟随系统；手动切换后记住选择
+const themeBtn = document.getElementById('themeBtn');
+const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+function applyTheme(t) {
+  document.documentElement.dataset.theme = t;
+  try { localStorage.setItem('ic-theme', t); } catch (e) {}
+  themeBtn.textContent = t === 'dark' ? '☀️ 白天' : '🌙 黑夜';
+  themeBtn.title = t === 'dark' ? '切换到白天模式' : '切换到黑夜模式';
+  if (themeColorMeta) themeColorMeta.content = t === 'dark' ? '#010102' : '#f5f6f6';
+}
+themeBtn.addEventListener('click', () => {
+  applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+});
+applyTheme(document.documentElement.dataset.theme || 'dark');
+
 let items = []; // { id, file, url, outUrl, outName, outSize, origW, origH, outW, outH, view, error, done }
 
 const fmtSize = (n) => {
@@ -184,6 +228,14 @@ const fmtSize = (n) => {
 };
 const extOf = (type) => ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[type] || 'png');
 const baseName = (name) => name.replace(/\.[^.]+$/, '');
+// 列表里名字截短显示：留前 14 字 + 扩展名，完整名放 title 里
+const shortName = (name) => {
+  if (name.length <= 20) return name;
+  const dot = name.lastIndexOf('.');
+  const ext = dot > 0 && name.length - dot <= 6 ? name.slice(dot) : '';
+  const stem = ext ? name.slice(0, dot) : name;
+  return stem.slice(0, 14) + '…' + ext;
+};
 
 function syncQualityState() {
   const f = formatSel.value;
@@ -481,7 +533,8 @@ function render() {
     meta.className = 'meta';
     const name = document.createElement('div');
     name.className = 'name';
-    name.textContent = item.file.name;
+    name.textContent = shortName(item.file.name);
+    name.title = item.file.name;
     meta.appendChild(name);
     const sizes = document.createElement('div');
     sizes.className = 'sizes';
