@@ -18,16 +18,16 @@
     </div>
     <div class="field" id="targetField" v-show="settings.mode === 'target'">
       <label for="targetSize">{{ t('targetLabel') }}</label>
-      <input type="number" id="targetSize" min="10" max="51200" :value="settings.targetSize" @input="onTargetDebounced(($event.target as HTMLInputElement).value)" @change="onTargetNow(($event.target as HTMLInputElement).value)" />
+      <input type="number" id="targetSize" min="10" max="51200" :value="settings.targetSize" @input="onTargetDebounced(($event.target as HTMLInputElement).value)" />
     </div>
     <div class="field" id="qualityField" v-show="settings.mode !== 'target'">
-      <label for="quality"><span>{{ t('qualityLabel') }}</span> <span class="value" id="qualityValue">{{ settings.quality }}%</span></label>
-      <input type="range" id="quality" min="10" max="100" :value="settings.quality" :disabled="qualityLocked" @input="onQuality(($event.target as HTMLInputElement).value)" />
+      <label for="quality"><span>{{ t('qualityLabel') }}</span> <span class="value" id="qualityValue">{{ qualityShown }}%</span></label>
+      <input type="range" id="quality" min="10" max="100" :value="qualityShown" :disabled="qualityLocked" @input="onQuality(($event.target as HTMLInputElement).value)" />
       <div class="field-hint" id="qualityHint" v-show="showPngHint">{{ t('pngHint') }}</div>
     </div>
     <div class="field">
       <label for="maxSize">{{ t('maxLabel') }}</label>
-      <input type="number" id="maxSize" min="0" max="20000" :value="settings.maxSize" @input="onMaxDebounced(($event.target as HTMLInputElement).value)" @change="onMaxNow(($event.target as HTMLInputElement).value)" />
+      <input type="number" id="maxSize" min="0" max="20000" :value="settings.maxSize" @input="onMaxDebounced(($event.target as HTMLInputElement).value)" />
     </div>
     <div class="field">
       <label><input type="checkbox" id="noUpscale" :checked="settings.noUpscale" @change="onNoUpscale(($event.target as HTMLInputElement).checked)" /> <span>{{ t('noUpscale') }}</span></label>
@@ -36,7 +36,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { Settings } from '../types'
 
 const props = defineProps<{
@@ -46,6 +46,18 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update', patch: Partial<Settings>, immediate: boolean): void
 }>()
+
+// Quality slider: the % label follows the drag immediately, but the actual
+// recompress is debounced 300ms so dragging doesn't recompress every frame.
+const qualityShown = ref(props.settings.quality)
+watch(() => props.settings.quality, (q) => { qualityShown.value = q })
+let qualityTimer: ReturnType<typeof setTimeout> | null = null
+function onQuality(v: string) {
+  const q = parseInt(v, 10) || 80
+  qualityShown.value = q
+  if (qualityTimer) clearTimeout(qualityTimer)
+  qualityTimer = setTimeout(() => emit('update', { quality: q }, true), 300)
+}
 
 // PNG is lossless: the quality slider does nothing, so it is locked (not a bug).
 const qualityLocked = computed(() => props.settings.format === 'image/png' || props.settings.mode === 'target')
@@ -59,10 +71,10 @@ function debounce(patch: Partial<Settings>) {
 
 function onFormat(v: string) { emit('update', { format: v }, true) }
 function onMode(v: string) { emit('update', { mode: v as Settings['mode'] }, true) }
-function onQuality(v: string) { emit('update', { quality: parseInt(v, 10) || 80 }, true) }
+// Number inputs commit through the debounced input handler only. A @change
+// handler on top of it would fire again on blur and start a duplicate
+// recompress — which can even remove the download button mid-click.
 function onTargetDebounced(v: string) { debounce({ targetSize: parseInt(v, 10) || 200 }) }
-function onTargetNow(v: string) { if (timer) clearTimeout(timer); emit('update', { targetSize: parseInt(v, 10) || 200 }, true) }
 function onMaxDebounced(v: string) { debounce({ maxSize: parseInt(v, 10) || 0 }) }
-function onMaxNow(v: string) { if (timer) clearTimeout(timer); emit('update', { maxSize: parseInt(v, 10) || 0 }, true) }
 function onNoUpscale(v: boolean) { emit('update', { noUpscale: v }, true) }
 </script>

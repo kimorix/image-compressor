@@ -49,10 +49,18 @@ export async function compressItem(item: CompressItem, s: Settings, t: T): Promi
     let width = origW
     let height = origH
     const max = s.maxSize || 0
-    if (max > 0 && Math.max(width, height) > max) {
-      const scale = max / Math.max(width, height)
-      width = Math.round(width * scale)
-      height = Math.round(height * scale)
+    if (max > 0) {
+      const m = Math.max(width, height)
+      if (m > max) {
+        const scale = max / m
+        width = Math.round(width * scale)
+        height = Math.round(height * scale)
+      } else if (m < max && !s.noUpscale) {
+        // noUpscale off means upscaling to the longest side is genuinely allowed.
+        const scale = max / m
+        width = Math.round(width * scale)
+        height = Math.round(height * scale)
+      }
     }
     const canvas = document.createElement('canvas')
     const encodeAt = (w: number, h: number, type: string, q?: number): Promise<Blob | null> =>
@@ -132,6 +140,26 @@ export async function compressItem(item: CompressItem, s: Settings, t: T): Promi
       const quality = s.quality / 100
       blob = await encodeAt(width, height, outType, outType === 'image/png' ? undefined : quality)
       if (!blob) throw new Error(t('formatError'))
+    }
+    // Never output something bigger than the input: re-encoding an already
+    // compressed JPG (or PNG -> PNG) through canvas often grows the file.
+    // In that case return the original file itself and mark it already optimal.
+    // A fresh object URL is used so callers can revoke it without touching item.url.
+    if (blob!.size >= item.file.size) {
+      return {
+        done: true,
+        error: null,
+        origW,
+        origH,
+        outUrl: URL.createObjectURL(item.file),
+        outSize: item.file.size,
+        outW: origW,
+        outH: origH,
+        outName: item.file.name,
+        view: 'comp',
+        targetNote: t('alreadyBest'),
+        typeNote: null,
+      }
     }
     return {
       done: true,

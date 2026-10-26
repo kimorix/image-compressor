@@ -32,7 +32,7 @@
         />
       </div>
       <div class="actions">
-        <button class="primary" id="downloadAll" :disabled="doneCount === 0" @click="downloadAll">{{ t('downloadAll') }}</button>
+        <button class="primary" id="downloadAll" :disabled="doneCount === 0 || zipping" @click="downloadAll">{{ t('downloadAll') }}</button>
         <button id="clearAll" :disabled="items.length === 0" @click="clearAll">{{ t('clearAll') }}</button>
       </div>
     </div>
@@ -54,6 +54,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, shallowRef } from 'vue'
+import { zipSync } from 'fflate'
 import DropZone from './components/DropZone.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import ImageItem from './components/ImageItem.vue'
@@ -120,16 +121,23 @@ function replaceItem(updated: CompressItem) {
 // Generation guard: settings changes and file adds can overlap in-flight runs.
 // Only the latest run's results are applied; a stale run's blob is revoked.
 let runGen = 0
+// At most 3 images decode/encode at once: throwing 50 phone photos through
+// Promise.all would spike memory and block the main thread.
+const MAX_CONCURRENT = 3
 async function runCompress(list: CompressItem[], g: number, snap: Settings) {
-  await Promise.all(list.map((item) =>
-    compressItem(item, snap, t).then((res) => {
+  let idx = 0
+  const workers = Array.from({ length: MAX_CONCURRENT }, async () => {
+    while (idx < list.length) {
+      const item = list[idx++]
+      const res = await compressItem(item, snap, t)
       if (g !== runGen) {
         if (res.done) URL.revokeObjectURL(res.outUrl)
-        return
+        continue
       }
       replaceItem({ ...item, ...res })
-    }),
-  ))
+    }
+  })
+  await Promise.all(workers)
 }
 
 function setLang(l: Lang) {
@@ -188,16 +196,46 @@ function openLightbox(item: CompressItem) {
 }
 
 function downloadAll() {
-  items.value.filter((i) => i.done).forEach((item, idx) => {
-    setTimeout(() => {
-      const a = document.createElement('a')
-      a.href = item.outUrl!
-      a.download = item.outName!
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-    }, idx * 300)
-  })
+  void downloadAllZip()
+}
+
+const zipping = ref(false)
+async function downloadAllZip() {
+  const done = items.value.filter((i) => i.done && i.outUrl)
+  if (!done.length || zipping.value) return
+  // One zip download instead of many consecutive downloads: browsers,
+  // especially Safari/iOS, block the latter. level 0 (store) — the files are
+  // already compressed, no need to burn CPU recompressing them.
+  zipping.value = true
+  try {
+    const used = new Set<string>()
+    const files: Record<string, Uint8Array> = {}
+    for (const item of done) {
+      let name = item.outName ?? item.file.name
+      if (used.has(name)) {
+        const dot = name.lastIndexOf('.')
+        const stem = dot > 0 ? name.slice(0, dot) : name
+        const ext = dot > 0 ? name.slice(dot) : ''
+        let n = 2
+        while (used.has(`${stem}-${n}${ext}`)) n++
+        name = `${stem}-${n}${ext}`
+      }
+      used.add(name)
+      const buf = await (await fetch(item.outUrl!)).arrayBuffer()
+      files[name] = new Uint8Array(buf)
+    }
+    const zipped = zipSync(files, { level: 0 })
+    const url = URL.createObjectURL(new Blob([zipped], { type: 'application/zip' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'images-compressed.zip'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 5000)
+  } finally {
+    zipping.value = false
+  }
 }
 
 function clearAll() {
