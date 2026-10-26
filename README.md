@@ -38,9 +38,9 @@ Vue 3 + Vite + TypeScript，组件化、模块化：
 ## 本地开发
 
 ```bash
-npm install
-npm run dev      # 开发服务器
-npm run build    # 构建到 docs/
+pnpm install
+pnpm dev       # 开发服务器
+pnpm build     # 构建到 docs/
 ```
 
 ## 部署
