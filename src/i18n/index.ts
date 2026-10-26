@@ -1,0 +1,254 @@
+export type Lang = 'zh' | 'en' | 'ja' | 'ko' | 'fr' | 'de'
+
+export const LANGS: { code: Lang; label: string }[] = [
+  { code: 'zh', label: '中文' },
+  { code: 'en', label: 'English' },
+  { code: 'ja', label: '日本語' },
+  { code: 'ko', label: '한국어' },
+  { code: 'fr', label: 'Français' },
+  { code: 'de', label: 'Deutsch' },
+]
+
+type Fn = (...args: (string | number)[]) => string
+type Messages = Record<string, string | Fn>
+
+const zh: Messages = {
+  appTitle: '图片压缩', badgeLocal: '100% 本地处理',
+  headerSub: '图片不会上传到任何服务器 · 支持批量 · 开源免费', githubBtn: 'GitHub ↗',
+  dropTitle: '拖拽图片到这里，或点击选择',
+  dropSub: '支持 JPG、PNG、WebP、GIF（首帧）、BMP、SVG 等常见格式，也可直接 Ctrl+V 粘贴',
+  dropAria: '选择图片',
+  fmtLabel: '输出格式', fmtOriginal: '保持原格式', fmtJpeg: 'JPEG（体积最小，适合照片）',
+  fmtPng: 'PNG（无损，适合截图/线条图）', fmtWebp: 'WebP（体积小且保真，推荐）',
+  modeLabel: '压缩模式', modeQuality: '按质量（手动调画质）', modeTarget: '按目标体积（自动调画质）',
+  targetLabel: '目标体积（KB / 每张）', qualityLabel: '质量', maxLabel: '最长边（像素，0 = 不缩放）',
+  noUpscale: '不放大图片（只缩小）', downloadAll: '全部下载', clearAll: '清空列表',
+  footer: '所有压缩均在你的浏览器内完成，不经过任何服务器<br>目标体积模式：先按质量、再按尺寸自动调节，直到装进目标；浏览器不支持 WebP 编码时会自动改用 JPEG。<br>注意：GIF 动图压缩后只保留首帧；JPEG 不支持透明通道，透明部分会填充白色。',
+  pngHint: 'PNG 为无损格式，画质参数不起作用，滑杆已锁定',
+  decodeError: '无法解码该图片', formatError: '浏览器不支持输出该格式', compressFail: '压缩失败',
+  typeNoteWebp: '当前浏览器不支持 WebP 编码，已自动改用 JPEG',
+  targetBest: '已是最高画质，仍小于目标', targetUnder: '已小于目标', targetMin: '已缩到最小，仍超目标',
+  targetAutoQ: (q) => `自动质量 ${q}%`,
+  targetAutoSize: (w, h) => `自动尺寸 ${w}×${h}`,
+  targetAutoSizeLow: (w, h) => `自动尺寸 ${w}×${h}（最低画质）`,
+  lbOrig: '原图', lbComp: '压缩后', lbCloseAria: '关闭预览',
+  lbInfoComp: (w, h, s) => `压缩后 ${w}×${h} · ${s}`,
+  lbInfoOrig: (w, h, s) => `原图 ${w}×${h} · ${s}`,
+  summary: (n, d, o, c, s) => `共 ${n} 张，已完成 ${d} 张 · 原始 <span class="nw">${o}</span> → 压缩后 <span class="nw">${c}</span> · <b>节省 ${s}%</b>`,
+  sizes: (a, b, s) => `<span class="nw">${a}</span> → <span class="nw">${b}</span> · <b>节省 ${s}%</b>`,
+  processing: '处理中…', dimsUnchanged: '（尺寸未变）',
+  processingCount: (f, n) => `正在处理 ${f}/${n} 张`,
+  thumbHint: '点击左侧预览可切换原图 / 压缩后对比', thumbTitle: '点击切换原图 / 压缩后预览',
+  tagComp: '压缩后', tagOrig: '原图',
+  btnPreview: '预览', btnDownload: '下载', btnRemove: '移除',
+  themeToDay: '切换到白天模式', themeToNight: '切换到黑夜模式', themeAria: '切换主题',
+  docTitle: '图片压缩 - 100% 本地处理',
+  metaDesc: '免费开源的图片压缩工具，所有处理均在浏览器本地完成，图片不会上传到任何服务器。',
+  langAria: '显示语言',
+}
+
+const en: Messages = {
+  appTitle: 'Image Compressor', badgeLocal: '100% Local',
+  headerSub: 'Images never leave your device · Batch support · Free & open source', githubBtn: 'GitHub ↗',
+  dropTitle: 'Drag images here, or click to select',
+  dropSub: 'Supports JPG, PNG, WebP, GIF (first frame), BMP, SVG and more. You can also paste with Ctrl+V',
+  dropAria: 'Select images',
+  fmtLabel: 'Output format', fmtOriginal: 'Keep original', fmtJpeg: 'JPEG (smallest, best for photos)',
+  fmtPng: 'PNG (lossless, best for screenshots)', fmtWebp: 'WebP (small & high quality, recommended)',
+  modeLabel: 'Compression mode', modeQuality: 'By quality (manual)', modeTarget: 'By target size (auto)',
+  targetLabel: 'Target size (KB / per image)', qualityLabel: 'Quality', maxLabel: 'Longest side (px, 0 = no resize)',
+  noUpscale: "Don't upscale (only shrink)", downloadAll: 'Download all', clearAll: 'Clear list',
+  footer: 'All compression runs locally in your browser — nothing is uploaded to any server<br>Target size mode: adjusts quality first, then dimensions, until the file fits the target. If the browser cannot encode WebP, it falls back to JPEG automatically.<br>Note: animated GIFs keep only the first frame after compression; JPEG has no transparency, so transparent areas are filled white.',
+  pngHint: 'PNG is lossless, so the quality setting has no effect and the slider is locked',
+  decodeError: 'Cannot decode this image', formatError: 'This browser cannot encode this format', compressFail: 'Compression failed',
+  typeNoteWebp: 'This browser cannot encode WebP, switched to JPEG automatically',
+  targetBest: 'Already at best quality, still under target', targetUnder: 'Already under target', targetMin: 'Already at minimum size, still over target',
+  targetAutoQ: (q) => `Auto quality ${q}%`,
+  targetAutoSize: (w, h) => `Auto size ${w}×${h}`,
+  targetAutoSizeLow: (w, h) => `Auto size ${w}×${h} (lowest quality)`,
+  lbOrig: 'Original', lbComp: 'Compressed', lbCloseAria: 'Close preview',
+  lbInfoComp: (w, h, s) => `Compressed ${w}×${h} · ${s}`,
+  lbInfoOrig: (w, h, s) => `Original ${w}×${h} · ${s}`,
+  summary: (n, d, o, c, s) => `${n} images, ${d} done · Original <span class="nw">${o}</span> → Compressed <span class="nw">${c}</span> · <b>Saved ${s}%</b>`,
+  sizes: (a, b, s) => `<span class="nw">${a}</span> → <span class="nw">${b}</span> · <b>Saved ${s}%</b>`,
+  processing: 'Processing…', dimsUnchanged: '(unchanged)',
+  processingCount: (f, n) => `Processing ${f}/${n}`,
+  thumbHint: 'Click the thumbnail to compare original / compressed', thumbTitle: 'Click to switch original / compressed preview',
+  tagComp: 'Compressed', tagOrig: 'Original',
+  btnPreview: 'Preview', btnDownload: 'Download', btnRemove: 'Remove',
+  themeToDay: 'Switch to day mode', themeToNight: 'Switch to night mode', themeAria: 'Toggle theme',
+  docTitle: 'Image Compressor - 100% Local',
+  metaDesc: 'Free open-source image compression tool. Everything runs locally in your browser — images are never uploaded.',
+  langAria: 'Display language',
+}
+
+const ja: Messages = {
+  appTitle: '画像圧縮', badgeLocal: '100% ローカル処理',
+  headerSub: '画像はサーバーに送信されません · 一括処理対応 · 無料・オープンソース', githubBtn: 'GitHub ↗',
+  dropTitle: '画像をここにドラッグ、またはクリックして選択',
+  dropSub: 'JPG、PNG、WebP、GIF（最初のフレーム）、BMP、SVG などに対応。Ctrl+V での貼り付けも可能',
+  dropAria: '画像を選択',
+  fmtLabel: '出力形式', fmtOriginal: '元の形式を維持', fmtJpeg: 'JPEG（最も小さい、写真に最適）',
+  fmtPng: 'PNG（可逆、スクリーンショットに最適）', fmtWebp: 'WebP（小さく高画質、おすすめ）',
+  modeLabel: '圧縮モード', modeQuality: '画質指定（手動）', modeTarget: '目標サイズ指定（自動）',
+  targetLabel: '目標サイズ（KB / 1枚）', qualityLabel: '画質', maxLabel: '長辺（px、0 = リサイズなし）',
+  noUpscale: '拡大しない（縮小のみ）', downloadAll: 'すべてダウンロード', clearAll: 'リストをクリア',
+  footer: 'すべての圧縮はブラウザ内で行われ、サーバーには送信されません<br>目標サイズモード：まず画質、次にサイズを自動調整し、目標に収まるまで続けます。WebP エンコードに対応していないブラウザでは自動的に JPEG になります。<br>注意：アニメーション GIF は圧縮後最初のフレームのみ残ります。JPEG は透明度に対応していないため、透明部分は白で塗りつぶされます。',
+  pngHint: 'PNG は可逆形式のため、画質設定は無効でスライダーはロックされています',
+  decodeError: 'この画像をデコードできません', formatError: 'このブラウザはこの形式を出力できません', compressFail: '圧縮に失敗しました',
+  typeNoteWebp: 'このブラウザは WebP エンコードに対応していないため、自動的に JPEG に切り替えました',
+  targetBest: '最高画質でも目標を下回っています', targetUnder: 'すでに目標を下回っています', targetMin: '最小サイズまで縮小しましたが、まだ目標を超えています',
+  targetAutoQ: (q) => `自動画質 ${q}%`,
+  targetAutoSize: (w, h) => `自動サイズ ${w}×${h}`,
+  targetAutoSizeLow: (w, h) => `自動サイズ ${w}×${h}（最低画質）`,
+  lbOrig: '元画像', lbComp: '圧縮後', lbCloseAria: 'プレビューを閉じる',
+  lbInfoComp: (w, h, s) => `圧縮後 ${w}×${h} · ${s}`,
+  lbInfoOrig: (w, h, s) => `元画像 ${w}×${h} · ${s}`,
+  summary: (n, d, o, c, s) => `${n} 枚中 ${d} 枚完了 · 元サイズ <span class="nw">${o}</span> → 圧縮後 <span class="nw">${c}</span> · <b>${s}% 削減</b>`,
+  sizes: (a, b, s) => `<span class="nw">${a}</span> → <span class="nw">${b}</span> · <b>${s}% 削減</b>`,
+  processing: '処理中…', dimsUnchanged: '（サイズ変更なし）',
+  processingCount: (f, n) => `処理中 ${f}/${n} 枚`,
+  thumbHint: 'サムネイルをクリックすると元画像 / 圧縮後を比較できます', thumbTitle: 'クリックで元画像 / 圧縮後を切り替え',
+  tagComp: '圧縮後', tagOrig: '元画像',
+  btnPreview: 'プレビュー', btnDownload: 'ダウンロード', btnRemove: '削除',
+  themeToDay: 'デイモードに切り替え', themeToNight: 'ナイトモードに切り替え', themeAria: 'テーマを切り替え',
+  docTitle: '画像圧縮 - 100% ローカル処理',
+  metaDesc: '無料のオープンソース画像圧縮ツール。すべての処理はブラウザ内で行われ、画像がアップロードされることはありません。',
+  langAria: '表示言語',
+}
+
+const ko: Messages = {
+  appTitle: '이미지 압축', badgeLocal: '100% 로컬 처리',
+  headerSub: '이미지가 서버로 전송되지 않습니다 · 일괄 처리 지원 · 무료 오픈소스', githubBtn: 'GitHub ↗',
+  dropTitle: '이미지를 여기로 드래그하거나 클릭하여 선택',
+  dropSub: 'JPG, PNG, WebP, GIF(첫 프레임), BMP, SVG 등을 지원합니다. Ctrl+V로 붙여넣을 수도 있습니다',
+  dropAria: '이미지 선택',
+  fmtLabel: '출력 형식', fmtOriginal: '원본 형식 유지', fmtJpeg: 'JPEG(가장 작음, 사진에 적합)',
+  fmtPng: 'PNG(무손실, 스크린샷에 적합)', fmtWebp: 'WebP(작고 고화질, 추천)',
+  modeLabel: '압축 모드', modeQuality: '화질 지정(수동)', modeTarget: '목표 용량 지정(자동)',
+  targetLabel: '목표 용량(KB / 장당)', qualityLabel: '화질', maxLabel: '긴 변(px, 0 = 크기 조정 안 함)',
+  noUpscale: '확대하지 않음(축소만)', downloadAll: '모두 다운로드', clearAll: '목록 지우기',
+  footer: '모든 압축은 브라우저 안에서 이루어지며 서버로 전송되지 않습니다<br>목표 용량 모드: 먼저 화질을, 다음으로 크기를 자동 조절하여 목표에 들어갈 때까지 계속합니다. WebP 인코딩을 지원하지 않는 브라우저에서는 자동으로 JPEG으로 전환됩니다.<br>주의: 움직이는 GIF는 압축 후 첫 프레임만 남습니다. JPEG은 투명도를 지원하지 않으므로 투명 부분은 흰색으로 채워집니다.',
+  pngHint: 'PNG는 무손실 형식이므로 화질 설정이 적용되지 않아 슬라이더가 잠겨 있습니다',
+  decodeError: '이 이미지를 디코딩할 수 없습니다', formatError: '이 브라우저는 이 형식을 출력할 수 없습니다', compressFail: '압축에 실패했습니다',
+  typeNoteWebp: '이 브라우저는 WebP 인코딩을 지원하지 않아 자동으로 JPEG으로 전환했습니다',
+  targetBest: '최고 화질에서도 목표보다 작습니다', targetUnder: '이미 목표보다 작습니다', targetMin: '최소 크기까지 줄였지만 여전히 목표를 초과합니다',
+  targetAutoQ: (q) => `자동 화질 ${q}%`,
+  targetAutoSize: (w, h) => `자동 크기 ${w}×${h}`,
+  targetAutoSizeLow: (w, h) => `자동 크기 ${w}×${h}(최저 화질)`,
+  lbOrig: '원본', lbComp: '압축 후', lbCloseAria: '미리보기 닫기',
+  lbInfoComp: (w, h, s) => `압축 후 ${w}×${h} · ${s}`,
+  lbInfoOrig: (w, h, s) => `원본 ${w}×${h} · ${s}`,
+  summary: (n, d, o, c, s) => `총 ${n}장 중 ${d}장 완료 · 원본 <span class="nw">${o}</span> → 압축 후 <span class="nw">${c}</span> · <b>${s}% 절약</b>`,
+  sizes: (a, b, s) => `<span class="nw">${a}</span> → <span class="nw">${b}</span> · <b>${s}% 절약</b>`,
+  processing: '처리 중…', dimsUnchanged: '(크기 변경 없음)',
+  processingCount: (f, n) => `처리 중 ${f}/${n}장`,
+  thumbHint: '썸네일을 클릭하면 원본 / 압축 후를 비교할 수 있습니다', thumbTitle: '클릭하여 원본 / 압축 후 전환',
+  tagComp: '압축 후', tagOrig: '원본',
+  btnPreview: '미리보기', btnDownload: '다운로드', btnRemove: '삭제',
+  themeToDay: '주간 모드로 전환', themeToNight: '야간 모드로 전환', themeAria: '테마 전환',
+  docTitle: '이미지 압축 - 100% 로컬 처리',
+  metaDesc: '무료 오픈소스 이미지 압축 도구입니다. 모든 처리는 브라우저 안에서 이루어지며 이미지가 업로드되지 않습니다.',
+  langAria: '표시 언어',
+}
+
+const fr: Messages = {
+  appTitle: "Compresseur d'images", badgeLocal: '100 % local',
+  headerSub: 'Les images ne quittent jamais votre appareil · Traitement par lots · Gratuit et open source', githubBtn: 'GitHub ↗',
+  dropTitle: 'Glissez vos images ici, ou cliquez pour sélectionner',
+  dropSub: 'Prend en charge JPG, PNG, WebP, GIF (première image), BMP, SVG, etc. Vous pouvez aussi coller avec Ctrl+V',
+  dropAria: 'Sélectionner des images',
+  fmtLabel: 'Format de sortie', fmtOriginal: "Conserver l'original", fmtJpeg: 'JPEG (le plus léger, idéal pour les photos)',
+  fmtPng: 'PNG (sans perte, idéal pour les captures)', fmtWebp: 'WebP (léger et fidèle, recommandé)',
+  modeLabel: 'Mode de compression', modeQuality: 'Par qualité (manuel)', modeTarget: 'Par taille cible (auto)',
+  targetLabel: 'Taille cible (Ko / par image)', qualityLabel: 'Qualité', maxLabel: 'Plus grand côté (px, 0 = pas de redimensionnement)',
+  noUpscale: 'Ne pas agrandir (réduire seulement)', downloadAll: 'Tout télécharger', clearAll: 'Effacer la liste',
+  footer: 'Toute la compression s\'effectue localement dans votre navigateur — rien n\'est envoyé à un serveur<br>Mode taille cible : la qualité est d\'abord ajustée, puis les dimensions, jusqu\'à atteindre la cible. Si le navigateur ne peut pas encoder en WebP, il bascule automatiquement vers JPEG.<br>Remarque : les GIF animés ne conservent que la première image après compression ; le JPEG ne gère pas la transparence, les zones transparentes sont remplies en blanc.',
+  pngHint: 'Le PNG est sans perte, le réglage de qualité n\'a donc aucun effet et le curseur est verrouillé',
+  decodeError: 'Impossible de décoder cette image', formatError: 'Ce navigateur ne peut pas encoder ce format', compressFail: 'Échec de la compression',
+  typeNoteWebp: 'Ce navigateur ne peut pas encoder en WebP, bascule automatique vers JPEG',
+  targetBest: 'Déjà à la meilleure qualité, toujours sous la cible', targetUnder: 'Déjà sous la cible', targetMin: 'Déjà à la taille minimale, toujours au-dessus de la cible',
+  targetAutoQ: (q) => `Qualité auto ${q} %`,
+  targetAutoSize: (w, h) => `Taille auto ${w}×${h}`,
+  targetAutoSizeLow: (w, h) => `Taille auto ${w}×${h} (qualité minimale)`,
+  lbOrig: 'Original', lbComp: 'Après compression', lbCloseAria: "Fermer l'aperçu",
+  lbInfoComp: (w, h, s) => `Après compression ${w}×${h} · ${s}`,
+  lbInfoOrig: (w, h, s) => `Original ${w}×${h} · ${s}`,
+  summary: (n, d, o, c, s) => `${n} images, ${d} terminées · Original <span class="nw">${o}</span> → Compressé <span class="nw">${c}</span> · <b>${s} % économisés</b>`,
+  sizes: (a, b, s) => `<span class="nw">${a}</span> → <span class="nw">${b}</span> · <b>${s} % économisés</b>`,
+  processing: 'Traitement…', dimsUnchanged: '(inchangé)',
+  processingCount: (f, n) => `Traitement ${f}/${n}`,
+  thumbHint: 'Cliquez sur la miniature pour comparer l\'original et la version compressée', thumbTitle: 'Cliquez pour basculer entre l\'original et la version compressée',
+  tagComp: 'Compressé', tagOrig: 'Original',
+  btnPreview: 'Aperçu', btnDownload: 'Télécharger', btnRemove: 'Retirer',
+  themeToDay: 'Passer en mode jour', themeToNight: 'Passer en mode nuit', themeAria: 'Changer de thème',
+  docTitle: "Compresseur d'images - 100 % local",
+  metaDesc: 'Outil gratuit et open source de compression d\'images. Tout s\'exécute localement dans votre navigateur — les images ne sont jamais envoyées.',
+  langAria: "Langue d'affichage",
+}
+
+const de: Messages = {
+  appTitle: 'Bildkomprimierung', badgeLocal: '100 % lokal',
+  headerSub: 'Bilder verlassen Ihr Gerät nicht · Stapelverarbeitung · Kostenlos & Open Source', githubBtn: 'GitHub ↗',
+  dropTitle: 'Bilder hierher ziehen oder klicken, um auszuwählen',
+  dropSub: 'Unterstützt JPG, PNG, WebP, GIF (erstes Bild), BMP, SVG u. a. Auch per Strg+V einfügen möglich',
+  dropAria: 'Bilder auswählen',
+  fmtLabel: 'Ausgabeformat', fmtOriginal: 'Original beibehalten', fmtJpeg: 'JPEG (kleinste Datei, ideal für Fotos)',
+  fmtPng: 'PNG (verlustfrei, ideal für Screenshots)', fmtWebp: 'WebP (klein und hochwertig, empfohlen)',
+  modeLabel: 'Komprimierungsmodus', modeQuality: 'Nach Qualität (manuell)', modeTarget: 'Nach Zielgröße (automatisch)',
+  targetLabel: 'Zielgröße (KB / pro Bild)', qualityLabel: 'Qualität', maxLabel: 'Längste Seite (px, 0 = keine Skalierung)',
+  noUpscale: 'Nicht vergrößern (nur verkleinern)', downloadAll: 'Alle herunterladen', clearAll: 'Liste leeren',
+  footer: 'Die gesamte Komprimierung läuft lokal in Ihrem Browser — nichts wird an einen Server gesendet<br>Zielgrößen-Modus: Zuerst wird die Qualität, dann die Abmessung automatisch angepasst, bis die Zielgröße erreicht ist. Kann der Browser kein WebP encodieren, wird automatisch auf JPEG umgestellt.<br>Hinweis: Animierte GIFs behalten nach der Komprimierung nur das erste Bild; JPEG unterstützt keine Transparenz, transparente Bereiche werden weiß gefüllt.',
+  pngHint: 'PNG ist verlustfrei, daher hat die Qualitätseinstellung keine Wirkung und der Regler ist gesperrt',
+  decodeError: 'Dieses Bild kann nicht decodiert werden', formatError: 'Dieser Browser kann dieses Format nicht encodieren', compressFail: 'Komprimierung fehlgeschlagen',
+  typeNoteWebp: 'Dieser Browser kann kein WebP encodieren, automatisch auf JPEG umgestellt',
+  targetBest: 'Bereits bei bester Qualität, trotzdem unter dem Ziel', targetUnder: 'Bereits unter dem Ziel', targetMin: 'Bereits bei Mindestgröße, trotzdem über dem Ziel',
+  targetAutoQ: (q) => `Auto-Qualität ${q} %`,
+  targetAutoSize: (w, h) => `Auto-Größe ${w}×${h}`,
+  targetAutoSizeLow: (w, h) => `Auto-Größe ${w}×${h} (niedrigste Qualität)`,
+  lbOrig: 'Original', lbComp: 'Komprimiert', lbCloseAria: 'Vorschau schließen',
+  lbInfoComp: (w, h, s) => `Komprimiert ${w}×${h} · ${s}`,
+  lbInfoOrig: (w, h, s) => `Original ${w}×${h} · ${s}`,
+  summary: (n, d, o, c, s) => `${n} Bilder, ${d} fertig · Original <span class="nw">${o}</span> → Komprimiert <span class="nw">${c}</span> · <b>${s} % gespart</b>`,
+  sizes: (a, b, s) => `<span class="nw">${a}</span> → <span class="nw">${b}</span> · <b>${s} % gespart</b>`,
+  processing: 'Wird verarbeitet…', dimsUnchanged: '(unverändert)',
+  processingCount: (f, n) => `Verarbeite ${f}/${n}`,
+  thumbHint: 'Klicken Sie auf die Miniatur, um Original und komprimierte Version zu vergleichen', thumbTitle: 'Klicken, um zwischen Original und komprimierter Vorschau zu wechseln',
+  tagComp: 'Komprimiert', tagOrig: 'Original',
+  btnPreview: 'Vorschau', btnDownload: 'Herunterladen', btnRemove: 'Entfernen',
+  themeToDay: 'Zum hellen Modus wechseln', themeToNight: 'Zum dunklen Modus wechseln', themeAria: 'Design wechseln',
+  docTitle: 'Bildkomprimierung - 100 % lokal',
+  metaDesc: 'Kostenloses Open-Source-Tool zur Bildkomprimierung. Alles läuft lokal in Ihrem Browser — Bilder werden nie hochgeladen.',
+  langAria: 'Anzeigesprache',
+}
+
+export const MESSAGES: Record<Lang, Messages> = { zh, en, ja, ko, fr, de }
+
+// Guard: every language must define every key the default (zh) defines.
+const baseKeys = Object.keys(zh).sort()
+for (const code of Object.keys(MESSAGES) as Lang[]) {
+  const missing = baseKeys.filter((k) => !(k in MESSAGES[code]))
+  if (missing.length) throw new Error(`i18n ${code} missing keys: ${missing.join(', ')}`)
+}
+
+export function detectLang(): Lang {
+  const l = (navigator.language || '').toLowerCase()
+  for (const { code } of LANGS) {
+    if (l.startsWith(code)) return code
+  }
+  return 'en'
+}
+
+export function initialLang(): Lang {
+  try {
+    const stored = localStorage.getItem('ic-lang') as Lang | null
+    if (stored && stored in MESSAGES) return stored
+  } catch { /* ignore */ }
+  return detectLang()
+}
+
+export function t(lang: Lang, key: string, ...args: (string | number)[]): string {
+  const v = MESSAGES[lang][key]
+  if (typeof v === 'function') return v(...args)
+  return v
+}
