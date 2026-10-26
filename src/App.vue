@@ -19,18 +19,16 @@
 
     <div class="card" id="resultCard" v-show="items.length > 0">
       <ProgressBar :finished="finishedCount" :total="items.length" :t="t" />
-      <div id="summary" v-html="summaryHtml"></div>
+      <div id="summary" :class="{ updating: recompressing }" v-html="summaryHtml"></div>
       <div id="list">
         <ImageItem
           v-for="item in items"
           :key="item.id"
           :item="item"
-          :settings="settings"
           :t="t"
           @remove="removeItem"
           @preview="lightboxId = $event.id"
           @view-change="onViewChange"
-          @override="onItemOverride"
         />
       </div>
       <div v-if="allAlreadyBest" class="dl-note">{{ t('allBestNote', items.length) }}</div>
@@ -41,7 +39,7 @@
     </div>
 
     <div class="card" id="settingsCard">
-      <SettingsPanel :settings="settings" :t="t" @update="onSettingsUpdate" />
+      <SettingsPanel :settings="settings" :t="t" @update="onSettingsUpdate" @preset="onPreset" />
     </div>
   </main>
   <Lightbox v-if="lbItem" :item="lbItem" :t="t" @close="lightboxId = null" @view-change="onViewChange" />
@@ -60,20 +58,12 @@ import { LANGS, initialLang, t as tx, type Lang } from './i18n'
 import { applyTheme, initialTheme, MOON_ICON, SUN_ICON, type Theme } from './lib/theme'
 import { compressItem } from './lib/compress'
 import { fmtSize } from './lib/format'
+import { DEFAULT_SETTINGS, matchPreset, PRESETS } from './lib/presets'
 import { newItem, type CompressItem, type Settings } from './types'
 
 const lang = ref<Lang>(initialLang())
 const theme = ref<Theme>(initialTheme())
-const settings = reactive<Settings>({
-  format: 'image/webp',
-  mode: 'quality',
-  targetSize: 200,
-  quality: 80,
-  maxSize: 1920,
-  noUpscale: true,
-  quantize: true,
-  keepExif: false,
-})
+const settings = reactive<Settings>({ ...DEFAULT_SETTINGS })
 // shallowRef on purpose: File/Blob objects must never be wrapped by Vue's
 // reactive proxy (it breaks platform brand checks like createObjectURL).
 const items = shallowRef<CompressItem[]>([])
@@ -102,7 +92,10 @@ const summaryHtml = computed(() => {
   const doneOrig = doneItems.reduce((s, i) => s + i.file.size, 0)
   const saved = doneOrig > 0 ? Math.max(0, Math.round((1 - comp / doneOrig) * 100)) : 0
   const detail = t('summaryDetail', items.value.length, doneCount.value, fmtSize(orig), fmtSize(comp))
-    + (recompressing.value ? ` · ${t('updating')}` : '')
+    // The spinner slot is always in the DOM (invisible when idle): the old
+    // "updating…" text grew the line on narrow screens and pushed the whole
+    // settings card — including the preset just tapped — down mid-click.
+    + ' <span class="sum-spin" aria-hidden="true"></span>'
   // No big figure when nothing was saved yet (or everything was already
   // optimal): the per-item already-best badge carries that case.
   const body = (doneCount.value === 0 || saved === 0)
@@ -133,13 +126,18 @@ function replaceItem(updated: CompressItem) {
 // Generation guard: settings changes and file adds can overlap in-flight runs.
 // Only the latest run's results are applied; a stale run's blob is revoked.
 let runGen = 0
-// Runs currently encoding (fresh or recompress). The summary shows an
-// "updating" note while a recompress is in flight over finished items.
+// Runs currently encoding (fresh or recompress). The summary shows a
+// spinner while a recompress is in flight over finished items.
 const activeRuns = ref(0)
 const recompressing = computed(() => activeRuns.value > 0 && items.value.length > 0 && items.value.every((i) => i.done))
 // At most 3 images decode/encode at once: throwing 50 phone photos through
 // Promise.all would spike memory and block the main thread.
 const MAX_CONCURRENT = 3
+// A settings change that lands mid-run must not start a second run on top
+// of it (that was the click-spam freeze: several full encodes burning CPU
+// at once, only the last one's results kept). It just marks a trailing run,
+// which fires once with the latest settings when the active run drains.
+let pendingRecompress = false
 async function runCompress(list: CompressItem[], g: number, snap: Settings) {
   activeRuns.value++
   try {
@@ -147,10 +145,7 @@ async function runCompress(list: CompressItem[], g: number, snap: Settings) {
     const workers = Array.from({ length: MAX_CONCURRENT }, async () => {
       while (idx < list.length) {
         const item = list[idx++]
-        // Per-image overrides merge over the global snapshot: one item can
-        // be JPEG q40 while the rest stay WebP q80.
-        const effective = item.override ? { ...snap, ...item.override } : snap
-        const res = await compressItem(item, effective, t)
+        const res = await compressItem(item, snap, t)
         if (g !== runGen) {
           if (res.done) URL.revokeObjectURL(res.outUrl)
           continue
@@ -161,6 +156,10 @@ async function runCompress(list: CompressItem[], g: number, snap: Settings) {
     await Promise.all(workers)
   } finally {
     activeRuns.value--
+    if (activeRuns.value === 0 && pendingRecompress) {
+      pendingRecompress = false
+      void recompressAll()
+    }
   }
 }
 
@@ -189,6 +188,10 @@ function addFiles(files: File[]) {
 
 async function recompressAll() {
   if (!items.value.length) return
+  if (activeRuns.value > 0) {
+    pendingRecompress = true
+    return
+  }
   const g = ++runGen
   const snap = { ...settings }
   // Do NOT reset finished items first: blanking them back to "processing"
@@ -199,23 +202,36 @@ async function recompressAll() {
 }
 
 function onSettingsUpdate(patch: Partial<Settings>) {
+  // No-change updates (re-selecting the current format, dragging the slider
+  // back to its value) used to burn a full recompress for nothing.
+  const changed = (Object.keys(patch) as (keyof Settings)[]).some((k) => settings[k] !== patch[k])
+  if (!changed) return
   Object.assign(settings, patch)
+  void recompressAll()
+}
+
+// Preset click = apply; clicking the active preset again cancels it and
+// restores the settings from before any preset was applied. Switching
+// presets keeps the original snapshot, so cancel always returns to the
+// pre-preset state, not to the intermediate preset.
+const activePreset = computed(() => matchPreset(settings))
+let presetBase: Settings | null = null
+function onPreset(id: string) {
+  if (activePreset.value === id) {
+    const base = presetBase ?? DEFAULT_SETTINGS
+    presetBase = null
+    Object.assign(settings, { ...base })
+  } else {
+    if (activePreset.value === null) presetBase = { ...settings }
+    const p = PRESETS.find((x) => x.id === id)
+    if (!p) return
+    Object.assign(settings, p.patch)
+  }
   void recompressAll()
 }
 
 function onViewChange(item: CompressItem, view: 'orig' | 'comp') {
   replaceItem({ ...item, view })
-}
-
-// Per-image override: patch the item (replaceItem keeps the override across
-// later global recompresses) and re-run just that item.
-function onItemOverride(item: CompressItem, patch: { format?: string; quality?: number } | null) {
-  const updated: CompressItem = patch
-    ? { ...item, override: { ...(item.override ?? {}), ...patch } }
-    : { ...item, override: undefined }
-  replaceItem(updated)
-  const g = ++runGen
-  void runCompress([updated], g, { ...settings })
 }
 
 function removeItem(item: CompressItem) {

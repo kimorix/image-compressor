@@ -28,45 +28,25 @@
       </template>
     </div>
     <div class="item-actions">
-      <button class="gear-btn" :class="{ active: !!item.override }" :title="t('overrideAria')" :aria-label="t('overrideAria')" @click="showPanel = !showPanel">⚙</button>
       <a v-if="item.done && item.outUrl" class="dl-icon" :href="item.outUrl" :download="item.outName ?? undefined" :title="t('btnDownload')" :aria-label="t('btnDownload')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></a>
       <button class="remove-btn" :title="t('btnRemove')" :aria-label="t('btnRemove')" @click="$emit('remove', item)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 7V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2m-8 0l1 13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-13"/></svg></button>
-    </div>
-    <div v-if="showPanel" class="override-panel">
-      <div class="field">
-        <label>{{ t('fmtLabel') }}</label>
-        <select class="ov-format" :value="item.override?.format ?? settings.format" @change="onOvFormat(($event.target as HTMLSelectElement).value)">
-          <option value="original">{{ t('fmtOriginal') }}</option>
-          <option value="image/jpeg">{{ t('fmtJpeg') }}</option>
-          <option value="image/png">{{ t('fmtPng') }}</option>
-          <option value="image/webp">{{ t('fmtWebp') }}</option>
-          <option value="image/avif">{{ t('fmtAvif') }}</option>
-        </select>
-      </div>
-      <div class="field" v-if="settings.mode !== 'target'">
-        <label class="qlabel"><span>{{ t('qualityLabel') }}</span> <span class="value">{{ ovQualityShown }}%</span></label>
-        <input type="range" class="ov-quality" min="10" max="100" :value="ovQualityShown" @input="onOvQuality(($event.target as HTMLInputElement).value)" />
-      </div>
-      <button v-if="item.override" class="ov-reset" @click="$emit('override', item, null)">{{ t('overrideReset') }}</button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import type { CompressItem, Settings } from '../types'
+import type { CompressItem } from '../types'
 import { fmtSize, shortName } from '../lib/format'
 
 const props = defineProps<{
   item: CompressItem
-  settings: Settings
   t: (key: string, ...args: (string | number)[]) => string
 }>()
 const emit = defineEmits<{
   (e: 'remove', item: CompressItem): void
   (e: 'preview', item: CompressItem): void
   (e: 'view-change', item: CompressItem, view: 'orig' | 'comp'): void
-  (e: 'override', item: CompressItem, patch: { format?: string; quality?: number } | null): void
 }>()
 
 const layerA = ref<HTMLImageElement | null>(null)
@@ -132,23 +112,6 @@ watch(() => props.item.view, () => {
 function onThumbClick() {
   if (!props.item.done) return
   emit('preview', props.item)
-}
-
-// Per-image override panel: format applies immediately, quality is debounced
-// like the global slider. The slider follows the override when one exists,
-// otherwise the global quality.
-const showPanel = ref(false)
-const ovQualityShown = ref(props.item.override?.quality ?? props.settings.quality)
-watch(() => props.item.override?.quality ?? props.settings.quality, (q) => { ovQualityShown.value = q })
-let ovTimer: ReturnType<typeof setTimeout> | null = null
-function onOvFormat(v: string) {
-  emit('override', props.item, { format: v })
-}
-function onOvQuality(v: string) {
-  const q = parseInt(v, 10) || 80
-  ovQualityShown.value = q
-  if (ovTimer) clearTimeout(ovTimer)
-  ovTimer = setTimeout(() => emit('override', props.item, { quality: q }), 300)
 }
 
 const savedPct = computed(() => {

@@ -118,7 +118,16 @@ button {
   .sum-big { font-size: 28px; font-weight: 600; letter-spacing: -.5px; line-height: 1.2; color: var(--green); margin-bottom: 2px; }
   .sum-detail { font-size: 14px; color: var(--muted); }
   .list-hint { font-size: 13px; color: var(--subtle); margin-top: 6px; }
+  // Recompress spinner: always in the DOM at a fixed size, invisible when
+  // idle — toggling it must never reflow the line (the old "updating…" text
+  // did exactly that on narrow screens).
+  .sum-spin {
+    display: inline-block; width: 12px; height: 12px; margin-left: 6px; vertical-align: -1px;
+    border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; opacity: 0;
+  }
+  &.updating .sum-spin { opacity: 1; animation: spin .8s linear infinite; }
 }
+@keyframes spin { to { transform: rotate(360deg); } }
 // Desktop: settings are a sticky right sidebar next to upload + results,
 // so tuning never means scrolling past the list to find the controls.
 @media (min-width: 720px) {
@@ -181,13 +190,13 @@ button {
   }
 }
 .item-actions { display: flex; gap: 10px; flex-shrink: 0; align-items: center; }
+// Both row icons are flex-centered the same way: the old <button> relied on
+// baseline alignment, which sat the trash icon a pixel or two off the
+// download icon.
 .item-actions button.remove-btn {
+  display: inline-flex; align-items: center; justify-content: center;
   min-width: 44px; min-height: 44px; padding: 0; font-size: 22px; line-height: 1;
   &:hover:not(:disabled) { color: var(--red); border-color: var(--red); }
-}
-.item-actions button.gear-btn {
-  min-width: 44px; min-height: 44px; padding: 0; font-size: 20px; line-height: 1;
-  &.active { color: var(--accent); border-color: var(--accent); }
 }
 .item-actions a.dl-icon {
   display: inline-flex; align-items: center; justify-content: center;
@@ -214,12 +223,6 @@ button {
   &.zoomed img { max-width: none; max-height: none; cursor: zoom-out; }
 }
 .lb-hint { text-align: center; color: #bbb; font-size: 13px; }
-.override-panel {
-  display: flex; gap: 16px; flex-wrap: wrap; align-items: end; flex-basis: 100%;
-  padding: 12px 0 4px;
-  .field { flex: 1 1 200px; }
-  .ov-reset { min-height: 40px; }
-}
 .nw { white-space: nowrap; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 footer { max-width: 920px; margin: 0 auto; padding: 0 16px 40px; color: var(--subtle); font-size: 13px; line-height: 1.7; }
@@ -235,10 +238,10 @@ footer { max-width: 920px; margin: 0 auto; padding: 0 16px 40px; color: var(--su
   }
   .thumb { grid-area: thumb; width: 84px; height: 84px; }
   .item .meta { grid-area: meta; }
-  .item .override-panel { grid-column: 1 / -1; }
   .item-actions {
     grid-area: actions; gap: 8px;
     button { padding: 8px 14px; font-size: 14px; min-height: 40px; }
+    button.remove-btn { padding: 0; }
     a.dl-icon { min-height: 40px; }
   }
 }

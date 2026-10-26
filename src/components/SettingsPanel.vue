@@ -9,7 +9,8 @@
         class="preset-btn"
         :data-preset="p.id"
         :class="{ active: activePreset === p.id }"
-        @click="emit('update', p.patch, true)"
+        :title="activePreset === p.id ? t('presetCancelTitle') : ''"
+        @click="emit('preset', p.id)"
       >{{ t('preset_' + p.id) }}</button>
     </div>
     <div class="field">
@@ -55,6 +56,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { Settings } from '../types'
+import { matchPreset, PRESETS } from '../lib/presets'
 
 const props = defineProps<{
   settings: Settings
@@ -62,25 +64,12 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{
   (e: 'update', patch: Partial<Settings>, immediate: boolean): void
+  (e: 'preset', id: string): void
 }>()
 
-// One-tap scenes: WeChat chat images (JPEG, 1920), WeChat article images
-// (JPEG, 900px body width), ID photos (target mode, 200KB cap).
-const PRESETS: { id: string; patch: Partial<Settings> }[] = [
-  { id: 'wechat', patch: { format: 'image/jpeg', mode: 'quality', quality: 85, maxSize: 1920 } },
-  { id: 'article', patch: { format: 'image/jpeg', mode: 'quality', quality: 85, maxSize: 900 } },
-  { id: 'idphoto', patch: { format: 'image/jpeg', mode: 'target', targetSize: 200 } },
-]
-const activePreset = computed(() => {
-  const s = props.settings
-  for (const p of PRESETS) {
-    if (p.id === 'idphoto') {
-      if (s.mode === 'target' && s.targetSize === 200 && s.format === 'image/jpeg') return p.id
-    } else if (s.mode === 'quality' && s.format === p.patch.format
-      && s.quality === p.patch.quality && s.maxSize === p.patch.maxSize) return p.id
-  }
-  return null
-})
+// Active preset is derived from the settings themselves, so a manual tweak
+// that leaves a preset's values automatically clears the highlight.
+const activePreset = computed(() => matchPreset(props.settings))
 
 // Quality slider: the % label follows the drag immediately, but the actual
 // recompress is debounced 300ms so dragging doesn't recompress every frame.
