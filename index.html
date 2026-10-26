@@ -42,7 +42,7 @@
   .item:first-child { border-top: none; }
   .thumb { position: relative; flex-shrink: 0; cursor: default; }
   .thumb.clickable { cursor: pointer; }
-  .thumb img { width: 104px; height: 104px; object-fit: cover; border-radius: 10px; background: #f1f5f9; display: block; }
+  .thumb img { width: 104px; height: 104px; object-fit: cover; border-radius: 10px; background: #f1f5f9; display: block; transition: opacity .25s ease; }
   .thumb .tag { position: absolute; left: 6px; bottom: 6px; background: rgba(0,0,0,.65); color: #fff; font-size: 12px; padding: 1px 7px; border-radius: 999px; }
   .item .meta { flex: 1; min-width: 0; }
   .item .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -363,8 +363,20 @@ function render() {
     thumbWrap.appendChild(thumb);
     thumbWrap.appendChild(tag);
     if (item.done) thumbWrap.addEventListener('click', () => {
-      item.view = item.view === 'comp' ? 'orig' : 'comp';
-      render();
+      // 淡出→换图→淡入，且只更新当前这一张，不整列表重建，避免切换时下面内容闪烁
+      if (thumbWrap.dataset.switching) return;
+      thumbWrap.dataset.switching = '1';
+      const imgEl = thumbWrap.querySelector('img');
+      const tagEl = thumbWrap.querySelector('.tag');
+      const finish = () => { imgEl.style.opacity = '1'; delete thumbWrap.dataset.switching; };
+      imgEl.style.opacity = '0';
+      setTimeout(() => {
+        item.view = item.view === 'comp' ? 'orig' : 'comp';
+        imgEl.onload = finish;
+        imgEl.src = item.view === 'comp' ? item.outUrl : item.url;
+        tagEl.textContent = item.view === 'comp' ? '压缩后' : '原图';
+        setTimeout(finish, 500); // 兜底：onload 未触发时也能恢复显示
+      }, 220);
     });
     const meta = document.createElement('div');
     meta.className = 'meta';
