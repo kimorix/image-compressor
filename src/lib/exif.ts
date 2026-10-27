@@ -45,7 +45,7 @@ export async function restoreExif(original: Blob, compressed: Blob): Promise<Blo
     delete exifObj['GPS']
     const exifBytes = piexif.dump(exifObj)
     const outBinary = piexif.insert(exifBytes, toBinary(compBytes))
-    return new Blob([fromBinary(outBinary)], { type: 'image/jpeg' })
+    return new Blob([fromBinary(outBinary) as BlobPart], { type: 'image/jpeg' })
   } catch (err) {
     console.warn('[image-compressor] EXIF restore failed, keeping stripped output:', err)
     return compressed
