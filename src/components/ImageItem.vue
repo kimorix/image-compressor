@@ -11,7 +11,7 @@
     </div>
     <div class="row-main">
       <div class="cell-name">
-        <div class="name" :title="item.file.name">{{ shortName(item.file.name) }}</div>
+        <div class="name" :title="item.file.name"><span class="name-stem">{{ nameParts.stem }}</span><span class="name-ext">{{ nameParts.ext }}</span></div>
         <span class="fmt-tag">{{ fmtTag }}</span>
       </div>
       <div class="orig-size">{{ fmtSize(item.file.size) }}</div>
@@ -42,7 +42,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import type { CompressItem } from '../types'
-import { fmtSize, shortName } from '../lib/format'
+import { fmtSize } from '../lib/format'
 
 const props = defineProps<{
   item: CompressItem
@@ -55,6 +55,15 @@ const emit = defineEmits<{
   (e: 'use-webp', item: CompressItem): void
   (e: 'retry', item: CompressItem): void
 }>()
+
+// Name cell: the stem truncates with CSS (fills whatever width the column
+// has) while the extension stays visible, instead of a fixed-length cut
+// that could still overflow the column or waste room on wide screens.
+const nameParts = computed(() => {
+  const n = props.item.file.name
+  const dot = n.lastIndexOf('.')
+  return dot > 0 && n.length - dot <= 6 ? { stem: n.slice(0, dot), ext: n.slice(dot) } : { stem: n, ext: '' }
+})
 
 const layerA = ref<HTMLImageElement | null>(null)
 const layerB = ref<HTMLImageElement | null>(null)

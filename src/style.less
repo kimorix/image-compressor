@@ -238,11 +238,11 @@ html { touch-action: manipulation; }
   }
   .item .thumb { width: 48px; height: 48px; }
   .item .row-main { grid-column: 2; display: grid; grid-template-columns: minmax(96px, 1fr) 68px 68px 48px 76px 60px auto; gap: 10px 6px; align-items: center; }
-  .item .cell-name { grid-column: 1; min-width: 0; }
+  .item .cell-name { grid-column: 1; min-width: 0; padding-right: 8px; }
   .item .orig-size { grid-column: 2; }
   .item .comp-size { grid-column: 3; }
   .item .save-cell { grid-column: 4; }
-  #list .item .dims { grid-column: 5; min-width: 0; font-size: 12px; }
+  #list .item .dims { grid-column: 5; min-width: 0; font-size: 12px; align-items: center; }
   .item .cell-status { grid-column: 6; }
   .item .item-actions { grid-column: 7; gap: 8px; }
   #list .item .item-actions button, #list .item .item-actions a.dl-icon { min-width: 36px; min-height: 36px; }
@@ -301,7 +301,9 @@ html { touch-action: manipulation; }
 .item {
   display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 12px; align-items: start; padding: 18px 0; border-top: 1px solid var(--border);
   &:first-child { border-top: none; }
-  .name { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .name { display: flex; max-width: 100%; font-weight: 600; font-size: 14px; white-space: nowrap; }
+  .name-stem { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .name-ext { flex: none; }
   .orig-size { color: var(--subtle); font-size: 14px; }
   .comp-size { font-size: 14px; }
   .dims { color: var(--subtle); font-size: 13px; display: flex; flex-direction: column; align-items: flex-start; line-height: 1.35; white-space: nowrap; }
@@ -581,7 +583,7 @@ main { max-width: none; margin: 0; padding: 0; min-width: 0; }
   .thumb-strip { display: flex; gap: 8px; align-items: stretch; margin-top: 16px; }
   .strip-viewport { flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: none; }
   .strip-viewport::-webkit-scrollbar { display: none; }
-  .strip-track { display: flex; gap: 12px; width: max-content; }
+  .strip-track { display: flex; gap: 12px; width: max-content; padding: 4px; } // room for the selected outline (2px + 2px offset), the scroller clips both axes
   .strip-nav { flex: none; width: 32px; min-height: auto; padding: 0; font-size: 22px; line-height: 1; border-radius: 8px; }
   .strip-nav:disabled { opacity: .35; }
   .strip-tile { position: relative; width: 96px; text-align: left; background: transparent; border: none; padding: 0; cursor: pointer; }

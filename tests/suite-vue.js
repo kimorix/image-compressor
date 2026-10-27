@@ -396,9 +396,14 @@ async function toQualityEmpty(page) {
   page = await newPage(browser);
   await upload(page, T + 'dji_20251026143022_grassland_photo.jpg');
   await waitDone(page, 1);
-  const shownName = await page.$eval('.item .name', (el) => el.textContent);
+  // 主干用 CSS 省略号截断（按列宽），扩展名单独一段始终可见，名字不溢出到相邻列
+  const nameBox = await page.$eval('.item .name', (el) => {
+    const stem = el.querySelector('.name-stem'); const cell = el.closest('.cell-name');
+    return { truncated: stem.scrollWidth > stem.clientWidth, ext: el.querySelector('.name-ext').textContent,
+      inside: el.getBoundingClientRect().right <= cell.getBoundingClientRect().right + 1 };
+  });
   const fullTitle = await page.$eval('.item .name', (el) => el.title);
-  check('长文件名截短显示且保留扩展名', shownName.includes('…') && shownName.endsWith('.jpg') && shownName.length < fullTitle.length, shownName);
+  check('长文件名截短显示且保留扩展名、不溢出', nameBox.truncated && nameBox.ext === '.jpg' && nameBox.inside, JSON.stringify(nameBox));
   check('完整文件名在 title 里', fullTitle === 'dji_20251026143022_grassland_photo.jpg', fullTitle);
   await page.close();
 
