@@ -16,6 +16,12 @@ export interface CompressItem {
   done: boolean
   targetNote: string | null
   typeNote: string | null
+  // Final output type (after any fallback flip), whether any pixel was
+  // transparent, and whether the input was an animated GIF. All three
+  // arrive with the compress result; defaults cover pre-result items.
+  outType: string | null
+  hasAlpha: boolean
+  isAnimatedGif: boolean
   // Settings snapshot the item's CURRENT result was computed under
   // (null until its first successful compress). recompressAll compares
   // each item against its own snapshot, so interleaved runs can't
@@ -29,9 +35,16 @@ export interface Settings {
   targetSize: number
   quality: number
   maxSize: number
+  // How maxSize is read: longest side (default), exact width, exact height,
+  // or a percent of the original size.
+  resizeMode: 'longest' | 'width' | 'height' | 'percent'
   noUpscale: boolean
   quantize: boolean
   keepExif: boolean
+  // JPEG fill for transparent pixels (default white); empty = white.
+  jpegFill: string
+  // Output name keeps the original filename instead of adding -compressed.
+  keepOriginalName: boolean
 }
 
 export function newItem(file: File): CompressItem {
@@ -51,6 +64,9 @@ export function newItem(file: File): CompressItem {
     done: false,
     targetNote: null,
     typeNote: null,
+    outType: null,
+    hasAlpha: false,
+    isAnimatedGif: false,
     lastSettings: null,
   }
 }

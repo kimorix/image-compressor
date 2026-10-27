@@ -9,7 +9,6 @@
         class="preset-btn"
         :data-preset="p.id"
         :class="{ active: activePreset === p.id }"
-        :title="activePreset === p.id ? t('presetCancelTitle') : ''"
         @click="emit('preset', p.id)"
       >{{ t('preset_' + p.id) }}</button>
     </div>
@@ -24,6 +23,8 @@
       </select>
       <label class="check" v-show="settings.format === 'image/png'"><input type="checkbox" id="quantize" :checked="settings.quantize" @change="onQuantize(($event.target as HTMLInputElement).checked)" /> <span>{{ t('quantizeLabel') }}</span></label>
       <label class="check" v-show="settings.format === 'image/jpeg'"><input type="checkbox" id="keepExif" :checked="settings.keepExif" @change="onKeepExif(($event.target as HTMLInputElement).checked)" /> <span>{{ t('keepExifLabel') }}</span></label>
+      <label class="check" v-show="settings.format === 'image/jpeg'"><input type="color" id="jpegFill" :value="settings.jpegFill" @change="onJpegFill(($event.target as HTMLInputElement).value)" /> <span>{{ t('jpegFillLabel') }}</span></label>
+      <label class="check"><input type="checkbox" id="keepOriginalName" :checked="settings.keepOriginalName" @change="onKeepOriginalName(($event.target as HTMLInputElement).checked)" /> <span>{{ t('keepOriginalNameLabel') }}</span></label>
     </div>
     <div class="field">
       <label for="mode">{{ t('modeLabel') }}</label>
@@ -41,8 +42,17 @@
       <input type="range" id="quality" min="10" max="100" :value="qualityShown" :disabled="qualityLocked" @input="onQuality(($event.target as HTMLInputElement).value)" />
     </div>
     <div class="field">
-      <label for="maxSize">{{ t('maxLabel') }}</label>
-      <input type="number" id="maxSize" min="0" max="20000" :value="settings.maxSize" @input="onMaxDebounced(($event.target as HTMLInputElement).value)" />
+      <label for="resizeMode">{{ t('resizeModeLabel') }}</label>
+      <select id="resizeMode" :value="settings.resizeMode" @change="onResizeMode(($event.target as HTMLSelectElement).value)">
+        <option value="longest">{{ t('resizeLongest') }}</option>
+        <option value="width">{{ t('resizeWidth') }}</option>
+        <option value="height">{{ t('resizeHeight') }}</option>
+        <option value="percent">{{ t('resizePercent') }}</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="maxSize">{{ resizeValueLabel }}</label>
+      <input type="number" id="maxSize" :min="settings.resizeMode === 'percent' ? 1 : 0" :max="settings.resizeMode === 'percent' ? 100 : 20000" :value="settings.maxSize" @input="onMaxDebounced(($event.target as HTMLInputElement).value)" />
       <label class="check"><input type="checkbox" id="noUpscale" :checked="settings.noUpscale" @change="onNoUpscale(($event.target as HTMLInputElement).checked)" /> <span>{{ t('noUpscale') }}</span></label>
     </div>
     <!-- PNG notes live in their own full-width row below the grid, not
@@ -50,6 +60,13 @@
     cell's height and push every field below it down mid-interaction. -->
     <div class="settings-note" id="qualityHint" v-show="showPngHint">{{ t('pngHint') }}</div>
     <div class="settings-note" id="quantHint" v-show="showQuantHint">{{ t('pngQuantHint') }}</div>
+    <!-- Footer notes, moved next to the control they describe: JPEG
+    transparency and the WebP fallback belong to the format, the target
+    mechanism to the mode. The GIF line stays in the footer until the
+    per-file GIF tag lands (it describes inputs, not a setting). -->
+    <div class="settings-note" id="jpegNote" v-show="settings.format === 'image/jpeg'">{{ t('fmtJpegNote') }}</div>
+    <div class="settings-note" id="webpNote" v-show="settings.format === 'image/webp'">{{ t('fmtWebpNote') }}</div>
+    <div class="settings-note" id="targetModeNote" v-show="settings.mode === 'target'">{{ t('modeTargetNote') }}</div>
   </div>
 </template>
 
@@ -70,6 +87,27 @@ const emit = defineEmits<{
 // Active preset is derived from the settings themselves, so a manual tweak
 // that leaves a preset's values automatically clears the highlight.
 const activePreset = computed(() => matchPreset(props.settings))
+
+// Resize value label follows the mode: longest keeps the old wording.
+const resizeValueLabel = computed(() => {
+  switch (props.settings.resizeMode) {
+    case 'width': return props.t('resizeWidthLabel')
+    case 'height': return props.t('resizeHeightLabel')
+    case 'percent': return props.t('resizePercentLabel')
+    default: return props.t('maxLabel')
+  }
+})
+// Switching modes resets the value into the new mode's range, so a
+// longest-side 1920 does not silently become a 1920% scale (capped to no
+// resize by noUpscale) or a 50% becomes a 50px width.
+function onResizeMode(v: string) {
+  const m = v as Settings['resizeMode']
+  const cur = props.settings.resizeMode
+  const patch: Partial<Settings> = { resizeMode: m }
+  if (m === 'percent' && cur !== 'percent' && props.settings.maxSize > 100) patch.maxSize = 100
+  if (m !== 'percent' && cur === 'percent' && props.settings.maxSize <= 100) patch.maxSize = 1920
+  emit('update', patch, true)
+}
 
 // Quality slider: the % label follows the drag immediately, but the actual
 // recompress is debounced 300ms so dragging doesn't recompress every frame.
@@ -139,4 +177,8 @@ function onMaxDebounced(v: string) { pendingTarget = false; debounce({ maxSize: 
 function onNoUpscale(v: boolean) { emit('update', { noUpscale: v }, true) }
 function onQuantize(v: boolean) { emit('update', { quantize: v }, true) }
 function onKeepExif(v: boolean) { emit('update', { keepExif: v }, true) }
+// Color picker commits on change (not input): dragging the picker would
+// otherwise fire a recompress per input event.
+function onJpegFill(v: string) { emit('update', { jpegFill: v }, true) }
+function onKeepOriginalName(v: boolean) { emit('update', { keepOriginalName: v }, true) }
 </script>

@@ -1,7 +1,7 @@
 <template>
   <header>
     <div>
-      <h1><span>{{ t('appTitle') }}</span><span class="badge">{{ t('badgeLocal') }}</span></h1>
+      <h1><span>{{ t('appTitle') }}</span><span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 018 0v3" /></svg>{{ t('badgeLocal') }}</span></h1>
       <p>{{ t('headerSub') }}</p>
     </div>
     <div class="header-actions">
@@ -9,17 +9,22 @@
       <select id="langSelect" class="lang-select" :value="lang" :aria-label="t('langAria')" @change="setLang(($event.target as HTMLSelectElement).value as Lang)">
         <option v-for="l in LANGS" :key="l.code" :value="l.code">{{ l.label }}</option>
       </select>
-      <a class="gh-btn" href="https://github.com/kimorix/image-compressor" target="_blank" rel="noopener">{{ t('githubBtn') }}</a>
+      <a class="gh-btn" href="https://github.com/kimorix/image-compressor" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z" /></svg><span class="gh-text">{{ t('githubBtn') }}</span></a>
     </div>
   </header>
-  <main>
+  <main :class="{ 'no-result': items.length === 0 }">
     <div class="card" id="uploadCard">
-      <DropZone :t="t" :compact="items.length > 0" @files="addFiles" />
+      <DropZone ref="dropzoneRef" :t="t" :compact="items.length > 0" @files="addFiles" />
       <p v-if="fileHint" class="file-hint">{{ fileHint }}</p>
     </div>
 
     <div class="card" id="settingsCard">
-      <SettingsPanel :settings="settings" :t="t" @update="onSettingsUpdate" @preset="onPreset" />
+      <button v-if="items.length > 0" class="settings-summary" type="button" :aria-expanded="!settingsCollapsed" @click="settingsCollapsed = !settingsCollapsed">
+        <span>{{ settingsSummary }}</span><span class="settings-caret">{{ settingsCollapsed ? '▾' : '▴' }}</span>
+      </button>
+      <div :class="{ 'settings-body-collapsed': items.length > 0 && settingsCollapsed }">
+        <SettingsPanel :settings="settings" :t="t" @update="onSettingsUpdate" @preset="onPreset" />
+      </div>
     </div>
 
     <div class="card" id="resultCard" v-show="items.length > 0">
@@ -33,6 +38,7 @@
           :t="t"
           @remove="removeItem"
           @preview="lightboxId = $event.id"
+          @use-webp="onUseWebp"
         />
       </div>
       <div v-if="allAlreadyBest" class="dl-note">{{ t('allBestNote', items.length) }}</div>
@@ -42,9 +48,15 @@
       </div>
     </div>
   </main>
-  <!-- Global recompress indicator: the summary spinner is easy to scroll
-  past, so a floating pill shows the same state anywhere on the page.
-  pointer-events none: it must never block taps while a run is in flight. -->
+  <div class="sticky-bar" v-show="items.length > 0">
+    <button class="sticky-add" type="button" @click="openPicker">{{ t('addBtn') }}</button>
+    <button class="sticky-clear" type="button" :disabled="items.length === 0" @click="onClearClick">{{ clearConfirm ? t('clearConfirm') : t('clearAll') }}</button>
+    <button class="sticky-download primary" type="button" :disabled="doneCount === 0 || zipping" @click="downloadAll">{{ t('downloadAll') }}</button>
+  </div>
+  <div class="sticky-spacer" v-show="items.length > 0" aria-hidden="true"></div>
+  <!-- Global recompress indicator: the centered "processing" pill is the
+  single loading indicator. pointer-events none: it must never block taps
+  while a run is in flight. -->
   <div class="global-loading" :class="{ show: recompressing }" aria-hidden="true"><span class="gl-spin"></span><span>{{ t('processing') }}</span></div>
   <div v-if="pageDragging" class="page-drop-hint" aria-hidden="true">{{ t('dropAnywhere') }}</div>
   <Lightbox v-if="lbItem" :item="lbItem" :t="t" @close="lightboxId = null" />
@@ -62,7 +74,7 @@ import ProgressBar from './components/ProgressBar.vue'
 import { LANGS, initialLang, t as tx, type Lang } from './i18n'
 import { applyTheme, initialTheme, MOON_ICON, SUN_ICON, type Theme } from './lib/theme'
 import { CompressPool } from './lib/compress-pool'
-import { fmtSize } from './lib/format'
+import { baseName, fmtSize } from './lib/format'
 import { DEFAULT_SETTINGS, matchPreset, PRESETS } from './lib/presets'
 import { loadSavedSettings, saveSettings } from './lib/settings-store'
 import { newItem, type CompressItem, type Settings } from './types'
@@ -76,6 +88,24 @@ watch(settings, () => saveSettings(settings), { deep: true })
 // shallowRef on purpose: File/Blob objects must never be wrapped by Vue's
 // reactive proxy (it breaks platform brand checks like createObjectURL).
 const items = shallowRef<CompressItem[]>([])
+
+// Mobile settings collapse: with images, the settings card folds to a
+// one-line summary (tapping it expands). Default collapsed so the results
+// are visible right under the upload area.
+const settingsCollapsed = ref(true)
+const settingsSummary = computed(() => {
+  const fmt = settings.format === 'original' ? t('fmtOriginal')
+    : settings.format === 'image/webp' ? 'WebP' : settings.format.split('/')[1].toUpperCase()
+  const mode = settings.mode === 'target' ? `≤${settings.targetSize}KB` : `${settings.quality}%`
+  const parts = [fmt, mode]
+  if (settings.maxSize) parts.push(settings.resizeMode === 'percent' ? `${settings.maxSize}%` : `${settings.maxSize}px`)
+  return parts.join(' · ')
+})
+
+// Sticky-bar "+ Add" reuses the dropzone's picker (a label for the hidden
+// file input is unreliable on iOS Safari; a programmatic click is not).
+const dropzoneRef = ref<{ openPicker: () => void } | null>(null)
+function openPicker() { dropzoneRef.value?.openPicker() }
 
 function t(key: string, ...args: (string | number)[]): string {
   return tx(lang.value, key, ...args)
@@ -226,7 +256,21 @@ function isUnaffected(item: CompressItem, next: Settings): boolean {
   if (next.mode === 'quality' && next.quality < prev.quality) return false
   if (next.mode === 'target' && next.targetSize < prev.targetSize) return false
   const origMax = Math.max(item.origW, item.origH)
-  const dimOf = (s: Settings) => (!s.maxSize ? origMax : (s.noUpscale ? Math.min(origMax, s.maxSize) : s.maxSize))
+  const dimOf = (s: Settings) => {
+    if (!s.maxSize) return origMax
+    if (s.resizeMode === 'percent') {
+      let sc = s.maxSize / 100
+      if (s.noUpscale && sc > 1) sc = 1
+      return Math.round(origMax * sc)
+    }
+    if (s.resizeMode === 'width' || s.resizeMode === 'height') {
+      const dim = s.resizeMode === 'width' ? item.origW : item.origH
+      const out = (dim > s.maxSize || !s.noUpscale) ? s.maxSize : dim
+      const other = s.resizeMode === 'width' ? item.origH : item.origW
+      return Math.max(out, Math.round(other * (out / dim)))
+    }
+    return s.noUpscale ? Math.min(origMax, s.maxSize) : s.maxSize
+  }
   if (dimOf(next) < dimOf(prev)) return false
   const injectedUnderPrev = prev.keepExif && item.file.type === 'image/jpeg'
     && (prev.format === 'image/jpeg' || prev.format === 'original')
@@ -254,27 +298,37 @@ function onSettingsUpdate(patch: Partial<Settings>) {
   // back to its value) used to burn a full recompress for nothing.
   const changed = (Object.keys(patch) as (keyof Settings)[]).some((k) => settings[k] !== patch[k])
   if (!changed) return
+  const onlyName = Object.keys(patch).length === 1 && 'keepOriginalName' in patch
   Object.assign(settings, patch)
+  if (onlyName) {
+    // Renaming needs no re-encode: rewrite the download names in place
+    // (new objects, so the rows re-render). Already-best items keep the
+    // original filename either way and are skipped.
+    items.value = items.value.map((item) => {
+      if (!item.done || !item.outName || item.outSize >= item.file.size) return item
+      const dot = item.outName.lastIndexOf('.')
+      const ext = dot > 0 ? item.outName.slice(dot) : ''
+      return { ...item, outName: baseName(item.file.name) + (settings.keepOriginalName ? '' : '-compressed') + ext }
+    })
+    return
+  }
   void recompressAll()
 }
 
-// Preset click = apply; clicking the active preset again cancels it and
-// restores the settings from before any preset was applied. Switching
-// presets keeps the original snapshot, so cancel always returns to the
-// pre-preset state, not to the intermediate preset.
-const activePreset = computed(() => matchPreset(settings))
-let presetBase: Settings | null = null
+// Transparent image flattened to JPEG: the row offers the one-tap fix.
+function onUseWebp() {
+  onSettingsUpdate({ format: 'image/webp' })
+}
+
+// Preset click = apply. Clicking the active preset again is a no-op: it
+// stays highlighted (the old cancel-on-reclick made users think the click
+// missed). Only a manual settings change clears the highlight, via
+// matchPreset in the panel.
 function onPreset(id: string) {
-  if (activePreset.value === id) {
-    const base = presetBase ?? DEFAULT_SETTINGS
-    presetBase = null
-    Object.assign(settings, { ...base })
-  } else {
-    if (activePreset.value === null) presetBase = { ...settings }
-    const p = PRESETS.find((x) => x.id === id)
-    if (!p) return
-    Object.assign(settings, p.patch)
-  }
+  if (matchPreset(settings) === id) return
+  const p = PRESETS.find((x) => x.id === id)
+  if (!p) return
+  Object.assign(settings, p.patch)
   void recompressAll()
 }
 
@@ -323,7 +377,9 @@ async function downloadAllZip() {
     const url = URL.createObjectURL(new Blob([zipped], { type: 'application/zip' }))
     const a = document.createElement('a')
     a.href = url
-    a.download = 'images-compressed.zip'
+    const d = new Date()
+    const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
+    a.download = `images-compressed-${ymd}-${done.length}.zip`
     document.body.appendChild(a)
     a.click()
     a.remove()

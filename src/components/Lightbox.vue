@@ -2,18 +2,23 @@
   <div class="lb-overlay" @click.self="$emit('close')">
     <div class="lb-box">
       <div class="lb-bar">
+        <div class="lb-zoom">
+          <button type="button" class="lb-zoom-btn" :class="{ active: zoomLevel === 'fit' }" :aria-pressed="zoomLevel === 'fit'" @click="zoomLevel = 'fit'">{{ t('lbFit') }}</button>
+          <button type="button" class="lb-zoom-btn" :class="{ active: zoomLevel === '100' }" :aria-pressed="zoomLevel === '100'" @click="zoomLevel = '100'">100%</button>
+          <button type="button" class="lb-zoom-btn" :class="{ active: zoomLevel === '200' }" :aria-pressed="zoomLevel === '200'" @click="zoomLevel = '200'">200%</button>
+        </div>
         <button class="lb-close" :title="t('lbClose')" :aria-label="t('lbClose')" @click="$emit('close')">×</button>
       </div>
-      <div class="lb-stage" :class="{ zoomed }">
-        <div class="lb-compare" ref="compareRef">
+      <div class="lb-stage" :class="{ zoomed: zoomLevel !== 'fit' }">
+        <div class="lb-compare" ref="compareRef" :style="compareStyle">
           <!-- Base layer: compressed when done, else the original (same
           fallback as the row thumbnail, covers the recompress window). -->
-          <img class="lb-img" :src="compSrc" :alt="item.file.name" @click="zoomed = !zoomed" />
+          <img class="lb-img" :src="compSrc" :alt="item.file.name" @click="cycleZoom" />
           <!-- Original layer, clipped to the left of the divider. Both
           layers share the wrapper's box, so they stay aligned at any zoom
           and scroll together when the stage pans. -->
           <div class="lb-orig-clip" :style="{ clipPath: `inset(0 ${100 - pos}% 0 0)` }">
-            <img class="lb-img" :src="item.url" :alt="item.file.name" @click="zoomed = !zoomed" />
+            <img class="lb-img" :src="item.url" :alt="item.file.name" @click="cycleZoom" />
           </div>
           <div
             class="lb-divider"
@@ -71,7 +76,24 @@ const dimsText = computed(() => {
   return `${it.origW}×${it.origH} → ${it.outW}×${it.outH}`
 })
 
-const zoomed = ref(false)
+// Zoom levels: fit (default), 100% (natural size), 200% (doubled).
+// Both layers share the wrapper's box, so scaling the wrapper scales them
+// together. The base width comes from the item fields, not the DOM:
+// compressed → outW, else original → origW (covers the recompress window).
+const zoomLevel = ref<'fit' | '100' | '200'>('fit')
+const baseW = computed(() => {
+  const it = props.item
+  const w = it.done && it.outUrl && it.outW ? it.outW : it.origW
+  return w > 0 ? w : 0
+})
+const compareStyle = computed(() => {
+  if (zoomLevel.value === 'fit' || !baseW.value) return {}
+  const factor = zoomLevel.value === '200' ? 2 : 1
+  return { width: `${baseW.value * factor}px` }
+})
+function cycleZoom() {
+  zoomLevel.value = zoomLevel.value === 'fit' ? '100' : zoomLevel.value === '100' ? '200' : 'fit'
+}
 const pos = ref(50)
 const compareRef = ref<HTMLElement | null>(null)
 
@@ -105,6 +127,31 @@ function onDividerKey(e: KeyboardEvent) {
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape') emit('close')
 }
-onMounted(() => window.addEventListener('keydown', onKey))
-onUnmounted(() => window.removeEventListener('keydown', onKey))
+// Scroll lock: while the preview is open, swipes on the overlay must not
+// scroll the page behind (iOS Safari chains them to the document).
+// overflow:hidden alone still lets iOS scroll through a fixed overlay, so
+// the body itself is pinned: position fixed + top offset preserves the
+// visual position, and unmount restores it. The stage keeps its own
+// overflow:auto, so zoomed panning still works.
+let savedY = 0
+function lockScroll() {
+  savedY = window.scrollY
+  const b = document.body
+  b.style.position = 'fixed'
+  b.style.top = `-${savedY}px`
+  b.style.left = '0'
+  b.style.right = '0'
+  b.style.width = '100%'
+}
+function unlockScroll() {
+  const b = document.body
+  b.style.position = ''
+  b.style.top = ''
+  b.style.left = ''
+  b.style.right = ''
+  b.style.width = ''
+  window.scrollTo(0, savedY)
+}
+onMounted(() => { window.addEventListener('keydown', onKey); lockScroll() })
+onUnmounted(() => { window.removeEventListener('keydown', onKey); unlockScroll() })
 </script>
