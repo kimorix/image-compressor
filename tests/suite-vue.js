@@ -774,7 +774,7 @@ async function toQualityEmpty(page) {
   const cancelFmt = await page.$eval('#formatSelect', (el) => el.value);
   const cancelQ = await page.$eval('#quality', (el) => el.value);
   const cancelHref = await itemHrefs(page);
-  check('再点已选预设取消：高亮消失、回到默认 WebP 质量 80 并重压', wcActive.includes('active') && !cancelActive.includes('active') && cancelFmt === 'image/webp' && cancelQ === '80' && JSON.stringify(cancelHref) !== JSON.stringify(wcHref), `${wcActive}/${cancelActive}/${cancelFmt}/${cancelQ}`);
+  check('再点已选预设取消：高亮消失、回到默认智能格式并重压', wcActive.includes('active') && !cancelActive.includes('active') && cancelFmt === 'auto' && cancelQ === '80' && JSON.stringify(cancelHref) !== JSON.stringify(wcHref), `${wcActive}/${cancelActive}/${cancelFmt}/${cancelQ}`);
   await change(page, () => pickPreset(page, 'wechat'));
   await change(page, () => setQuality(page, 90));
   const clearedActive = await page.$eval('#presetSelect', (el) => (el.value === 'wechat' ? 'active' : ''));
@@ -823,13 +823,13 @@ async function toQualityEmpty(page) {
   await upload(page, T + 'test.jpg');
   await waitDone(page, 1);
   await page.click('.settings-summary');
-  const presetsY0 = await page.$eval('.presets', (el) => el.getBoundingClientRect().top + window.scrollY);
+  const presetsY0 = await page.$eval('#presetSelect', (el) => el.getBoundingClientRect().top + window.scrollY);
   const noSumSpin0 = (await page.$('#summary .sum-spin')) === null;
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
   await pickPreset(page, 'wechat');
   await page.waitForFunction(() => document.querySelector('.global-loading')?.classList.contains('show'), null, { timeout: 10000 });
-  const presetsY1 = await page.$eval('.presets', (el) => el.getBoundingClientRect().top + window.scrollY);
+  const presetsY1 = await page.$eval('#presetSelect', (el) => el.getBoundingClientRect().top + window.scrollY);
   const pillCenter = await page.$eval('.global-loading', (el) => { const r = el.getBoundingClientRect(); return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 }; });
   const vp = await page.evaluate(() => ({ w: window.innerWidth, h: window.innerHeight }));
   const centered = Math.abs(pillCenter.cx - vp.w / 2) <= 2 && Math.abs(pillCenter.cy - vp.h / 2) <= 2;
