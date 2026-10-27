@@ -136,6 +136,7 @@ export class CompressPool {
         outName: res.outName!,
         view: 'comp',
         targetNote: res.targetNote ?? null,
+        targetNoteNotable: res.targetNoteNotable ?? false,
         typeNote: res.typeNote ?? null,
         outType: res.outType ?? ctx.item.file.type,
         hasAlpha: res.hasAlpha ?? false,

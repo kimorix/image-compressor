@@ -13,7 +13,7 @@
       <img :src="thumbSrc" :alt="item.file.name" loading="lazy" decoding="async" />
       <span v-if="item.isAnimatedGif" class="m-gif">GIF</span>
       <span :class="['m-badge', statusClass]">{{ statusText }}</span>
-      <span v-if="hasNotes" class="m-note" aria-hidden="true">i</span>
+      <span v-if="hasNote" class="m-note" aria-hidden="true">i</span>
       <div v-if="processing" class="m-progress" role="progressbar" :aria-label="t('statusProcessing')"><span></span></div>
       <div v-if="item.error" :class="['m-error', { cancelled: item.cancelled }]" aria-hidden="true"></div>
       <button
@@ -27,7 +27,9 @@
     <div class="m-name" :title="item.file.name">
       <span class="m-name-stem">{{ nameParts.stem }}</span><span class="m-name-ext">{{ nameParts.ext }}</span>
     </div>
-    <div class="m-meta" :title="metaText"><span class="m-meta-text">{{ metaText }}</span></div>
+    <!-- One line: sizes, then the saving when it still fits. The pct wraps
+    onto a clipped second line instead of squeezing the sizes. -->
+    <div class="m-meta" :title="metaTitle"><span class="m-meta-text">{{ sizeText }}</span><span v-if="pctText" class="m-meta-pct">{{ pctText }}</span></div>
     <button
       v-if="canDownload"
       type="button"
@@ -47,6 +49,7 @@ import { computed } from 'vue'
 import type { CompressItem } from '../types'
 import { fmtSizeShort } from '../lib/format'
 import { clampAspect, isTinyImage } from '../lib/masonry'
+import { hasActionableNote } from '../lib/notes'
 
 const props = defineProps<{
   item: CompressItem
@@ -76,16 +79,14 @@ const savedPct = computed(() => {
 const isAlreadyBest = computed(() => props.item.done && props.item.outSize >= props.item.file.size)
 const canDownload = computed(() => props.item.done && !!props.item.outUrl)
 
-const formatMap: Record<string, string> = { 'image/jpeg': 'JPEG', 'image/png': 'PNG', 'image/webp': 'WebP', 'image/avif': 'AVIF' }
-const fmtTag = computed(() => {
-  if (props.item.done && props.item.outType) return formatMap[props.item.outType] ?? props.item.outType
-  return props.item.file.name.split('.').pop()?.toUpperCase() ?? ''
-})
-const metaText = computed(() => {
+// The card keeps sizes only; the output format lives in the detail sheet.
+const sizeText = computed(() => {
   const it = props.item
-  if (it.done && !isAlreadyBest.value) return `${fmtSizeShort(it.file.size)} → ${fmtSizeShort(it.outSize)} · ${fmtTag.value}`
-  return `${fmtSizeShort(it.file.size)} · ${fmtTag.value}`
+  if (it.done && !isAlreadyBest.value) return `${fmtSizeShort(it.file.size)} → ${fmtSizeShort(it.outSize)}`
+  return fmtSizeShort(it.file.size)
 })
+const pctText = computed(() => (props.item.done && !isAlreadyBest.value && savedPct.value > 0 ? `−${savedPct.value}%` : ''))
+const metaTitle = computed(() => (pctText.value ? `${sizeText.value} ${pctText.value}` : sizeText.value))
 
 const statusText = computed(() => {
   const it = props.item
@@ -109,11 +110,9 @@ const statusClass = computed(() => {
 
 const showRetry = computed(() => !!props.item.error && props.item.retryable !== false)
 
-const smallSave = computed(() => props.item.done && !isAlreadyBest.value && savedPct.value < 10)
-const showAlphaNote = computed(() => props.item.done && !isAlreadyBest.value
-  && props.item.hasAlpha && props.item.outType === 'image/jpeg')
-const hasNotes = computed(() => !!(props.item.targetNote || props.item.typeNote
-  || smallSave.value || showAlphaNote.value || props.item.isAnimatedGif))
+// Only notes worth opening the sheet for (see lib/notes.ts); the sheet
+// itself still lists every note.
+const hasNote = computed(() => hasActionableNote(props.item))
 
 // Same capability check as the desktop row: a touch device with file sharing
 // gets the share sheet (Save Image / WeChat), otherwise the download icon.

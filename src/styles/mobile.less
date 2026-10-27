@@ -397,44 +397,67 @@
     height: 15px;
     display: block;
   }
+  // Info area = 6 + 17 (one-line name) + 2 + 28 (meta/download row) plus
+  // the card's 8px padding and 1px border on both sides: 71px. Keep in sync
+  // with CARD_INFO_HEIGHT in lib/masonry.ts.
   .m-name {
     display: flex;
-    align-items: flex-start;
-    gap: 1px;
-    height: 2.2em;
+    height: 17px;
     margin-top: 6px;
     overflow: hidden;
     font-size: 13px;
     font-weight: 500;
-    line-height: 1.1;
+    line-height: 17px;
+    white-space: nowrap;
   }
   .m-name-stem {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    overflow: hidden;
     min-width: 0;
-    overflow-wrap: anywhere;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .m-name-ext {
     flex: none;
   }
+  // Sizes first; the saving % sits beside them only when both fit. Otherwise
+  // it wraps to a second line that the fixed 28px height clips away.
   .m-meta {
     display: flex;
-    align-items: center;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    column-gap: 6px;
     height: 28px;
     margin-top: 2px;
-    padding-right: 34px;
+    padding-right: 32px;
     overflow: hidden;
     color: var(--subtle);
     font-size: 12px;
-    line-height: 1.25;
+    line-height: 28px;
+    white-space: nowrap;
   }
   .m-meta-text {
+    flex: 0 1 auto;
     min-width: 0;
     overflow: hidden;
-    white-space: nowrap;
     text-overflow: ellipsis;
+  }
+  .m-meta-pct {
+    flex: none;
+    color: var(--green-text);
+    font-weight: 500;
+  }
+  // 320px phones: a column leaves ~80px beside the download button, less
+  // than "12.4 MB → 3.2 MB" needs. The sizes take the whole row there and
+  // the button moves onto the thumbnail's bottom-right corner. The info
+  // area under the thumbnail is a fixed 61px (6 + 17 + 2 + 28 + 8 padding),
+  // so the offset is constant: 61 + 6 inset from the padding box.
+  @media (max-width: 359px) {
+    .m-dl {
+      right: 14px;
+      bottom: 67px;
+    }
+    .m-meta {
+      padding-right: 0;
+    }
   }
   @media (max-width: 479px) {
     .m-thumb {
@@ -661,6 +684,18 @@
 .sheet-secondary.danger {
   color: var(--red);
   border-color: color-mix(in srgb, var(--red) 40%, var(--border));
+}
+// Settings sheet: opened from the tab bar, it stops right above it so the
+// Settings tab stays visible (and active) while the sheet is open.
+.sheet-overlay.settings-overlay {
+  bottom: calc(56px + env(safe-area-inset-bottom));
+}
+.settings-overlay .sheet {
+  max-height: 92%;
+}
+.settings-sheet .sheet-body {
+  padding-top: 4px;
+  padding-bottom: 16px;
 }
 @keyframes sheet-in {
   from { transform: translateY(100%); }

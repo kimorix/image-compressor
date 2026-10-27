@@ -20,6 +20,9 @@ export interface CompressItem {
   retryable: boolean
   done: boolean
   targetNote: string | null
+  // targetNote needs attention (resized to fit / still over target); see
+  // lib/notes.ts for what puts the ⓘ marker on a phone card.
+  targetNoteNotable: boolean
   typeNote: string | null
   // Final output type (after any fallback flip), whether any pixel was
   // transparent, and whether the input was an animated GIF. All three
@@ -82,6 +85,7 @@ export function newItem(file: File, relDir = ''): CompressItem {
     retryable: true,
     done: false,
     targetNote: null,
+    targetNoteNotable: false,
     typeNote: null,
     outType: null,
     hasAlpha: false,

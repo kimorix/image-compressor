@@ -1,5 +1,5 @@
 <template>
-  <header :inert="busy || detailId ? true : undefined">
+  <header :inert="busy || sheetOpen ? true : undefined">
     <div>
       <h1><span>{{ t('appTitle') }}</span><span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3z" /><path d="M9 12l2 2 4-4" /></svg><span class="badge-text"><span class="badge-main">{{ t('badgeLocal') }}</span><span class="badge-sub">{{ t('badgeSub') }}</span></span></span></h1>
       <p>{{ t('headerSub') }}</p>
@@ -12,7 +12,7 @@
       <a class="gh-btn" href="https://github.com/kimorix/image-compressor" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z" /></svg><span class="gh-text">{{ t('githubBtn') }}</span></a>
     </div>
   </header>
-  <div class="layout" :inert="busy || detailId ? true : undefined">
+  <div class="layout" :inert="busy || sheetOpen ? true : undefined">
     <aside id="sideNav">
       <nav class="side-links">
         <button type="button" :class="{ active: view === 'tool' }" @click="goTool"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="M21 15l-5-5L5 21" /></svg>{{ t('navTool') }}</button>
@@ -52,7 +52,7 @@
         <h3>{{ t('resultTitle') }}</h3>
         <div class="actions">
           <button id="clearAll" :class="{ danger: clearConfirm }" :disabled="items.length === 0" @click="onClearClick">{{ clearConfirm ? t('clearConfirm') : t('clearAll') }}</button>
-          <button class="primary" id="downloadAll" :disabled="doneCount === 0 || zipping" @click="downloadAll">{{ t('downloadAll') }}</button>
+          <button class="primary" id="downloadAll" :disabled="doneCount === 0 || zipping || sharing" @click="downloadAll">{{ t('downloadAll') }}</button>
         </div>
       </div>
       <div id="summary" v-html="summaryHtml"></div>
@@ -111,14 +111,13 @@
     </div>
   </main>
   <div id="rightPanel" v-show="view === 'tool'">
-      <div class="card" id="settingsCard">
+      <!-- Phones open the same SettingsPanel in a bottom sheet from the tab
+      bar instead (see the BottomSheet below), so the card is desktop-only. -->
+      <div v-if="!isMobile" class="card" id="settingsCard">
         <div class="settings-head">
           <h3>{{ t('settingsTitle') }}</h3>
           <button type="button" class="settings-collapse-btn" :class="{ collapsed: settingsCollapsed }" :aria-expanded="!settingsCollapsed" :title="settingsCollapsed ? t('expandBtn') : t('collapseBtn')" :aria-label="settingsCollapsed ? t('expandBtn') : t('collapseBtn')" @click="settingsCollapsed = !settingsCollapsed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6" /></svg></button>
         </div>
-        <button class="settings-summary" type="button" :aria-expanded="!settingsCollapsed" @click="settingsCollapsed = !settingsCollapsed">
-          <span>{{ settingsSummary }}</span><span class="settings-caret">{{ settingsCollapsed ? '▾' : '▴' }}</span>
-        </button>
         <div class="settings-body" :class="{ 'settings-body-collapsed': settingsCollapsed }">
           <SettingsPanel :settings="settings" :t="t" :has-items="items.length > 0" @update="onSettingsUpdate" @preset="onPreset" @start="recompressAll" />
         </div>
@@ -176,19 +175,22 @@
       </div>
     </section>
   </div>
-  <div class="sticky-bar" v-show="items.length > 0 && view === 'tool'" :inert="busy || detailId ? true : undefined">
+  <div class="sticky-bar" v-show="items.length > 0 && view === 'tool'" :inert="busy || sheetOpen ? true : undefined">
     <button class="sticky-add" type="button" @click="openPicker">{{ t('addBtn') }}</button>
     <button class="sticky-clear" type="button" :disabled="items.length === 0" @click="onClearClick">{{ clearConfirm ? t('clearConfirm') : t('clearAll') }}</button>
-    <button class="sticky-download primary" type="button" :disabled="doneCount === 0 || zipping" @click="downloadAll">{{ t('downloadAll') }}</button>
+    <button class="sticky-download primary" type="button" :disabled="doneCount === 0 || zipping || sharing" @click="downloadAll">{{ t('downloadAll') }}</button>
   </div>
   <div class="sticky-spacer" v-show="items.length > 0 && view === 'tool'" aria-hidden="true"></div>
+  <!-- The settings sheet stops above the tab bar, so the bar stays live
+  there (Settings shows active; Home or Settings closes the sheet). The
+  detail sheet covers it. -->
   <nav class="tab-bar" :inert="busy || detailId ? true : undefined">
-    <button type="button" :class="{ active: view === 'tool' && !moreOpen && !settingsInView }" @click="goHome"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8" /><path d="M5 9v11h14V9" /></svg>{{ t('tabHome') }}</button>
-    <button type="button" :class="{ active: view === 'tool' && !moreOpen && settingsInView }" @click="goSettings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></svg>{{ t('tabSettings') }}</button>
+    <button type="button" :class="{ active: view === 'tool' && !moreOpen && !settingsOpen }" @click="goHome"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8" /><path d="M5 9v11h14V9" /></svg>{{ t('tabHome') }}</button>
+    <button type="button" :class="{ active: settingsOpen && !moreOpen }" :aria-expanded="settingsOpen" @click="goSettings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></svg>{{ t('tabSettings') }}</button>
     <button type="button" :class="{ active: moreOpen || view === 'history' }" :aria-expanded="moreOpen" @click="moreOpen = !moreOpen"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>{{ t('tabMore') }}</button>
   </nav>
   <div v-if="moreOpen" class="more-backdrop" @click="moreOpen = false"></div>
-  <div class="more-menu" v-show="moreOpen" :inert="busy || detailId ? true : undefined">
+  <div class="more-menu" v-show="moreOpen" :inert="busy || sheetOpen ? true : undefined">
     <button type="button" class="more-tool" aria-disabled="true" @click="showComingSoon">
       <span class="more-tool-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="8" height="8" rx="1" /><rect x="13" y="12" width="8" height="8" rx="1" /><path d="M13 8h6M16 5v6M11 16H5M8 13v6" /></svg></span>
       <span class="more-tool-copy"><strong>{{ t('moreImageConvert') }}</strong><small>{{ t('moreImageConvertDesc') }}</small></span>
@@ -221,7 +223,20 @@
     @use-webp="onUseWebp"
     @preview="openFromSheet"
   />
-  <footer v-html="t('footer')" :inert="busy || detailId ? true : undefined"></footer>
+  <BottomSheet
+    v-if="settingsOpen && isMobile"
+    :title="t('settingsTitle')"
+    :close-label="t('lbClose')"
+    label-id="settingsSheetTitle"
+    sheet-class="settings-sheet"
+    overlay-class="settings-overlay"
+    @close="settingsOpen = false"
+  >
+    <div class="sheet-body">
+      <SettingsPanel :settings="settings" :t="t" :has-items="items.length > 0" @update="onSettingsUpdate" @preset="onPreset" @start="startFromSheet" />
+    </div>
+  </BottomSheet>
+  <footer v-html="t('footer')" :inert="busy || sheetOpen ? true : undefined"></footer>
 </template>
 
 <script setup lang="ts">
@@ -232,6 +247,7 @@ import SettingsPanel from './components/SettingsPanel.vue'
 import ImageItem from './components/ImageItem.vue'
 import MobileCard from './components/MobileCard.vue'
 import MobileDetailSheet from './components/MobileDetailSheet.vue'
+import BottomSheet from './components/BottomSheet.vue'
 import Lightbox from './components/Lightbox.vue'
 import ProgressBar from './components/ProgressBar.vue'
 import { LANGS, initialLang, t as tx, type Lang } from './i18n'
@@ -245,6 +261,7 @@ import { newItem, type CompressItem, type Settings } from './types'
 import { isUnaffected } from './lib/recompress'
 import { useCompareSlider } from './composables/useCompareSlider'
 import { appendMasonry, distributeMasonry, fallbackColumnWidth, type MasonryColumns } from './lib/masonry'
+import { shareFilesOr } from './lib/share'
 
 const lang = ref<Lang>(initialLang())
 const theme = ref<Theme>(initialTheme())
@@ -256,26 +273,20 @@ watch(settings, () => saveSettings(settings), { deep: true })
 // reactive proxy (it breaks platform brand checks like createObjectURL).
 const items = shallowRef<CompressItem[]>([])
 
-// Mobile settings collapse: with images, the settings card folds to a
-// one-line summary (tapping it expands). Collapsed by default on narrow
-// screens so the results are visible right under the upload area;
-// desktop starts expanded (the panel is a fixed sidebar there, and
-// folding is opt-in via the header button).
-const settingsCollapsed = ref(typeof window !== 'undefined' ? window.innerWidth < 720 : true)
+// Desktop settings card collapse (header button). It starts expanded: the
+// panel is a fixed sidebar there. Phones use the settings sheet instead.
+const settingsCollapsed = ref(false)
 // The compare preview card is a desktop rail feature. On phones the row tap
 // opens the full-screen lightbox instead, so the card would only load two
 // large images below 20 rows. Do not even mount it there.
 const isMobile = ref(typeof window !== 'undefined' ? window.innerWidth < 720 : false)
 // Shell views: tool (default) vs history. The sidebar and the mobile tab
-// bar switch between them; settings is an action (expand + scroll), not a
-// view, because the panel already lives on the tool page.
+// bar switch between them; settings is not a view: on phones the Settings
+// tab opens the settings bottom sheet over the tool page.
 const view = ref<'tool' | 'history'>('tool')
-// Mobile tab bar: Settings is a section of the tool view, not a view of its
-// own, so its tab lights up while the settings card sits in the middle band
-// of the viewport (and Home lights up otherwise). Without this, tapping
-// Settings with a long result list scrolled away and left no tab active.
-const settingsInView = ref(false)
-let settingsObserver: IntersectionObserver | null = null
+// Phone settings sheet. The Settings tab is active exactly while it is open
+// (Home otherwise), wherever the result list happens to be scrolled.
+const settingsOpen = ref(false)
 const moreOpen = ref(false)
 const moreToast = ref<string | null>(null)
 let moreToastTimer: ReturnType<typeof setTimeout> | null = null
@@ -293,8 +304,11 @@ watch(detailItem, (it) => { if (!it) detailId.value = null })
 function openDetail(item: CompressItem) {
   if (!isMobile.value) return
   moreOpen.value = false
+  settingsOpen.value = false
   detailId.value = item.id
 }
+// Any phone sheet open: the page behind is inert and its scroll is locked.
+const sheetOpen = computed(() => !!detailId.value || (settingsOpen.value && isMobile.value))
 function retryFromSheet(item: CompressItem) {
   detailId.value = null
   retryItem(item)
@@ -359,6 +373,7 @@ watch(isMobile, (mobile) => {
   else {
     masonryCols.value = [[], []]
     detailId.value = null
+    settingsOpen.value = false
   }
 })
 type HistRec = { n: string; o: number; c: number; p: number; f: string; t: number }
@@ -405,7 +420,7 @@ function goTool() {
 // Tab bar Home: back to the tool, scrolled to the top. (Templates cannot
 // reach window, so this lives in script: the old inline call threw.)
 function goHome() {
-  settingsInView.value = false
+  settingsOpen.value = false
   goTool()
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
@@ -414,26 +429,22 @@ function goHistory() {
   view.value = 'history'
   moreOpen.value = false
 }
-async function goSettings() {
+// Tab bar Settings (phones only; the tab bar is hidden from 720px): open
+// the settings sheet over the tool page instead of scrolling to a card.
+function goSettings() {
   view.value = 'tool'
   moreOpen.value = false
-  settingsCollapsed.value = false
-  settingsInView.value = true
-  await nextTick()
-  document.getElementById('settingsCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  detailId.value = null
+  settingsOpen.value = !settingsOpen.value
 }
-const settingsSummary = computed(() => {
-  const fmt = settings.format === 'auto' ? t('fmtAutoShort')
-    : settings.format === 'original' ? t('fmtOriginal')
-    : settings.format === 'image/webp' ? 'WebP' : settings.format.split('/')[1].toUpperCase()
-  const parts = [fmt]
-  if (settings.mode === 'target') parts.push(`≤${settings.targetSize}KB`)
-  else if (settings.mode === 'quality') parts.push(`${settings.quality}%`)
-  else if (settings.format !== 'auto') parts.push(t('modeAuto'))
-  if (settings.resizeMode === 'exact') parts.push(`${settings.maxSize}×${settings.maxHeight}`)
-  else if (settings.maxSize) parts.push(settings.resizeMode === 'percent' ? `${settings.maxSize}%` : `${settings.maxSize}px`)
-  return parts.join(' · ')
-})
+// Opening the More menu from the (still live) tab bar replaces the sheet.
+watch(moreOpen, (open) => { if (open) settingsOpen.value = false })
+// "Start / recompress" inside the sheet: close it so the progress and the
+// results are visible, then run.
+function startFromSheet() {
+  settingsOpen.value = false
+  void recompressAll()
+}
 
 const dropzoneRef = ref<{ openPicker: () => void } | null>(null)
 function openPicker() { dropzoneRef.value?.openPicker() }
@@ -925,9 +936,37 @@ const pvCompareStyle = computed(() => {
   return w && h ? { width: `min(100%, calc(55vh * ${w} / ${h}))` } : { width: '100%' }
 })
 
-// One finished image downloads as itself; a zip is only for two or more.
-function downloadAll() {
+// Phones: "download all" hands every compressed file to the share sheet
+// (Save N images to Photos, AirDrop, …) when the browser can share files.
+// Dismissing the sheet does nothing; any other failure, or no file-sharing
+// support, falls back to the regular download below. Desktop is unchanged.
+const sharing = ref(false)
+async function downloadAll() {
   const done = items.value.filter((i) => i.done && i.outUrl)
+  if (!done.length) return
+  const nav = typeof navigator !== 'undefined' ? navigator : undefined
+  if (!isMobile.value || typeof nav?.canShare !== 'function') {
+    downloadAllFiles(done)
+    return
+  }
+  if (sharing.value) return
+  sharing.value = true
+  try {
+    const files = await Promise.all(done.map(async (it) => {
+      const blob = await (await fetch(it.outUrl!)).blob()
+      return new File([blob], it.outName ?? it.file.name, { type: blob.type })
+    }))
+    await shareFilesOr(nav, files, () => downloadAllFiles(done))
+  } catch (err) {
+    console.warn('[image-compressor] Share failed, downloading instead:', err)
+    downloadAllFiles(done)
+  } finally {
+    sharing.value = false
+  }
+}
+
+// One finished image downloads as itself; a zip is only for two or more.
+function downloadAllFiles(done: CompressItem[]) {
   if (done.length === 1) {
     const a = document.createElement('a')
     a.href = done[0].outUrl!
@@ -960,9 +999,9 @@ function onBeforeUnload(e: BeforeUnloadEvent) {
   e.preventDefault()
   e.returnValue = ''
 }
-watch([busy, () => !!detailId.value], ([isBusy, isDetail]) => {
+watch([busy, sheetOpen], ([isBusy, isSheet]) => {
   // A fixed scrim/sheet alone still lets the page scroll behind it.
-  document.body.style.overflow = isBusy || isDetail ? 'hidden' : ''
+  document.body.style.overflow = isBusy || isSheet ? 'hidden' : ''
   if (!isBusy) busyAddBlocked.value = false
 })
 async function downloadAllZip() {
@@ -1110,14 +1149,6 @@ function onDocKeydown(e: KeyboardEvent) {
 }
 
 onMounted(() => {
-  const settingsEl = document.getElementById('settingsCard')
-  if (settingsEl && typeof IntersectionObserver !== 'undefined') {
-    settingsObserver = new IntersectionObserver(
-      (entries) => { for (const e of entries) settingsInView.value = e.isIntersecting },
-      { rootMargin: '-35% 0px -35% 0px' },
-    )
-    settingsObserver.observe(settingsEl)
-  }
   applyTheme(theme.value)
   setLang(lang.value)
   window.addEventListener('beforeunload', onBeforeUnload)
@@ -1130,7 +1161,6 @@ onMounted(() => {
   document.addEventListener('drop', onDocDrop)
 })
 onUnmounted(() => {
-  settingsObserver?.disconnect()
   document.removeEventListener('keydown', onDocKeydown)
   if (moreToastTimer) clearTimeout(moreToastTimer)
   document.removeEventListener('paste', onPaste)

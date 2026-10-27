@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  CARD_INFO_HEIGHT,
   appendMasonry,
   clampAspect,
   columnHeightDifference,
@@ -27,8 +28,19 @@ describe('masonry aspect and height estimate', () => {
     const tall = item('t', 1080, 6000)
     expect(estimateThumbHeight(tall, 166, 390)).toBe(166)
     expect(estimateThumbHeight(tall, 186, 720)).toBeCloseTo(226.67, 1)
-    expect(estimateCardHeight(tall, 166, 390)).toBe(249)
-    expect(estimateCardHeight(item('unknown', 0, 0), 166, 390)).toBe(233)
+    expect(estimateCardHeight(tall, 166, 390)).toBe(237)
+    expect(estimateCardHeight(item('unknown', 0, 0), 166, 390)).toBe(221)
+  })
+
+  it('reserves a one-line name plus the 28px meta row (71px info area)', () => {
+    // 1px border + 8px padding + 6 + 17 (name) + 2 + 28 (meta) + 8 + 1
+    expect(CARD_INFO_HEIGHT).toBe(71)
+    // Long names cannot grow the card: the estimate ignores the filename.
+    const a = { ...item('a', 1200, 900), file: { name: 'x'.repeat(200) } } as unknown as CompressItem
+    const b = { ...item('b', 1200, 900), file: { name: 'x.jpg' } } as unknown as CompressItem
+    expect(estimateCardHeight(a, 150, 375)).toBe(estimateCardHeight(b, 150, 375))
+    // 150px column at 375px: thumb 134 wide, 4:3 → 100.5 tall, + 71.
+    expect(estimateCardHeight(a, 150, 375)).toBe(Math.ceil(134 / (4 / 3) + 71))
   })
 
   it('leaves wide images at the 4:3 limit', () => {

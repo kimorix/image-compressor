@@ -678,8 +678,8 @@ html {
   #rightPanel .pv-compare {
     margin: auto;
   }
-  // Specificity beats the global .settings-head{display:none} below:
-  // same-specificity order would let the later hide rule win everywhere.
+  // The settings card (and so its head) only renders from 720px; phones
+  // open the same SettingsPanel in a bottom sheet.
   #settingsCard .settings-head {
     display: flex;
     align-items: center;
@@ -871,15 +871,9 @@ html {
     }
   }
 }
-// Mobile with images: results jump above the settings card (upload ->
-// results -> preview -> settings) and the settings fold to a one-line
-// summary. The sticky bottom bar lives in styles/mobile.less.
-.settings-summary {
-  display: none;
-}
-.settings-head {
-  display: none;
-}
+// Phones: no right panel content (the preview card is desktop-only and the
+// settings open in a bottom sheet); the sticky bottom bar and the sheets live
+// in styles/mobile.less.
 .settings-body-collapsed {
   display: none;
 }
@@ -903,31 +897,9 @@ html {
   #uploadCard {
     order: 1;
   }
-  #rightPanel #previewCard {
-    order: 1;
-  }
-  #rightPanel #settingsCard {
-    order: 2;
-  }
   // Top actions are redundant once the sticky bar exists.
   #resultCard .actions {
     display: none;
-  }
-  .settings-summary {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    width: 100%;
-    padding: 12px 4px;
-    margin-bottom: 4px;
-    background: transparent;
-    border: none;
-    color: var(--text);
-    font-size: 13px;
-    font-weight: 600;
-    text-align: left;
-    cursor: pointer;
   }
 }
 .progress {

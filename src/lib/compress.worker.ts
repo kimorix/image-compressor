@@ -24,6 +24,7 @@ export interface WorkerResult {
   outSize?: number
   outName?: string
   targetNote?: string | null
+  targetNoteNotable?: boolean
   typeNote?: string | null
   blob?: Blob | null
   alreadyBest?: boolean
@@ -53,6 +54,7 @@ self.onmessage = async (e: MessageEvent<WorkerTask>) => {
       outSize: res.outSize,
       outName: res.outName,
       targetNote: res.targetNote,
+      targetNoteNotable: res.targetNoteNotable,
       typeNote: res.typeNote,
       blob: res.alreadyBest ? null : res.outBlob,
       alreadyBest: res.alreadyBest,

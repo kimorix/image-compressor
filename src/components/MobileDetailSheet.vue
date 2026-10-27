@@ -1,103 +1,88 @@
 <template>
-  <div class="sheet-overlay" @click.self="emit('close')">
-    <section
-      ref="sheetRef"
-      class="sheet"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="sheetTitle"
-      :style="sheetStyle"
-    >
-      <div class="sheet-drag" @pointerdown="onDragStart">
-        <span class="sheet-handle"></span>
-      </div>
-      <div class="sheet-head">
-        <h2 id="sheetTitle">{{ t('detailTitle') }}</h2>
-        <button ref="closeBtn" type="button" class="sheet-close" :title="t('lbClose')" :aria-label="t('lbClose')" @click="emit('close')">×</button>
-      </div>
-
-      <div class="sheet-body">
-        <div class="pv-stage sheet-stage" @click="onStageClick($event, () => emit('preview', item))">
-          <div class="pv-compare" ref="compareRef" :style="compareStyle">
-            <img class="pv-img" :src="compSrc" :alt="item.file.name" />
-            <div v-if="canCompare" class="pv-orig-clip" :style="{ clipPath: `inset(0 ${100 - pos}% 0 0)` }">
-              <img class="pv-img" :src="item.url" :alt="item.file.name" />
-            </div>
-            <div
-              v-if="canCompare"
-              class="pv-divider"
-              :style="{ left: pos + '%' }"
-              tabindex="0"
-              role="slider"
-              :aria-label="t('lbCompare')"
-              :aria-valuemin="0"
-              :aria-valuemax="100"
-              :aria-valuenow="Math.round(pos)"
-              @pointerdown="onDividerDown"
-              @keydown="onDividerKey"
-            >
-              <span class="pv-handle">↔</span>
-            </div>
-            <span v-if="canCompare" class="pv-side-tag left">{{ t('tagOrig') }}</span>
-            <span v-if="canCompare" class="pv-side-tag right">{{ t('tagComp') }}</span>
+  <BottomSheet :title="t('detailTitle')" :close-label="t('lbClose')" label-id="sheetTitle" @close="emit('close')">
+    <div class="sheet-body">
+      <div class="pv-stage sheet-stage" @click="onStageClick($event, () => emit('preview', item))">
+        <div class="pv-compare" ref="compareRef" :style="compareStyle">
+          <img class="pv-img" :src="compSrc" :alt="item.file.name" />
+          <div v-if="canCompare" class="pv-orig-clip" :style="{ clipPath: `inset(0 ${100 - pos}% 0 0)` }">
+            <img class="pv-img" :src="item.url" :alt="item.file.name" />
           </div>
-        </div>
-
-        <p class="sheet-name" :title="item.file.name">{{ item.file.name }}</p>
-
-        <div class="sheet-summary">
-          <span v-if="item.done && item.outUrl" class="sheet-sizes">{{ fmtSize(item.file.size) }} → {{ fmtSize(item.outSize) }}</span>
-          <span v-else class="sheet-sizes">{{ fmtSize(item.file.size) }}</span>
-          <span v-if="item.done && item.outUrl && !isAlreadyBest" class="sheet-pct">−{{ savedPct }}%</span>
-          <span v-if="statusLine" class="sheet-state" :class="{ fail: !!item.error && !item.cancelled }">{{ statusLine }}</span>
-        </div>
-
-        <dl class="sheet-rows">
-          <div v-if="dimsText">
-            <dt>{{ t('thDims') }}</dt>
-            <dd :class="{ warn: upscaled }">{{ dimsText }}</dd>
+          <div
+            v-if="canCompare"
+            class="pv-divider"
+            :style="{ left: pos + '%' }"
+            tabindex="0"
+            role="slider"
+            :aria-label="t('lbCompare')"
+            :aria-valuemin="0"
+            :aria-valuemax="100"
+            :aria-valuenow="Math.round(pos)"
+            @pointerdown="onDividerDown"
+            @keydown="onDividerKey"
+          >
+            <span class="pv-handle">↔</span>
           </div>
-          <div>
-            <dt>{{ t('thFormat') }}</dt>
-            <dd>{{ formatText }}</dd>
-          </div>
-        </dl>
-
-        <div v-if="hasNotes" class="sheet-notes">
-          <h3>{{ t('detailNotes') }}</h3>
-          <p v-if="item.error" :class="['sheet-note', { fail: !item.cancelled }]">{{ item.error }}</p>
-          <p v-if="item.cancelled && !item.error" class="sheet-note">{{ t('cancelled') }}</p>
-          <p v-if="item.targetNote" class="sheet-note">{{ item.targetNote }}</p>
-          <p v-if="item.typeNote" class="sheet-note">{{ item.typeNote }}</p>
-          <p v-if="item.isAnimatedGif" class="sheet-note">{{ t('gifFirstFrame') }}</p>
-          <p v-if="showAlphaNote" class="sheet-note">
-            {{ t('alphaJpegNote') }}
-            <button type="button" class="sheet-link" @click="emit('use-webp', item)">{{ t('useWebpBtn') }}</button>
-          </p>
-          <p v-if="smallSave" class="sheet-note">{{ smallSaveText }}</p>
-          <p v-if="isAlreadyBest" class="sheet-note">{{ t('alreadyBest') }}</p>
-          <p v-if="copyState === 'fail'" class="sheet-note fail">{{ t('copyFailed') }}</p>
+          <span v-if="canCompare" class="pv-side-tag left">{{ t('tagOrig') }}</span>
+          <span v-if="canCompare" class="pv-side-tag right">{{ t('tagComp') }}</span>
         </div>
-
-        <button v-if="showRetry" type="button" class="sheet-retry" @click="emit('retry', item)">{{ t('retryBtn') }}</button>
       </div>
 
-      <div class="sheet-actions">
-        <button type="button" class="sheet-secondary" :disabled="!canDownload || copying" @click="onCopy">
-          {{ copyState === 'ok' ? t('copied') : t('copyBtn') }}
-        </button>
-        <button type="button" class="sheet-secondary danger" @click="emit('remove', item)">{{ t('deleteBtn') }}</button>
-        <button type="button" class="primary" :disabled="!canDownload" @click="onPrimary">{{ primaryLabel }}</button>
+      <p class="sheet-name" :title="item.file.name">{{ item.file.name }}</p>
+
+      <div class="sheet-summary">
+        <span v-if="item.done && item.outUrl" class="sheet-sizes">{{ fmtSize(item.file.size) }} → {{ fmtSize(item.outSize) }}</span>
+        <span v-else class="sheet-sizes">{{ fmtSize(item.file.size) }}</span>
+        <span v-if="item.done && item.outUrl && !isAlreadyBest" class="sheet-pct">−{{ savedPct }}%</span>
+        <span v-if="statusLine" class="sheet-state" :class="{ fail: !!item.error && !item.cancelled }">{{ statusLine }}</span>
       </div>
-    </section>
-  </div>
+
+      <dl class="sheet-rows">
+        <div v-if="dimsText">
+          <dt>{{ t('thDims') }}</dt>
+          <dd :class="{ warn: upscaled }">{{ dimsText }}</dd>
+        </div>
+        <div>
+          <dt>{{ t('thFormat') }}</dt>
+          <dd>{{ formatText }}</dd>
+        </div>
+      </dl>
+
+      <div v-if="hasNotes" class="sheet-notes">
+        <h3>{{ t('detailNotes') }}</h3>
+        <p v-if="item.error" :class="['sheet-note', { fail: !item.cancelled }]">{{ item.error }}</p>
+        <p v-if="item.cancelled && !item.error" class="sheet-note">{{ t('cancelled') }}</p>
+        <p v-if="item.targetNote" class="sheet-note">{{ item.targetNote }}</p>
+        <p v-if="item.typeNote" class="sheet-note">{{ item.typeNote }}</p>
+        <p v-if="item.isAnimatedGif" class="sheet-note">{{ t('gifFirstFrame') }}</p>
+        <p v-if="showAlphaNote" class="sheet-note">
+          {{ t('alphaJpegNote') }}
+          <button type="button" class="sheet-link" @click="emit('use-webp', item)">{{ t('useWebpBtn') }}</button>
+        </p>
+        <p v-if="smallSave" class="sheet-note">{{ smallSaveText }}</p>
+        <p v-if="isAlreadyBest" class="sheet-note">{{ t('alreadyBest') }}</p>
+        <p v-if="copyState === 'fail'" class="sheet-note fail">{{ t('copyFailed') }}</p>
+      </div>
+
+      <button v-if="showRetry" type="button" class="sheet-retry" @click="emit('retry', item)">{{ t('retryBtn') }}</button>
+    </div>
+
+    <div class="sheet-actions">
+      <button type="button" class="sheet-secondary" :disabled="!canDownload || copying" @click="onCopy">
+        {{ copyState === 'ok' ? t('copied') : t('copyBtn') }}
+      </button>
+      <button type="button" class="sheet-secondary danger" @click="emit('remove', item)">{{ t('deleteBtn') }}</button>
+      <button type="button" class="primary" :disabled="!canDownload" @click="onPrimary">{{ primaryLabel }}</button>
+    </div>
+  </BottomSheet>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch, type Ref } from 'vue'
+import BottomSheet from './BottomSheet.vue'
 import type { CompressItem } from '../types'
 import { fmtSize } from '../lib/format'
 import { useCompareSlider } from '../composables/useCompareSlider'
+import { hasAlphaJpegNote } from '../lib/notes'
 
 const props = defineProps<{
   item: CompressItem
@@ -113,11 +98,6 @@ const emit = defineEmits<{
 
 const itemRef = computed(() => props.item) as Ref<CompressItem | null>
 const { pos, compareRef, onDividerDown, onDividerKey, onStageClick } = useCompareSlider(itemRef)
-
-const sheetRef = ref<HTMLElement | null>(null)
-const closeBtn = ref<HTMLButtonElement | null>(null)
-const dragY = ref(0)
-const sheetStyle = computed(() => ({ transform: `translateY(${Math.max(0, dragY.value)}px)` }))
 
 const done = computed(() => props.item.done && !!props.item.outUrl)
 const canCompare = computed(() => done.value)
@@ -174,8 +154,7 @@ const statusLine = computed(() => {
   if (it.error) return it.cancelled ? props.t('cancelled') : props.t('statusFailed')
   return ''
 })
-const showAlphaNote = computed(() => props.item.done && !isAlreadyBest.value
-  && props.item.hasAlpha && props.item.outType === 'image/jpeg')
+const showAlphaNote = computed(() => hasAlphaJpegNote(props.item))
 const smallSave = computed(() => props.item.done && !isAlreadyBest.value && savedPct.value < 10)
 const smallSaveText = computed(() => {
   const ls = props.item.lastSettings
@@ -249,64 +228,7 @@ async function onPrimary() {
   }
 }
 
-// Down-swipe close: only the handle starts a drag, so scrolling the sheet
-// body and dragging the comparison divider keep their own gestures.
-let dragStartY = 0
-let dragStarted = 0
-function onDragStart(e: PointerEvent) {
-  dragStartY = e.clientY
-  dragStarted = Date.now()
-  dragY.value = 0
-  try { (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId) } catch { /* synthetic/unsupported */ }
-  const move = (ev: PointerEvent) => {
-    dragY.value = Math.max(0, ev.clientY - dragStartY)
-  }
-  const up = () => {
-    window.removeEventListener('pointermove', move)
-    window.removeEventListener('pointerup', up)
-    const elapsed = Date.now() - dragStarted
-    if (dragY.value > 100 || (dragY.value > 36 && elapsed < 260)) {
-      dragY.value = 0
-      emit('close')
-    } else {
-      dragY.value = 0
-    }
-  }
-  window.addEventListener('pointermove', move)
-  window.addEventListener('pointerup', up)
-}
-
-const previousFocus = ref<HTMLElement | null>(null)
-function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape') {
-    e.preventDefault()
-    emit('close')
-    return
-  }
-  if (e.key !== 'Tab' || !sheetRef.value) return
-  const focusables = [...sheetRef.value.querySelectorAll<HTMLElement>(
-    'button:not(:disabled), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-  )].filter((el) => el.offsetParent !== null)
-  if (!focusables.length) return
-  const first = focusables[0]
-  const last = focusables[focusables.length - 1]
-  if (e.shiftKey && document.activeElement === first) {
-    e.preventDefault()
-    last.focus()
-  } else if (!e.shiftKey && document.activeElement === last) {
-    e.preventDefault()
-    first.focus()
-  }
-}
-
-onMounted(() => {
-  previousFocus.value = document.activeElement as HTMLElement | null
-  closeBtn.value?.focus()
-  document.addEventListener('keydown', onKeydown)
-})
 onBeforeUnmount(() => {
-  document.removeEventListener('keydown', onKeydown)
   if (copyTimer) clearTimeout(copyTimer)
-  previousFocus.value?.focus?.()
 })
 </script>
