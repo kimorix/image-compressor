@@ -65,7 +65,7 @@ body {
   letter-spacing: -0.05px;
 }
 header {
-  max-width: 920px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 36px 16px 4px;
   display: flex;
@@ -99,9 +99,10 @@ header {
   margin-left: 8px;
   vertical-align: middle;
   svg {
-    width: 12px;
-    height: 12px;
+    width: 14px;
+    height: 14px;
     display: block;
+    flex: none;
   }
 }
 .header-actions {
@@ -158,10 +159,9 @@ header {
     border-color: var(--border-strong);
   }
 }
+// main sits in the .layout grid, which owns the page padding.
 main {
-  max-width: 920px;
-  margin: 0 auto;
-  padding: 20px 16px 48px;
+  min-width: 0;
 }
 .card {
   background: var(--card);
@@ -622,19 +622,17 @@ html {
     flex-direction: column;
     justify-content: center;
   }
-}
-// Desktop: the middle column is just upload + results stacked, so its
-// rows are sized by their own content (the 1.0.5 two-column grid let the
-// tall settings card stretch row 1 and leave a blank gap between upload
-// and results). The third block is a sticky viewport-height right panel:
-// settings on top (collapsible), preview pinned at its bottom, never
-// scrolling away. minmax(0, 1fr) + min-width: 0: grid items default to
-// min-width: auto, so a long unbreakable content (long filename, long
-// select option) could force a column wider than its share and push the
-// panel off the right edge on narrow desktops (iPad landscape).
-// With 0 minima the columns always share the viewport and the content
-// truncates inside, as .name already does with ellipsis.
-@media (min-width: 720px) {
+  // Desktop: the middle column is just upload + results stacked, so its
+  // rows are sized by their own content (the 1.0.5 two-column grid let the
+  // tall settings card stretch row 1 and leave a blank gap between upload
+  // and results). The third block is a sticky viewport-height right panel:
+  // settings on top (collapsible), preview pinned at its bottom, never
+  // scrolling away. minmax(0, 1fr) + min-width: 0: grid items default to
+  // min-width: auto, so a long unbreakable content (long filename, long
+  // select option) could force a column wider than its share and push the
+  // panel off the right edge on narrow desktops (iPad landscape).
+  // With 0 minima the columns always share the viewport and the content
+  // truncates inside, as .name already does with ellipsis.
   header {
     padding-right: 376px;
   }
@@ -680,8 +678,8 @@ html {
   #rightPanel .pv-compare {
     margin: auto;
   }
-  // Specificity beats the global .settings-head{display:none} below:
-  // same-specificity order would let the later hide rule win everywhere.
+  // The settings card (and so its head) only renders from 720px; phones
+  // open the same SettingsPanel in a bottom sheet.
   #settingsCard .settings-head {
     display: flex;
     align-items: center;
@@ -814,7 +812,11 @@ html {
       gap: 10px 4px;
       align-items: center;
     }
+    // The desktop table drops the filename (it is truncated in a 118px column
+    // and duplicated by the strip/preview); the format tag takes the column.
+    // The full name stays on the row's title and in the strip.
     .item .cell-name {
+      position: relative;
       grid-column: 1;
       min-width: 0;
       padding-right: 0;
@@ -822,13 +824,6 @@ html {
     }
     .item .name-tags {
       justify-content: center;
-    }
-    // The desktop table drops the filename (it is truncated in a 118px column
-    // and duplicated by the strip/preview); the format tag takes the column.
-    // The full name stays on the row's title, in the strip, and in the mobile
-    // stacked row.
-    .item .cell-name {
-      position: relative;
     }
     .item .cell-name .name {
       position: absolute;
@@ -876,15 +871,9 @@ html {
     }
   }
 }
-// Mobile with images: results jump above the settings card (upload ->
-// results -> preview -> settings), the settings fold to a one-line
-// summary, and a sticky bottom bar replaces the top actions.
-.settings-summary {
-  display: none;
-}
-.settings-head {
-  display: none;
-}
+// Phones: no right panel content (the preview card is desktop-only and the
+// settings open in a bottom sheet); the sticky bottom bar and the sheets live
+// in styles/mobile.less.
 .settings-body-collapsed {
   display: none;
 }
@@ -908,64 +897,9 @@ html {
   #uploadCard {
     order: 1;
   }
-  #resultCard {
-    order: 2;
-  }
-  #rightPanel #previewCard {
-    order: 1;
-  }
-  #rightPanel #settingsCard {
-    order: 2;
-  }
-  // Mobile table cells read as one line: original → compressed −%. Only for
-  // a finished row: "→ Processing" or "→ Failed" was nonsense.
-  .comp-size.done::before {
-    content: "→ ";
-  }
   // Top actions are redundant once the sticky bar exists.
   #resultCard .actions {
     display: none;
-  }
-  .settings-summary {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    width: 100%;
-    padding: 12px 4px;
-    margin-bottom: 4px;
-    background: transparent;
-    border: none;
-    color: var(--text);
-    font-size: 13px;
-    font-weight: 600;
-    text-align: left;
-    cursor: pointer;
-  }
-  .sticky-bar {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 30;
-    padding: 10px 12px;
-    padding-bottom: calc(10px + env(safe-area-inset-bottom));
-    background: var(--card);
-    border-top: 1px solid var(--border);
-    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.15);
-  }
-  .sticky-bar .sticky-download {
-    flex: 1;
-  }
-  .sticky-bar .sticky-clear {
-    background: transparent;
-  }
-  .sticky-spacer {
-    display: block;
-    height: calc(64px + env(safe-area-inset-bottom));
   }
 }
 .progress {
@@ -1531,25 +1465,14 @@ footer {
   .gh-btn {
     padding: 9px 10px;
   }
-  .gh-btn svg {
-    width: 18px;
-    height: 18px;
-    display: block;
-  }
   .lang-select {
     padding: 9px 28px 9px 10px;
-  }
-  main {
-    padding: 16px 12px 40px;
   }
   .card {
     padding: 16px;
   }
   #dropzone {
     padding: 28px 16px;
-  }
-  .item-actions {
-    gap: 8px;
   }
 }
 // Very narrow phones: the header is the only place GitHub lives now (the
@@ -1603,15 +1526,6 @@ footer {
 }
 
 /* ===== 1.0.4 换壳：三栏布局 + 导航/统计/Tab（浅蓝主题 token 已并入上方 :root[data-theme="light"]） ===== */
-header {
-  max-width: 1400px;
-}
-main {
-  max-width: none;
-  margin: 0;
-  padding: 0;
-  min-width: 0;
-}
 .layout {
   max-width: 1400px;
   margin: 0 auto;
@@ -1635,10 +1549,7 @@ main {
 }
 @media (min-width: 1080px) {
   .layout {
-    display: grid;
     grid-template-columns: 220px minmax(0, 1fr) 340px;
-    gap: 20px;
-    align-items: start;
   }
   #sideNav {
     display: block;
@@ -1726,11 +1637,6 @@ main {
   font-weight: 400;
   opacity: 0.85;
 }
-.badge svg {
-  width: 14px;
-  height: 14px;
-  flex: none;
-}
 /* 设置分节编号 */
 .start-btn {
   width: 100%;
@@ -1802,96 +1708,6 @@ main {
 .hist-date {
   color: var(--subtle);
   white-space: nowrap;
-}
-/* 移动端底部 Tab 栏 + 更多菜单（桌面隐藏） */
-.tab-bar,
-.more-menu,
-.more-backdrop {
-  display: none;
-}
-@media (max-width: 719px) {
-  .layout {
-    padding: 16px 12px 40px;
-  }
-  // The mobile history view has no sticky bar/spacer now; reserve the tab
-  // bar height so the last record is never trapped underneath it.
-  #historyView {
-    padding-bottom: calc(64px + env(safe-area-inset-bottom));
-  }
-  .sticky-bar {
-    bottom: calc(56px + env(safe-area-inset-bottom));
-    padding-bottom: 10px;
-  }
-  .sticky-spacer {
-    height: calc(120px + env(safe-area-inset-bottom));
-  }
-  .tab-bar {
-    display: flex;
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 31;
-    padding-bottom: env(safe-area-inset-bottom);
-    background: var(--card);
-    border-top: 1px solid var(--border);
-  }
-  .tab-bar button {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-    background: transparent;
-    border: none;
-    color: var(--subtle);
-    font-size: 11px;
-    font-weight: 500;
-    padding: 8px 4px 6px;
-    min-height: 56px;
-  }
-  .tab-bar button svg {
-    width: 20px;
-    height: 20px;
-  }
-  .tab-bar button.active {
-    color: var(--accent);
-  }
-  .more-menu {
-    display: flex;
-    flex-direction: column;
-    position: fixed;
-    right: 12px;
-    z-index: 32;
-    bottom: calc(56px + env(safe-area-inset-bottom) + 8px);
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-    padding: 6px;
-    min-width: 160px;
-  }
-  .more-menu button,
-  .more-menu a {
-    background: transparent;
-    border: none;
-    color: var(--text);
-    text-decoration: none;
-    font-size: 14px;
-    text-align: left;
-    padding: 10px 12px;
-    min-height: 44px;
-    border-radius: 8px;
-  }
-  // Click-away layer behind the menu: the old menu stayed open until one of
-  // its own items was tapped, covering the page for no reason.
-  .more-backdrop {
-    display: block;
-    position: fixed;
-    inset: 0;
-    z-index: 31;
-    background: transparent;
-  }
 }
 
 /* ===== 1.0.4 结果区：统计条 + 行标签/pill + 上传区按钮/chips ===== */
@@ -2331,24 +2147,6 @@ main {
   min-height: 36px;
   padding: 6px 14px;
 }
-@media (max-width: 719px) {
-  .pager button {
-    min-height: 44px;
-    padding: 8px 16px;
-  }
-  .busy-cancel {
-    min-height: 44px;
-    padding: 8px 14px;
-  }
-  .pv-close {
-    width: 44px;
-    height: 44px;
-    min-height: 44px;
-  }
-  .lb-zoom-btn {
-    min-height: 44px;
-  }
-}
 
 /* ===== 移动端紧凑结果布局 =====
    Phones have ~250px of usable height after the header, upload and summary.
@@ -2356,17 +2154,23 @@ main {
    per image), so one screen showed barely one result. The compact row keeps
    the same information hierarchy in three lines: name + format, sizes, and
    status + actions; dimensions move to the lightbox, and the redundant
-   upload card is replaced by the sticky "add" button once results exist. */
+   upload card is replaced by the sticky "add" button once results exist.
+   Phones now render the masonry instead of #list (see styles/mobile.less),
+   so only the shell, summary and form-control rules remain here. */
 .row-bottom {
   display: contents;
 }
 @media (max-width: 719px) {
+  .lb-zoom-btn {
+    min-height: 44px;
+  }
   // The sticky bar already has "添加"; a second large dashed dropzone above
   // the list only pushed the results below the fold.
   #uploadCard.has-items:not(.show-hint) {
     display: none;
   }
   #resultCard {
+    order: 2;
     padding: 12px 12px 8px;
   }
   #resultCard .result-head {
@@ -2394,87 +2198,6 @@ main {
   // remain. This drops one line from the summary on every phone.
   .stat-sub {
     display: none;
-  }
-  .item {
-    grid-template-columns: 56px minmax(0, 1fr);
-    gap: 10px;
-    align-items: start;
-    padding: 11px 0;
-  }
-  .item .thumb {
-    width: 56px;
-    height: 56px;
-  }
-  .item .row-main {
-    gap: 3px 6px;
-    align-items: center;
-  }
-  // Name and format share one line; the name truncates, the tags stay whole.
-  .item .cell-name {
-    flex-basis: 100%;
-    flex-direction: row;
-    align-items: center;
-    flex-wrap: nowrap;
-    gap: 5px;
-  }
-  .item .cell-name .name {
-    flex: 0 1 auto;
-    min-width: 0;
-    font-size: 13px;
-  }
-  .item .name-tags {
-    flex: 0 0 auto;
-    flex-wrap: nowrap;
-    gap: 3px;
-  }
-  .item .fmt-tag,
-  .item .best-tag {
-    font-size: 10px;
-    line-height: 1.5;
-    padding: 0 4px;
-  }
-  .item .orig-size,
-  .item .comp-size,
-  .item .save-cell {
-    font-size: 12px;
-    line-height: 1.4;
-  }
-  .item .save-pct {
-    font-size: 12px;
-  }
-  // Dimensions are in the lightbox; keeping them here cost a full line for
-  // every finished image and was the main reason rows felt long.
-  .item .dims {
-    display: none;
-  }
-  .item .row-bottom {
-    display: flex;
-    flex-basis: 100%;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 4px 6px;
-  }
-  .row-bottom .cell-status {
-    flex: none;
-  }
-  .row-bottom .item-actions {
-    flex-basis: auto;
-    margin-left: auto;
-    gap: 4px;
-  }
-  // Keep 44px finger targets even though the icons are 20px.
-  .row-bottom .item-actions button,
-  .row-bottom .item-actions a.dl-icon {
-    min-width: 44px;
-    min-height: 44px;
-  }
-  .row-bottom .status-pill {
-    font-size: 10px;
-    line-height: 1.6;
-    padding: 0 6px;
-  }
-  .item .note-row {
-    margin-top: 2px;
   }
   // iOS zooms the whole page when a focused form control is under 16px. The
   // language select and the settings selects were 14px, so switching language
@@ -2506,636 +2229,4 @@ main {
   }
 }
 
-/* ===== 移动端双列瀑布流 + 底部详情面板 =====
-   Desktop (≥720px) never renders #masonry; the existing #list table/stacked
-   markup and the right-side preview card are untouched. */
-#masonry {
-  display: none;
-}
-@media (max-width: 719px) {
-  #masonry {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-  }
-  .masonry-col {
-    flex: 1 1 0;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .masonry-card {
-    position: relative;
-    box-sizing: border-box;
-    width: 100%;
-    padding: 8px;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: var(--card);
-    text-align: left;
-    transition: opacity 0.2s var(--ease), transform 0.2s var(--ease);
-  }
-  .masonry-card.leaving {
-    opacity: 0;
-    transform: scale(0.98);
-    pointer-events: none;
-  }
-  .m-open {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    padding: 0;
-    border: 0;
-    border-radius: 12px;
-    background: transparent;
-    cursor: pointer;
-  }
-  .m-open:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: -2px;
-  }
-  .m-thumb {
-    position: relative;
-    width: 100%;
-    max-height: none;
-    overflow: hidden;
-    border-radius: 8px;
-    background: var(--surface-2);
-    line-height: 0;
-  }
-  .m-thumb img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  .m-thumb.tiny {
-    background-color: var(--surface-2);
-    background-image:
-      linear-gradient(var(--border) 1px, transparent 1px),
-      linear-gradient(90deg, var(--border) 1px, transparent 1px);
-    background-size: 8px 8px;
-  }
-  .m-thumb.tiny img {
-    object-fit: contain;
-    padding: 8px;
-    box-sizing: border-box;
-  }
-  .m-badge,
-  .m-gif {
-    position: absolute;
-    pointer-events: none;
-    z-index: 3;
-    max-width: calc(100% - 12px);
-    padding: 1px 6px;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--card) 86%, transparent);
-    -webkit-backdrop-filter: blur(4px);
-    backdrop-filter: blur(4px);
-    line-height: 1.5;
-    white-space: normal;
-    overflow-wrap: anywhere;
-  }
-  .m-badge {
-    top: 6px;
-    right: 6px;
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--subtle);
-    text-align: right;
-  }
-  .m-badge.save {
-    color: var(--green-text);
-  }
-  .m-badge.processing {
-    color: var(--accent);
-  }
-  .m-badge.fail {
-    color: var(--red);
-  }
-  .m-badge.cancelled,
-  .m-badge.queued,
-  .m-badge.best {
-    color: var(--subtle);
-  }
-  .m-gif {
-    top: 6px;
-    left: 6px;
-    font-size: 10px;
-    font-weight: 700;
-    color: var(--text);
-  }
-  .m-note {
-    position: absolute;
-    pointer-events: none;
-    left: 6px;
-    bottom: 6px;
-    z-index: 3;
-    width: 14px;
-    height: 14px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent);
-    border-radius: 50%;
-    background: color-mix(in srgb, var(--warn) 14%, var(--card));
-    color: var(--warn);
-    font-size: 9px;
-    font-weight: 700;
-    font-style: normal;
-    line-height: 1;
-  }
-  .m-progress {
-    position: absolute;
-    pointer-events: none;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 2;
-    height: 3px;
-    overflow: hidden;
-    background: color-mix(in srgb, var(--accent) 22%, transparent);
-  }
-  .m-progress span {
-    display: block;
-    width: 40%;
-    height: 100%;
-    background: var(--accent);
-    animation: m-progress 1.1s linear infinite;
-  }
-  @keyframes m-progress {
-    from { transform: translateX(-100%); }
-    to { transform: translateX(350%); }
-  }
-  .m-error {
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    pointer-events: none;
-    background: color-mix(in srgb, var(--red) 13%, transparent);
-  }
-  .m-error.cancelled {
-    background: color-mix(in srgb, var(--card) 38%, transparent);
-  }
-  .m-retry {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    z-index: 4;
-    min-width: 0;
-    min-height: 44px;
-    padding: 0 14px;
-    transform: translate(-50%, -50%);
-    border: 1px solid var(--red);
-    border-radius: 999px;
-    background: var(--card);
-    color: var(--red);
-    font-size: 12px;
-    font-weight: 500;
-    white-space: nowrap;
-  }
-  .m-dl {
-    position: absolute;
-    right: 8px;
-    bottom: 8px;
-    z-index: 4;
-    width: 28px;
-    height: 28px;
-    min-width: 28px;
-    min-height: 28px;
-    padding: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--card) 88%, transparent);
-    color: var(--text);
-    -webkit-backdrop-filter: blur(4px);
-    backdrop-filter: blur(4px);
-  }
-  .m-dl svg {
-    width: 15px;
-    height: 15px;
-    display: block;
-  }
-  .m-name {
-    display: flex;
-    align-items: flex-start;
-    gap: 1px;
-    height: 2.2em;
-    margin-top: 6px;
-    overflow: hidden;
-    font-size: 13px;
-    font-weight: 500;
-    line-height: 1.1;
-  }
-  .m-name-stem {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    overflow: hidden;
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-  .m-name-ext {
-    flex: none;
-  }
-  .m-meta {
-    display: flex;
-    align-items: center;
-    height: 28px;
-    margin-top: 2px;
-    padding-right: 34px;
-    overflow: hidden;
-    color: var(--subtle);
-    font-size: 12px;
-    line-height: 1.25;
-  }
-  .m-meta-text {
-    min-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-  @media (max-width: 479px) {
-    .m-thumb {
-      max-height: 166px;
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .masonry-card {
-      transition: none;
-    }
-    .m-progress span {
-      animation: none;
-      width: 100%;
-      transform: none;
-      opacity: 0.6;
-    }
-  }
-}
-
-/* Bottom sheet: above the sticky bars/tab bar (31/32), below the Lightbox
-   (50) so opening the full-screen compare from the sheet layers correctly. */
-.sheet-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  display: flex;
-  align-items: flex-end;
-  background: rgba(0, 0, 0, 0.48);
-  animation: sheet-fade 0.18s ease-out;
-}
-.sheet {
-  position: relative;
-  width: 100%;
-  max-height: 92vh;
-  max-height: 92dvh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-bottom: 0;
-  border-radius: 16px 16px 0 0;
-  background: var(--card);
-  color: var(--text);
-  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.3);
-  animation: sheet-in 0.22s var(--ease);
-}
-.sheet-drag {
-  flex: none;
-  padding: 8px 0 4px;
-  display: flex;
-  justify-content: center;
-  touch-action: none;
-  cursor: grab;
-}
-.sheet-handle {
-  width: 36px;
-  height: 4px;
-  border-radius: 999px;
-  background: var(--border-strong);
-}
-.sheet-head {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 0 16px 8px;
-}
-.sheet-head h2 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-}
-.sheet-close {
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
-  min-height: 44px;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-2);
-  color: var(--text);
-  font-size: 20px;
-  line-height: 1;
-}
-.sheet-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  padding: 0 16px 12px;
-}
-.sheet-stage {
-  max-height: 42dvh;
-  overflow: auto;
-  border-radius: 10px;
-  background: var(--surface-2);
-  cursor: zoom-in;
-}
-.sheet-stage .pv-compare {
-  margin: 0 auto;
-}
-.sheet-name {
-  margin: 12px 0 4px;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
-}
-.sheet-summary {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-  font-size: 13px;
-  color: var(--subtle);
-}
-.sheet-pct {
-  color: var(--green-text);
-  font-weight: 500;
-}
-.sheet-state {
-  font-size: 12px;
-  color: var(--subtle);
-}
-.sheet-state.fail {
-  color: var(--red);
-}
-.sheet-rows {
-  margin: 12px 0 0;
-  display: grid;
-  gap: 6px;
-}
-.sheet-rows > div {
-  display: grid;
-  grid-template-columns: 4.5em minmax(0, 1fr);
-  gap: 8px;
-  font-size: 12px;
-  line-height: 1.4;
-}
-.sheet-rows dt {
-  color: var(--subtle);
-}
-.sheet-rows dd {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-.sheet-rows dd.warn {
-  color: var(--warn);
-}
-.sheet-notes {
-  margin-top: 12px;
-  padding: 10px;
-  border-radius: 10px;
-  background: var(--surface-2);
-}
-.sheet-notes h3 {
-  margin: 0 0 4px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--subtle);
-}
-.sheet-note {
-  margin: 4px 0 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--subtle);
-  overflow-wrap: anywhere;
-}
-.sheet-note.fail {
-  color: var(--red);
-}
-.sheet-link {
-  padding: 0;
-  min-height: 0;
-  border: 0;
-  background: transparent;
-  color: var(--accent);
-  font-size: inherit;
-  font-weight: 600;
-  text-decoration: underline;
-}
-.sheet-retry {
-  margin-top: 12px;
-  min-height: 44px;
-  padding: 8px 16px;
-  border: 1px solid var(--red);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--red);
-  font-size: 13px;
-  font-weight: 500;
-}
-.sheet-actions {
-  flex: none;
-  display: flex;
-  gap: 8px;
-  padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
-  border-top: 1px solid var(--border);
-  background: var(--card);
-}
-.sheet-actions button {
-  flex: 1 1 0;
-  min-height: 44px;
-  padding: 8px 10px;
-  border-radius: 9px;
-  font-size: 13px;
-}
-.sheet-actions .primary {
-  flex: 1.25 1 0;
-}
-.sheet-secondary {
-  border: 1px solid var(--border);
-  background: var(--surface-2);
-  color: var(--text);
-}
-.sheet-secondary.danger {
-  color: var(--red);
-  border-color: color-mix(in srgb, var(--red) 40%, var(--border));
-}
-@keyframes sheet-in {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
-}
-@keyframes sheet-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .sheet-overlay,
-  .sheet {
-    animation: none;
-  }
-}
-
-/* ===== 移动端更多菜单：图片格式转换 / PDF 转 Word（即将推出） ===== */
-@media (max-width: 719px) {
-  // Restore the three-button action bar from the design: Add / Clear / Download.
-  // The labels may wrap on 320px German, so every button must be allowed to
-  // shrink below its min-content width instead of widening the fixed bar.
-  .sticky-bar {
-    gap: 8px;
-    padding-left: 10px;
-    padding-right: 10px;
-  }
-  .sticky-bar button {
-    min-width: 0;
-  }
-  .sticky-bar .sticky-add,
-  .sticky-bar .sticky-clear {
-    flex: 0 1 auto;
-    padding-left: 10px;
-    padding-right: 10px;
-  }
-  .sticky-bar .sticky-download {
-    flex: 1 1 0;
-    padding-left: 10px;
-    padding-right: 10px;
-  }
-  .more-menu {
-    width: min(290px, calc(100vw - 24px));
-    min-width: 0;
-    padding: 6px;
-    gap: 2px;
-    border-radius: 14px;
-  }
-  .more-menu .more-tool {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-    min-height: 58px;
-    padding: 8px 10px;
-    border: 0;
-    border-radius: 10px;
-    background: transparent;
-    color: var(--text);
-    text-align: left;
-    opacity: 1;
-    cursor: pointer;
-  }
-  .more-tool-icon {
-    flex: none;
-    width: 32px;
-    height: 32px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--surface-2);
-    color: var(--accent);
-  }
-  .more-tool-icon.pdf {
-    color: var(--red);
-  }
-  .more-tool-icon svg {
-    width: 18px;
-    height: 18px;
-    display: block;
-  }
-  .more-tool-copy {
-    flex: 1 1 auto;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .more-tool-copy strong {
-    font-size: 14px;
-    font-weight: 600;
-    line-height: 1.25;
-  }
-  .more-tool-copy small {
-    overflow: hidden;
-    color: var(--subtle);
-    font-size: 11px;
-    line-height: 1.3;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-  .more-soon {
-    flex: none;
-    padding: 2px 6px;
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    color: var(--subtle);
-    font-size: 10px;
-    line-height: 1.4;
-    white-space: nowrap;
-  }
-}
-@media (max-width: 380px) {
-  .sticky-bar {
-    gap: 6px;
-    padding-left: 8px;
-    padding-right: 8px;
-  }
-  .sticky-bar button {
-    padding-left: 6px;
-    padding-right: 6px;
-    font-size: 12px;
-  }
-}
-
-/* Lightweight "coming soon" feedback for the two disabled More tools. */
-.more-toast {
-  position: fixed;
-  left: 50%;
-  bottom: calc(140px + env(safe-area-inset-bottom));
-  z-index: 45;
-  max-width: calc(100vw - 48px);
-  transform: translateX(-50%);
-  padding: 8px 14px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--card);
-  color: var(--text);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
-  font-size: 12px;
-  line-height: 1.4;
-  white-space: nowrap;
-  animation: more-toast-in 0.16s ease-out;
-}
-@keyframes more-toast-in {
-  from { opacity: 0; transform: translate(-50%, 4px); }
-  to { opacity: 1; transform: translate(-50%, 0); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .more-toast { animation: none; }
-}
-
-/* Keep the bottom tab bar above the More backdrop so the "More" button can
-   toggle the menu closed (the backdrop still covers the page and sticky bar). */
-@media (max-width: 719px) {
-  .tab-bar {
-    z-index: 33;
-  }
-}
+@import "./styles/mobile.less";

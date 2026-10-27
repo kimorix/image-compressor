@@ -6,10 +6,11 @@ import type { CompressItem } from '../types'
 // Must match style.less: .masonry { gap: 8px } and .masonry-card { padding: 8px }.
 export const MASONRY_GAP = 8
 export const CARD_PADDING = 8
-// 8px top + 6px gap + two 13px/1.1 filename lines + 2px + a 28px meta/download
-// row + 8px bottom + 1px borders. The card reserves the two-line filename and
-// true 28px action row, so this estimate does not depend on the name length.
-export const CARD_INFO_HEIGHT = 83
+// 8px top + 6px gap + one 17px filename line + 2px + a 28px meta/download
+// row + 8px bottom + 1px borders. The filename is a single ellipsized line
+// and the action row has a fixed height, so this estimate does not depend on
+// the name length (must match .m-name/.m-meta in styles/mobile.less).
+export const CARD_INFO_HEIGHT = 71
 // At 390–430px a 3:4 thumbnail would be ~200px tall and two rows would push
 // the fourth card under the sticky bars once the 28px bottom action row is
 // reserved. Capping the display height at 166px keeps the rendered ratio

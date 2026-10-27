@@ -31,6 +31,11 @@ export interface CompressBlobSuccess {
   outH: number
   outName: string
   targetNote: string | null
+  // True when targetNote asks for the user's attention (the image was
+  // resized to fit, or still misses the target at minimum size). Purely
+  // informational notes (auto/smart quality, best quality) stay false, so
+  // the phone card only shows its ⓘ marker for notes worth opening.
+  targetNoteNotable: boolean
   typeNote: string | null
   // Final output type (after any canvas fallback flip), whether any pixel
   // was transparent, and whether the input was an animated GIF.
@@ -59,6 +64,7 @@ export interface CompressSuccess {
   outName: string
   view: 'comp'
   targetNote: string | null
+  targetNoteNotable: boolean
   typeNote: string | null
   outType: string
   hasAlpha: boolean
@@ -317,6 +323,7 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
       }
     }
     let targetNote: string | null = null
+    let targetNoteNotable = false
     let typeNote: string | null = null
 
     const canvasEncode = (type: string, q?: number): Promise<Blob | null> =>
@@ -442,10 +449,12 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
           if (best) {
             blob = best; width = bestW; height = bestH
             targetNote = outType === 'image/png' && !quantize ? t('targetAutoSize', width, height) : t('targetAutoSizeLow', width, height)
+            targetNoteNotable = true
           } else {
             width = Math.max(1, Math.round(width * 0.1)); height = Math.max(1, Math.round(height * 0.1))
             blob = await encodeAt(width, height, q)
             targetNote = t('targetMin')
+            targetNoteNotable = true
           }
         }
       }
@@ -503,6 +512,7 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
         outH: origH,
         outName: file.name,
         targetNote: t('alreadyBest'),
+        targetNoteNotable: false,
         typeNote: null,
         outType: file.type,
         hasAlpha: alphaScan ?? false,
@@ -521,6 +531,7 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
       outH: height,
       outName: baseName(file.name) + (s.keepOriginalName ? '' : '-compressed') + '.' + extOf(outType),
       targetNote,
+      targetNoteNotable,
       typeNote,
       outType,
       hasAlpha: alphaScan ?? false,
@@ -553,6 +564,7 @@ export async function compressItem(item: CompressItem, s: Settings, t: T, canvas
     outName: res.outName,
     view: 'comp',
     targetNote: res.targetNote,
+    targetNoteNotable: res.targetNoteNotable,
     typeNote: res.typeNote,
     outType: res.outType,
     hasAlpha: res.hasAlpha,
