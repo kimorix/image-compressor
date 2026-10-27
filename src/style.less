@@ -40,8 +40,9 @@ header {
 }
 .header-actions { display: flex; gap: 10px; align-items: center; }
 .gh-btn {
-  display: inline-block; padding: 9px 16px; border: 1px solid var(--border); border-radius: 8px;
+  display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; border: 1px solid var(--border); border-radius: 8px;
   background: var(--surface-2); color: var(--text); text-decoration: none; font-size: 14px; font-weight: 500;
+  svg { width: 18px; height: 18px; display: block; }
   &:hover { border-color: var(--border-strong); }
 }
 .icon-btn {
@@ -165,14 +166,20 @@ html { touch-action: manipulation; }
 }
 // Desktop: settings are a sticky right sidebar next to upload + results,
 // so tuning never means scrolling past the list to find the controls.
+// minmax(0, 1fr) + min-width: 0 on the areas: grid items default to
+// min-width: auto, so a long unbreakable content (long filename, long
+// select option) could force a column wider than its share and push the
+// sidebar off the right edge on narrow desktops (iPad landscape).
+// With 0 minima the columns always share the viewport and the content
+// truncates inside, as .name already does with ellipsis.
 @media (min-width: 720px) {
   main {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start;
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start;
     grid-template-areas: "upload settings" "result settings";
   }
-  #uploadCard { grid-area: upload; }
-  #settingsCard { grid-area: settings; position: sticky; top: 20px; }
-  #resultCard { grid-area: result; }
+  #uploadCard { grid-area: upload; min-width: 0; }
+  #settingsCard { grid-area: settings; position: sticky; top: 20px; min-width: 0; }
+  #resultCard { grid-area: result; min-width: 0; }
   .card { margin-bottom: 0; }
 }
 // Mobile with images: results jump above the settings card (upload ->

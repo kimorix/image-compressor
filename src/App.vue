@@ -320,14 +320,23 @@ function onUseWebp() {
   onSettingsUpdate({ format: 'image/webp' })
 }
 
-// Preset click = apply. Clicking the active preset again is a no-op: it
-// stays highlighted (the old cancel-on-reclick made users think the click
-// missed). Only a manual settings change clears the highlight, via
-// matchPreset in the panel.
+// Preset click = apply; clicking the active preset again cancels it:
+// settings roll back to the snapshot taken when that preset was applied
+// (or to defaults when there is none, e.g. the page loaded with a preset
+// already matching). Only a manual settings change clears the highlight
+// otherwise, via matchPreset in the panel.
+let presetSnapshot: Settings | null = null
 function onPreset(id: string) {
-  if (matchPreset(settings) === id) return
+  if (matchPreset(settings) === id) {
+    if (presetSnapshot) Object.assign(settings, presetSnapshot)
+    else Object.assign(settings, DEFAULT_SETTINGS)
+    presetSnapshot = null
+    void recompressAll()
+    return
+  }
   const p = PRESETS.find((x) => x.id === id)
   if (!p) return
+  presetSnapshot = { ...settings }
   Object.assign(settings, p.patch)
   void recompressAll()
 }
