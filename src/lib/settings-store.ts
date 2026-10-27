@@ -3,6 +3,9 @@ import type { Settings } from '../types'
 // Last-used settings, remembered across visits. Loads are validated
 // per-key against the defaults: a corrupt or partial save degrades to
 // defaults for the bad keys instead of breaking startup.
+// Mode is deliberately NOT remembered: every visit starts smart, even
+// when an older save carries a mode (those saves predate the rule and
+// their mode is ignored on load, never re-saved).
 const KEY = 'ic-settings'
 const FORMATS = ['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'original']
 
@@ -13,7 +16,6 @@ export function loadSavedSettings(): Partial<Settings> {
     const v = JSON.parse(raw) as Partial<Settings>
     const out: Partial<Settings> = {}
     if (FORMATS.includes(v.format as string)) out.format = v.format
-    if (v.mode === 'quality' || v.mode === 'target' || v.mode === 'smart') out.mode = v.mode
     if (Number.isFinite(v.targetSize) && (v.targetSize as number) > 0) out.targetSize = v.targetSize
     if (Number.isFinite(v.quality) && (v.quality as number) >= 1 && (v.quality as number) <= 100) out.quality = v.quality
     if (Number.isFinite(v.maxSize) && (v.maxSize as number) >= 0) out.maxSize = v.maxSize
@@ -32,7 +34,11 @@ export function loadSavedSettings(): Partial<Settings> {
 
 export function saveSettings(s: Settings): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify(s))
+    // Mode is not persisted (see above): strip it so a mid-session
+    // switch to quality/target can never resurface on the next visit.
+    const rest: Partial<Settings> = { ...s }
+    delete rest.mode
+    localStorage.setItem(KEY, JSON.stringify(rest))
   } catch {
     // Private mode or quota: remembering is a nicety, never an error.
   }

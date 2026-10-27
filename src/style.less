@@ -4,9 +4,9 @@
   --bg: #010102; --card: #0f1011; --surface-2: #141516;
   --text: #f7f8f8; --muted: #d0d6e0; --subtle: #8a8f98;
   --border: #23252a; --border-strong: #34343a;
-  --accent: #5e6ad2; --accent-hover: #828fff; --green: #27a644; --green-soft: rgba(39,166,68,.16); --warn: #f59e0b; --red: #f87171;
+  --accent: #5b8cff; --accent-hover: #7aa6ff; --green: #27a644; --green-soft: rgba(39,166,68,.16); --warn: #f59e0b; --red: #f87171;
   --radius: 12px; --radius-sm: 8px; --ease: cubic-bezier(.4,0,.2,1); --fade: .35s;
-  --card-shadow: inset 0 1px 0 rgba(255,255,255,.04); --accent-soft: rgba(94,106,210,.12);
+  --card-shadow: inset 0 1px 0 rgba(255,255,255,.04); --accent-soft: rgba(91,140,255,.16);
   color-scheme: dark;
 }
 :root[data-theme="light"] {
@@ -14,7 +14,7 @@
   --text: #17181c; --muted: #52525b; --subtle: #6b7280;
   --border: #e5e7eb; --border-strong: #d4d4d8;
   --green: #15803d; --green-soft: rgba(21,128,61,.10); --warn: #b45309; --red: #dc2626;
-  --card-shadow: 0 1px 3px rgba(0,0,0,.06); --accent-soft: rgba(94,106,210,.08);
+  --card-shadow: 0 1px 3px rgba(0,0,0,.06); --accent-soft: rgba(37,99,235,.08);
   color-scheme: light;
 }
 // Custom select chevron: the native arrow sits hard against the border, so
@@ -106,13 +106,31 @@ main { max-width: 920px; margin: 0 auto; padding: 20px 16px 48px; }
   }
 }
 .settings-note { grid-column: 1 / -1; font-size: 13px; color: var(--subtle); }
+// Segmented option groups: every option visible at once, no dropdown
+// hunting; buttons wrap on narrow cards instead of overflowing them.
+.field-label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg-btn {
+  padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px;
+  background: transparent; color: var(--text); font-size: 13px; cursor: pointer;
+  &:hover { border-color: var(--accent); }
+  &.active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+}
+// Advanced group: one heading row that collapses the pro options.
+.adv { grid-column: 1 / -1; border-top: 1px solid var(--border); margin-top: 2px; padding-top: 2px; }
+.adv-head {
+  display: flex; align-items: center; justify-content: space-between; width: 100%;
+  padding: 8px 0; background: transparent; border: none; color: var(--text);
+  font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.adv-body { display: flex; flex-direction: column; gap: 2px; }
 .file-hint { margin: 8px 0 0; font-size: 13px; color: var(--subtle); }
 .presets {
   grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
   .presets-label { font-size: 13px; color: var(--subtle); }
   .preset-btn {
     min-height: 36px; padding: 6px 12px; font-size: 13px;
-    &.active { border-color: var(--accent); color: var(--accent); background: rgba(94,106,210,.22); }
+    &.active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
   }
 }
 .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
@@ -131,9 +149,13 @@ button {
   &:disabled { opacity: .5; cursor: not-allowed; }
 }
 #summary {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 10px 12px; margin-bottom: 12px;
   .sum-big { font-size: 28px; font-weight: 600; letter-spacing: -.5px; line-height: 1.2; color: var(--green); margin-bottom: 2px; }
   .sum-detail { font-size: 14px; color: var(--muted); }
   .list-hint { font-size: 13px; color: var(--subtle); margin-top: 6px; }
+// Local-processing reassurance under the dropzone format line.
+.drop-local { font-size: 12px; color: var(--subtle); margin-top: 2px; }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 // Centered recompress pill: fixed at viewport center, fade-only, never
@@ -236,6 +258,10 @@ html { touch-action: manipulation; }
   }
   .dims {
     color: var(--subtle); font-size: 13px; margin-top: 2px;
+  }
+  .retry-btn {
+    background: transparent; border: none; padding: 0; margin-left: 8px;
+    color: var(--accent); font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer;
   }
   .small-note, .alpha-note {
     color: var(--subtle); font-size: 13px; margin-top: 2px;
