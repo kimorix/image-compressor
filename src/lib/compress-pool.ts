@@ -22,6 +22,9 @@ interface Pending {
   settings: Settings
   lang: Lang
   canvasWebp: boolean
+  // UI-only start notification. The compression path is unchanged; App uses
+  // this to distinguish a task waiting in the queue from one actually encoding.
+  onStart?: () => void
 }
 
 export class CompressPool {
@@ -104,6 +107,7 @@ export class CompressPool {
       const { task, ctx } = this.queue.shift()!
       ctx.worker = w
       this.pending.set(task.id, ctx)
+      ctx.onStart?.()
       w.postMessage(task)
     }
   }
@@ -191,10 +195,18 @@ export class CompressPool {
     this.idle = []
   }
 
-  async run(item: CompressItem, settings: Settings, lang: Lang): Promise<CompressResult> {
+  async run(
+    item: CompressItem,
+    settings: Settings,
+    lang: Lang,
+    onStart?: () => void,
+  ): Promise<CompressResult> {
     const canvasWebp = await this.probeCanvasWebp()
     const tx = (key: string, ...args: (string | number)[]) => translate(lang, key, ...args)
-    if (this.noWorker) return compressItem(item, settings, tx, canvasWebp)
+    if (this.noWorker) {
+      onStart?.()
+      return compressItem(item, settings, tx, canvasWebp)
+    }
     return new Promise<CompressResult>((resolve) => {
       const task: WorkerTask = { id: this.nextId++, file: item.file, settings, lang, canvasWebp }
       // Worker is assigned in drain; until then ctx.worker is a placeholder
@@ -206,15 +218,18 @@ export class CompressPool {
         settings,
         lang,
         canvasWebp,
+        onStart,
       } as Pending
       const w = this.getWorker()
       if (w) {
         ctx.worker = w
         this.pending.set(task.id, ctx)
+        onStart?.()
         w.postMessage(task)
       } else if (this.noWorker) {
         // Spawn failed (no Worker support, or construction threw): do not
         // park the task in the queue, go straight to the main thread.
+        onStart?.()
         resolve(compressItem(item, settings, tx, canvasWebp))
       } else {
         this.queue.push({ task, ctx })

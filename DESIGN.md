@@ -335,8 +335,11 @@ components:
     size: 48px
   result-thumb-stacked:
     size: 84px
-  result-thumb-phone:
-    size: 56px
+  masonry-card:
+    rounded: 12px
+    padding: 8px
+    gap: 8px
+    maxThumbHeightSmallPhone: 166px
   format-tag:
     backgroundColor: transparent
     textColor: "{colors.ink-subtle}"
@@ -555,8 +558,10 @@ crossfade), and the only large color area is the image being compared.
 - The result summary is a **flat four-cell bar**, not a hero metric: labels
   12px, values 14px, and the saved value in softened green (`{colors.success-text}`).
 - Dense data, calm chrome: a 48px-thumbnail table on wide screens, an 84px
-  stacked row on tablets, and a three-line 56px-thumbnail compact row on
-  phones. Dimensions move into the lightbox on phones.
+  stacked row on tablets (720–1365px), and a two-column image-first masonry on
+  phones. Phone cards show a clamped-aspect thumbnail, filename, one meta line
+  and a 28px download/share action; dimensions and full notes move into a
+  bottom detail sheet.
 - System fonts only. No webfont request, no font swap, no layout shift.
 - Full local-first promise: the badge, the dropzone line, and the footer all say
   it once; no row repeats it.
@@ -728,8 +733,8 @@ Base unit 4px. Tokens: `{spacing.xxs}` 4 · `{spacing.xs}` 8 · `{spacing.sm}` 1
 - Card padding: 24px (16px on mobile).
 - Header: 36px top, 16px sides, 4px bottom (24px top on mobile).
 - Settings grid: 14px row gap, 16px column gap.
-- Result row: 12px vertical padding on the table, 18px on the stacked tablet
-  row, 11px on the phone compact row.
+- Result row: 12px vertical padding on the table and stacked tablet row;
+  phone masonry cards use 8px internal padding and 8px gaps.
 - Page bottom: 48px.
 
 ### Container and grid
@@ -747,9 +752,11 @@ Base unit 4px. Tokens: `{spacing.xxs}` 4 · `{spacing.xs}` 8 · `{spacing.sm}` 1
   remaining space. Header/footer right padding grows to 436px.
 - **< 720px**: single column. Empty state shows upload; once results exist the
   upload card is hidden (the sticky Add button takes over), so the visible
-  order is results then settings. The compare preview card is not mounted
-  (row tap opens the lightbox), and the mobile shell adds a sticky action bar
-  and a bottom tab bar.
+  order is results then settings. Results are a two-column masonry (8px gap,
+  12px card radius) distributed by JS shortest-column height; the compare
+  preview card is not mounted. Tapping a card opens the bottom detail sheet,
+  and the mobile shell adds a three-button sticky action bar and a bottom tab
+  bar.
 
 The middle column is always `minmax(0, 1fr)` with `min-width: 0`; long
 unbreakable names must truncate inside the column, never widen it.
@@ -923,12 +930,11 @@ Order inside the card:
    0% it is `{colors.ink-subtle}` and reads `0%`, never `−0%`. The bar is a
    single 10px-radius surface-2 container, never nested cards.
 4. **Rows** — table with a header row at ≥1366px; a stacked 84px-thumb row from
-   720–1365px; a three-line compact row below 720px (56px thumb, name + format,
-   sizes + savings, status + actions). Phone rows hide dimensions (available in
-   the lightbox) and put status and the 44px action buttons on one footer line.
-5. **Pager** — 20 rows per page on desktop, 12 on phones, previous/label/next,
-   only when needed. Stats, thumbnail strip and downloads are global, not per
-   page. A new import resets the list to page 1. Changing page scrolls the
+   720–1365px; a two-column masonry below 720px. Stats, thumbnail strip and
+   downloads are global. Mobile has no pager, so adding a file never replaces
+   the visible page or scrolls back to the top.
+5. **Pager** — desktop only, 20 rows per page, previous/label/next, only when
+   needed. A new import resets the list to page 1. Changing page scrolls the
    result card back into view instead of leaving the viewport at the pager.
 6. If every item is already optimal, a 13px note: "N images uncompressed,
    originals will be kept."
@@ -973,20 +979,57 @@ left-aligned. It is hidden below 1366px where rows stack.
 
 No per-row settings gear. No third action beyond copy/share, download, remove.
 
-### Result row — stacked (720–1365px) and compact (<720px)
+### Result row — stacked (720–1365px)
 
-**720–1365px:** `84px minmax(0, 1fr)` with 12px gap, 18px vertical padding.
-The meta column wraps: name + format tag on their own line, then original →
-compressed → save, then dimensions (stacked with a rotated arrow when changed,
-one line when unchanged), status, then actions. Touch row icons are 44px. The
-arrow is a `→` rotated 90°.
+`84px minmax(0, 1fr)` with 12px gap, 18px vertical padding. The meta column
+wraps: name + format tag on their own line, then original → compressed → save,
+then dimensions (stacked with a rotated arrow when changed, one line when
+unchanged), status, then actions. Touch row icons are 44px. The arrow is a `→`
+rotated 90°.
 
-**<720px:** `56px minmax(0, 1fr)` with 10px gap and 11px vertical padding.
-Three lines: name + format tag; original → compressed −saved; status + 44px
-actions in one footer. Dimensions are hidden here because the lightbox already
-reports them; keeping them added a full line to every finished row. The footer
-is a flex row (status left, actions right) that wraps for long translations.
-This is ~108px tall versus the old ~250px five-line row.
+### Mobile masonry (<720px)
+
+No `column-count` and no `grid-template-rows: masonry`. `src/lib/masonry.ts`
+estimates each card as `thumbnail height + fixed information height`, where the
+thumbnail height uses the original aspect clamped to 3:4–4:3 (1:1 when unknown)
+and a 166px cap on ≤479px viewports. Two arrays of card ids are rendered as two
+flex columns; each new card goes to the currently shorter column. Existing ids
+stay in their column through queued → processing → done and through imports;
+only deletion/clear (and re-entering the mobile layout) rebuilds the columns.
+
+- Card: `{colors.surface}`/`{colors.hairline}`/12px radius; 8px padding; 8px
+  column and row gaps. No shadow.
+- Thumbnail: `object-fit: cover`; images with either side <64px use
+  `object-fit: contain` over a subtle 8px grid. `loading="lazy"` and
+  `decoding="async"` on every card image.
+- Overlays: top-right translucent pill (11px) for −% / already-best / queued /
+  processing / failed; top-left `GIF` chip; bottom-left 14px amber note dot;
+  bottom-right 28px download/share button in the card footer; a 3px accent
+  indeterminate bar while encoding; failed items get a faint red wash and a
+  centered 44px Retry button.
+- Text: filename 13px/500, up to two lines with the extension kept visible;
+  meta 12px `{colors.ink-subtle}` one line (`388 KB → 156 KB · WebP`). The
+  information block reserves the two-line filename height and a 28px action
+  row so the height estimate is stable. The card overlay is a sibling button, not a wrapper
+  around the download/retry buttons.
+- Dimensions are intentionally not on the card; they live in the detail sheet.
+
+### Mobile detail sheet
+
+Tapping a card (other than its download button) opens a bottom sheet
+(`role="dialog"`, `aria-modal`, focus trap, Esc/overlay/down-swipe close, body
+scroll locked):
+
+1. Original/compressed comparison slider reusing `.pv-*` geometry and
+   `useCompareSlider`; clicking the comparison opens the existing Lightbox.
+2. Full filename, `orig → out` size, saved %, dimensions (`dimsUnchanged` when
+   unchanged), and source → output format.
+3. Full note list: errors/cancellations, target note, type note, GIF first
+   frame, transparent-to-JPEG note + "Use WebP", small-saving note, already
+   optimal, and copy failure.
+4. Bottom actions: Copy / Delete / primary. The primary reads "Save to Photos"
+   on touch devices whose `navigator.canShare({files})` is true and invokes the
+   share sheet; otherwise it reads "Download". Safe-area padding is included.
 
 ### Already-best and note states
 
@@ -1057,29 +1100,31 @@ This is ~108px tall versus the old ~250px five-line row.
 ### Mobile shell (<720px)
 
 - Settings card becomes a one-line summary row that expands.
-- Result card actions hide; a fixed sticky bar sits above the tab bar:
-  "+ Add" and "Download all" (primary, flex 1), with safe-area padding. Clear
-  lives in the More menu on phones (the desktop result-head Clear uses the
-  ghost variant); keeping a third label overflowed the 320px German bar. The
-  bar is shown only on the tool view; the history view hides it (and its
-  spacer) and reserves the tab-bar height at the list bottom.
+- Result card actions hide; a fixed sticky bar sits above the tab bar with
+  three actions: "+ Add", "Clear" (two-step), and "Download all" (primary,
+  flex 1), with safe-area padding. Buttons shrink below min-content width so
+  the German labels wrap instead of overflowing a 320px screen. The bar is
+  shown only on the tool view; the history view hides it (and its spacer) and
+  reserves the tab-bar height at the list bottom.
 - Bottom tab bar: Home, Settings, More. 56px min height, 20px icons, 11px
-  labels, active accent. "More" opens a 44px-item menu (History, theme, GitHub,
-  clear) with a transparent click-away backdrop; More stays active while the
-  history view is open.
-- The compare preview card is **not mounted** on phones (row tap opens the
-  lightbox); this avoids loading two large images on the results screen and
-  brings the settings card closer.
+  labels, active accent. The bar sits above the More backdrop so tapping
+  "More" again closes the menu. "More" opens a 290px, 14px-radius menu above
+  the bar with exactly two coming-soon tools:
+  - Image format conversion — common formats, one-tap conversion.
+  - PDF to Word — local conversion, files never uploaded.
+  Each row has a 32px icon, title, one 11px description line and a grey
+  "Coming soon" pill. Rows carry `aria-disabled="true"`; clicking only shows a
+  lightweight toast. The menu closes on backdrop, More toggle, or Esc. Theme
+  and GitHub remain in the header; Clear lives in the sticky bar; History
+  remains on desktop.
+- The compare preview card is **not mounted** on phones; tapping a card opens
+  the detail sheet. The sheet is the only large overlay below the Lightbox.
 - The sticky spacer reserves 120px on the tool view so the footer is reachable;
   it is hidden on the history view.
 - Card order: empty state upload → results → settings; once results exist the
   upload card is hidden and the sticky Add button takes over, so results sit
-  directly under the header. The settings card is collapsed by
-  default on narrow screens.
-- The sticky bar has two actions on phones (Add, Download all); Clear moves to
-  the More menu and keeps its two-step confirm there (the menu stays open for
-  the second tap, then closes once the list is empty). Three localized labels
-  did not fit 320px in German and overflowed the bar by 8px.
+  directly under the header. The settings card is collapsed by default on
+  narrow screens.
 
 ### Progress, loading, motion
 
@@ -1132,10 +1177,11 @@ This is ~108px tall versus the old ~250px five-line row.
 - **Downloads.** One finished image downloads directly; two or more become one
   ZIP (level 0, folder structure preserved, duplicate names suffixed `-2`).
   Browsers block consecutive downloads, so never fire N downloads.
-- **Pagination.** 20 rows per page on desktop, 12 on phones; a new import
-  resets to page 1; selecting an item from another page moves the list there;
-  the preview falls back to the first item on the current page; changing page
-  scrolls the result card back to the top.
+- **Pagination.** Desktop only, 20 rows per page; a new import resets to page 1;
+  selecting an item from another page moves the list there; the preview falls
+  back to the first item on the current page; changing page scrolls the result
+  card back to the top. Phones render the full masonry without a pager, so an
+  import never replaces the visible page or scrolls to the top.
 - **Keyboard.** Lightbox: Esc closes, ←/→ switch, Space flips original/compressed;
   the divider keeps its own arrow keys. Dropzone and thumbnails are Enter/Space
   operable.
@@ -1211,7 +1257,7 @@ This is ~108px tall versus the old ~250px five-line row.
   but real.
 - Keep every string in all six languages, and every color/radius/font size in
   `style.less` tokens.
-- Verify at 390, 768, 1024, 1440 and 1600px. Run typecheck, unit tests, build,
+- Verify at 390, 430, 719, 720, 1024, 1440 and 1600px. Run typecheck, unit tests, build,
   and commit `docs/` with `src/`.
 
 ### Don't
@@ -1242,11 +1288,11 @@ This is ~108px tall versus the old ~250px five-line row.
 | ≥1600px | Wide desktop | Right rail 400px; header/footer right padding 436px |
 | 1366–1599px | Desktop table | Result table with fixed columns; rail 340px |
 | 1080–1365px | Desktop sidebar | Sidebar 220px; results stack (table minimum not met) |
-| 720–1079px | Tablet | No sidebar; fixed 340px rail; stacked result rows |
-| 601–719px | Small tablet | Single column, mobile shell (order, sticky bar, tab bar); 16px/12px page padding; header still desktop-style |
-| ≤600px | Mobile compact | 16px cards, 28px dropzone, 26px title, stacked header; actions wrap to a right-aligned row when the translated title is long |
-| ≤480px | Small phone | Stat labels 11px, values 13px |
-| ≤380px | Narrow phone | 24px title; GitHub icon hidden (More menu has it); badge 11/9px, action gap 4px; header wraps with right-aligned actions when the translated title is long |
+| 720–1079px | Tablet | No sidebar; fixed 340px rail; stacked result rows; desktop preview card |
+| 601–719px | Small tablet | Single column, two-column masonry, bottom detail sheet, sticky 3-button bar + tab bar; 16px/12px page padding; header still desktop-style |
+| ≤600px | Mobile compact | 16px cards, 28px dropzone, 26px title, stacked header; masonry cards; actions wrap to a right-aligned row when the translated title is long |
+| ≤480px | Small phone | Masonry thumbnails capped at 166px; stat labels 10px, values 13px |
+| ≤380px | Narrow phone | 24px title; GitHub icon hidden; badge 11/9px, action gap 4px; header wraps with right-aligned actions when the translated title is long |
 
 The stat strip stays four columns at every width; at ≤480px labels shrink to
 11px and values to 13px. The header's badge stacks under the title at ≤600px.
@@ -1312,10 +1358,14 @@ switches at runtime.
 | Sidebar, history, mobile tab bar, more menu | `src/App.vue` |
 | Dropzone, paste, folder drop | `src/components/DropZone.vue` |
 | Settings, presets, advanced | `src/components/SettingsPanel.vue` |
-| Result row, thumbnails, copy/share | `src/components/ImageItem.vue` |
+| Desktop result row, thumbnails, copy/share | `src/components/ImageItem.vue` |
+| Mobile masonry card (badge, note dot, download/share, retry) | `src/components/MobileCard.vue` |
+| Mobile bottom detail sheet | `src/components/MobileDetailSheet.vue` |
+| Shared compare-slider mechanics (preview + sheet) | `src/composables/useCompareSlider.ts` |
+| Masonry aspect/height estimate + stable two-column distribution | `src/lib/masonry.ts` |
 | Lightbox compare + zoom | `src/components/Lightbox.vue` |
 | Progress | `src/components/ProgressBar.vue` |
-| Preview card (rail) | `src/App.vue` |
+| Preview card (rail, ≥720px) | `src/App.vue` |
 | Compression behavior | `src/lib/compress.ts`, `compress-pool.ts` |
 | Recompress skip logic | `src/lib/recompress.ts` |
 | Pixel safety limit | `src/lib/limits.ts` |
@@ -1325,7 +1375,7 @@ switches at runtime.
 
 - `pnpm dev` — local Vite server.
 - `pnpm typecheck` — `vue-tsc --noEmit`.
-- `pnpm test` — Vitest unit tests (`tests/unit`, 34 tests).
+- `pnpm test` — Vitest unit tests (`tests/unit`, 45 tests, including masonry allocation/aspect and i18n coverage).
 - `pnpm build` — Vite build to `docs/` + language shells via
   `scripts/seo-pages.mjs`.
 - CI (`.github/workflows/ci.yml`) runs typecheck, tests, build, and fails if the

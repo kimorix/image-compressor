@@ -1,5 +1,5 @@
 <template>
-  <header :inert="busy || undefined">
+  <header :inert="busy || detailId ? true : undefined">
     <div>
       <h1><span>{{ t('appTitle') }}</span><span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3z" /><path d="M9 12l2 2 4-4" /></svg><span class="badge-text"><span class="badge-main">{{ t('badgeLocal') }}</span><span class="badge-sub">{{ t('badgeSub') }}</span></span></span></h1>
       <p>{{ t('headerSub') }}</p>
@@ -12,7 +12,7 @@
       <a class="gh-btn" href="https://github.com/kimorix/image-compressor" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z" /></svg><span class="gh-text">{{ t('githubBtn') }}</span></a>
     </div>
   </header>
-  <div class="layout" :inert="busy || undefined">
+  <div class="layout" :inert="busy || detailId ? true : undefined">
     <aside id="sideNav">
       <nav class="side-links">
         <button type="button" :class="{ active: view === 'tool' }" @click="goTool"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="M21 15l-5-5L5 21" /></svg>{{ t('navTool') }}</button>
@@ -68,7 +68,7 @@
           <span class="lh-actions">{{ t('thActions') }}</span>
         </div>
       </div>
-      <div id="list">
+      <div v-if="!isMobile" id="list">
         <ImageItem
           v-for="item in pagedItems"
           :key="item.id"
@@ -80,7 +80,29 @@
           @retry="retryItem"
         />
       </div>
-      <div v-if="items.length > pageSize" class="pager">
+      <!-- Phones use a JS-balanced two-column masonry. Desktop (≥720px)
+      keeps the existing table/list branch above untouched. -->
+      <div v-if="isMobile" id="masonry" class="masonry" ref="masonryRef" :aria-label="t('resultTitle')">
+        <div
+          v-for="(col, ci) in masonryColumns"
+          :key="ci"
+          class="masonry-col"
+          :data-col="ci"
+        >
+          <MobileCard
+            v-for="item in col"
+            :key="item.id"
+            :item="item"
+            :t="t"
+            :active="activeIds.has(item.id)"
+            :processing="processingIds.has(item.id)"
+            :leaving="removingIds.has(item.id)"
+            @open="openDetail"
+            @retry="retryItem"
+          />
+        </div>
+      </div>
+      <div v-if="!isMobile && items.length > PAGE_SIZE" class="pager">
         <button type="button" :disabled="page <= 1" @click="goPage(-1)">{{ t('pagePrev') }}</button>
         <span class="pager-label">{{ t('pageLabel', page, pageCount) }}</span>
         <button type="button" :disabled="page >= pageCount" @click="goPage(1)">{{ t('pageNext') }}</button>
@@ -154,24 +176,31 @@
       </div>
     </section>
   </div>
-  <div class="sticky-bar" v-show="items.length > 0 && view === 'tool'" :inert="busy || undefined">
+  <div class="sticky-bar" v-show="items.length > 0 && view === 'tool'" :inert="busy || detailId ? true : undefined">
     <button class="sticky-add" type="button" @click="openPicker">{{ t('addBtn') }}</button>
     <button class="sticky-clear" type="button" :disabled="items.length === 0" @click="onClearClick">{{ clearConfirm ? t('clearConfirm') : t('clearAll') }}</button>
     <button class="sticky-download primary" type="button" :disabled="doneCount === 0 || zipping" @click="downloadAll">{{ t('downloadAll') }}</button>
   </div>
   <div class="sticky-spacer" v-show="items.length > 0 && view === 'tool'" aria-hidden="true"></div>
-  <nav class="tab-bar" :inert="busy || undefined">
+  <nav class="tab-bar" :inert="busy || detailId ? true : undefined">
     <button type="button" :class="{ active: view === 'tool' }" @click="goHome"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8" /><path d="M5 9v11h14V9" /></svg>{{ t('tabHome') }}</button>
     <button type="button" @click="goSettings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></svg>{{ t('tabSettings') }}</button>
     <button type="button" :class="{ active: moreOpen || view === 'history' }" :aria-expanded="moreOpen" @click="moreOpen = !moreOpen"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>{{ t('tabMore') }}</button>
   </nav>
   <div v-if="moreOpen" class="more-backdrop" @click="moreOpen = false"></div>
-  <div class="more-menu" v-show="moreOpen" :inert="busy || undefined">
-    <button type="button" @click="goHistory">{{ t('navHistory') }}</button>
-    <button type="button" @click="toggleTheme(); moreOpen = false">{{ t('moreTheme') }}</button>
-    <a href="https://github.com/kimorix/image-compressor" target="_blank" rel="noopener">{{ t('githubBtn') }}</a>
-    <button type="button" :disabled="items.length === 0" @click="onMoreClear">{{ clearConfirm ? t('clearConfirm') : t('clearAll') }}</button>
+  <div class="more-menu" v-show="moreOpen" :inert="busy || detailId ? true : undefined">
+    <button type="button" class="more-tool" aria-disabled="true" @click="showComingSoon">
+      <span class="more-tool-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="8" height="8" rx="1" /><rect x="13" y="12" width="8" height="8" rx="1" /><path d="M13 8h6M16 5v6M11 16H5M8 13v6" /></svg></span>
+      <span class="more-tool-copy"><strong>{{ t('moreImageConvert') }}</strong><small>{{ t('moreImageConvertDesc') }}</small></span>
+      <span class="more-soon">{{ t('comingSoon') }}</span>
+    </button>
+    <button type="button" class="more-tool" aria-disabled="true" @click="showComingSoon">
+      <span class="more-tool-icon pdf" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z" /><path d="M14 3v5h5" /><path d="M8.5 15l2-4 2 4 2-4 2 4" /></svg></span>
+      <span class="more-tool-copy"><strong>{{ t('morePdfToWord') }}</strong><small>{{ t('morePdfToWordDesc') }}</small></span>
+      <span class="more-soon">{{ t('comingSoon') }}</span>
+    </button>
   </div>
+  <div v-if="moreToast" class="more-toast" role="status">{{ moreToast }}</div>
   <!-- Blocking global loading: the scrim captures pointer/touch, the page
   sections above are inert, and the status pill stays visible above it. -->
   <div v-if="busy" class="busy-scrim" aria-hidden="true"></div>
@@ -182,7 +211,17 @@
   </div>
   <div v-if="pageDragging" class="page-drop-hint" aria-hidden="true">{{ t('dropAnywhere') }}</div>
   <Lightbox v-if="lbItem" :item="lbItem" :t="t" :has-prev="lbIndex > 0" :has-next="lbIndex >= 0 && lbIndex < items.length - 1" :inert="busy || undefined" :busy="busy" @close="lightboxId = null" @prev="lbStep(-1)" @next="lbStep(1)" />
-  <footer v-html="t('footer')" :inert="busy || undefined"></footer>
+  <MobileDetailSheet
+    v-if="detailItem && isMobile"
+    :item="detailItem"
+    :t="t"
+    @close="detailId = null"
+    @remove="removeItem"
+    @retry="retryFromSheet"
+    @use-webp="onUseWebp"
+    @preview="openFromSheet"
+  />
+  <footer v-html="t('footer')" :inert="busy || detailId ? true : undefined"></footer>
 </template>
 
 <script setup lang="ts">
@@ -191,6 +230,8 @@ import { Zip, ZipPassThrough } from 'fflate'
 import DropZone from './components/DropZone.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import ImageItem from './components/ImageItem.vue'
+import MobileCard from './components/MobileCard.vue'
+import MobileDetailSheet from './components/MobileDetailSheet.vue'
 import Lightbox from './components/Lightbox.vue'
 import ProgressBar from './components/ProgressBar.vue'
 import { LANGS, initialLang, t as tx, type Lang } from './i18n'
@@ -202,6 +243,8 @@ import { DEFAULT_SETTINGS, matchPreset, PRESETS } from './lib/presets'
 import { loadSavedSettings, saveSettings } from './lib/settings-store'
 import { newItem, type CompressItem, type Settings } from './types'
 import { isUnaffected } from './lib/recompress'
+import { useCompareSlider } from './composables/useCompareSlider'
+import { appendMasonry, distributeMasonry, fallbackColumnWidth, type MasonryColumns } from './lib/masonry'
 
 const lang = ref<Lang>(initialLang())
 const theme = ref<Theme>(initialTheme())
@@ -228,6 +271,90 @@ const isMobile = ref(typeof window !== 'undefined' ? window.innerWidth < 720 : f
 // view, because the panel already lives on the tool page.
 const view = ref<'tool' | 'history'>('tool')
 const moreOpen = ref(false)
+const moreToast = ref<string | null>(null)
+let moreToastTimer: ReturnType<typeof setTimeout> | null = null
+function showComingSoon() {
+  moreToast.value = t('comingSoon')
+  if (moreToastTimer) clearTimeout(moreToastTimer)
+  moreToastTimer = setTimeout(() => { moreToast.value = null }, 1600)
+}
+
+// Mobile detail sheet. The item id (not the object) keeps the sheet live
+// across recompresses that replace the item.
+const detailId = ref<string | null>(null)
+const detailItem = computed(() => items.value.find((i) => i.id === detailId.value) ?? null)
+watch(detailItem, (it) => { if (!it) detailId.value = null })
+function openDetail(item: CompressItem) {
+  if (!isMobile.value) return
+  moreOpen.value = false
+  detailId.value = item.id
+}
+function retryFromSheet(item: CompressItem) {
+  detailId.value = null
+  retryItem(item)
+}
+function openFromSheet(item: CompressItem) {
+  detailId.value = null
+  selectPreview(item)
+  lightboxId.value = item.id
+}
+
+// JS masonry state. IDs remain stable while item objects are replaced on
+// every compression update; the columns themselves are only rebuilt on
+// delete/clear (and when entering the mobile layout).
+const masonryRef = ref<HTMLElement | null>(null)
+const masonryCols = ref<[string[], string[]]>([[], []])
+const removingIds = ref<Set<string>>(new Set())
+const removalTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const masonryColumns = computed<MasonryColumns>(() => {
+  const byId = new Map(items.value.map((i) => [i.id, i]))
+  return masonryCols.value.map((ids) => ids.map((id) => byId.get(id)).filter((i): i is CompressItem => !!i)) as MasonryColumns
+})
+function masonryMetrics() {
+  const container = masonryRef.value?.clientWidth ?? 0
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 390
+  const columnWidth = container > 0 ? (container - 8) / 2 : fallbackColumnWidth(vw)
+  return { columnWidth, vw }
+}
+function rebuildMasonry() {
+  const { columnWidth, vw } = masonryMetrics()
+  const [a, b] = distributeMasonry(items.value, columnWidth, vw)
+  masonryCols.value = [a.map((i) => i.id), b.map((i) => i.id)]
+}
+function appendMasonryState() {
+  const { columnWidth, vw } = masonryMetrics()
+  const byId = new Map(items.value.map((i) => [i.id, i]))
+  const existing: MasonryColumns = [
+    masonryCols.value[0].map((id) => byId.get(id)).filter((i): i is CompressItem => !!i),
+    masonryCols.value[1].map((id) => byId.get(id)).filter((i): i is CompressItem => !!i),
+  ]
+  const next = appendMasonry(existing, items.value, columnWidth, vw)
+  masonryCols.value = [next[0].map((i) => i.id), next[1].map((i) => i.id)]
+}
+// Rebuild only when the current ids no longer cover the assignments (e.g.
+// clear + re-add in the same tick); a plain state replacement keeps columns.
+watch(items, (next, prev) => {
+  if (!isMobile.value) return
+  const ids = new Set(next.map((i) => i.id))
+  const assigned = new Set(masonryCols.value[0].concat(masonryCols.value[1]))
+  // Deletion/clear and any stale assignment rebuild the whole layout.
+  const missing = [...assigned].some((id) => !ids.has(id))
+  if (next.length < (prev?.length ?? 0) || missing) {
+    rebuildMasonry()
+    return
+  }
+  // A first render or a new import can arrive with the same length Vue
+  // last saw (the shallow array is replaced several times in one tick);
+  // append by "is this id assigned?" rather than by length alone.
+  if (next.some((i) => !assigned.has(i.id))) appendMasonryState()
+}, { flush: 'post' })
+watch(isMobile, (mobile) => {
+  if (mobile) void nextTick(rebuildMasonry)
+  else {
+    masonryCols.value = [[], []]
+    detailId.value = null
+  }
+})
 type HistRec = { n: string; o: number; c: number; p: number; f: string; t: number }
 const historyRecords = ref<HistRec[]>([])
 function loadHistory() {
@@ -367,8 +494,13 @@ function replaceItem(updated: CompressItem) {
 // Generation guard: settings changes and file adds can overlap in-flight runs.
 // Only the latest run's results are applied; a stale run's blob is revoked.
 let runGen = 0
-// Runs currently encoding (fresh or recompress).
+// Runs currently encoding (fresh or recompress). activeIds includes items
+// waiting in the pool queue; processingIds contains only items whose encode
+// has actually started, which is what distinguishes the grey queued badge
+// from the accent progress bar on a card.
 const activeRuns = ref(0)
+const activeIds = ref<Set<string>>(new Set())
+const processingIds = ref<Set<string>>(new Set())
 // Encode workers (2–4 by hardwareConcurrency, see compress-pool): the pool
 // queues the rest, so a 50-photo batch neither spikes memory nor blocks
 // the main thread.
@@ -380,35 +512,49 @@ const pool = new CompressPool()
 let pendingRecompress = false
 async function runCompress(list: CompressItem[], g: number, snap: Settings) {
   activeRuns.value++
+  activeIds.value = new Set([...activeIds.value, ...list.map((i) => i.id)])
   try {
     await Promise.all(list.map(async (item) => {
-      const res = await pool.run(item, snap, lang.value)
-      if (g !== runGen) {
-        if (res.done) URL.revokeObjectURL(res.outUrl)
-        return
-      }
-      if (!res.done && res.cancelled) {
-        // Keep a displayed result if this was a recompress; only a fresh item
-        // that never finished gets the cancelled error.
-        if (!item.done) replaceItem({ ...item, error: res.error, cancelled: true })
-        return
-      }
-      // Only a successful result counts as "computed under snap": a
-      // failed item keeps its displayed (older) result, so its snapshot
-      // must stay at the older settings, not advance to snap.
-      // keepOriginalName can be toggled while this run is in flight; rewrite
-      // the name from the CURRENT setting so the result never resurrects the
-      // naming that was active when the encode started.
-      const applied = res.done && res.outSize < item.file.size
-        ? { ...res, outName: baseName(item.file.name) + (settings.keepOriginalName ? '' : '-compressed') + '.' + extOf(res.outType) }
-        : res
-      replaceItem({ ...item, ...applied, ...(applied.done ? { lastSettings: snap, cancelled: false, retryable: true } : {}) })
-      // First completion only: recompresses of an already-done item are
-      // not new history entries.
-      if (!item.done && res.done) {
-        const fmtMap: Record<string, string> = { 'image/jpeg': 'JPEG', 'image/png': 'PNG', 'image/webp': 'WebP', 'image/avif': 'AVIF' }
-        const ext = item.file.name.split('.').pop()?.toUpperCase() ?? ''
-        saveHistory({ n: item.file.name, o: item.file.size, c: res.outSize, p: Math.max(0, Math.round((1 - res.outSize / item.file.size) * 100)), f: fmtMap[res.outType] ?? ext, t: Date.now() })
+      try {
+        const res = await pool.run(item, snap, lang.value, () => {
+          const next = new Set(processingIds.value)
+          next.add(item.id)
+          processingIds.value = next
+        })
+        if (g !== runGen) {
+          if (res.done) URL.revokeObjectURL(res.outUrl)
+          return
+        }
+        if (!res.done && res.cancelled) {
+          // Keep a displayed result if this was a recompress; only a fresh item
+          // that never finished gets the cancelled error.
+          if (!item.done) replaceItem({ ...item, error: res.error, cancelled: true })
+          return
+        }
+        // Only a successful result counts as "computed under snap": a
+        // failed item keeps its displayed (older) result, so its snapshot
+        // must stay at the older settings, not advance to snap.
+        // keepOriginalName can be toggled while this run is in flight; rewrite
+        // the name from the CURRENT setting so the result never resurrects the
+        // naming that was active when the encode started.
+        const applied = res.done && res.outSize < item.file.size
+          ? { ...res, outName: baseName(item.file.name) + (settings.keepOriginalName ? '' : '-compressed') + '.' + extOf(res.outType) }
+          : res
+        replaceItem({ ...item, ...applied, ...(applied.done ? { lastSettings: snap, cancelled: false, retryable: true } : {}) })
+        // First completion only: recompresses of an already-done item are
+        // not new history entries.
+        if (!item.done && res.done) {
+          const fmtMap: Record<string, string> = { 'image/jpeg': 'JPEG', 'image/png': 'PNG', 'image/webp': 'WebP', 'image/avif': 'AVIF' }
+          const ext = item.file.name.split('.').pop()?.toUpperCase() ?? ''
+          saveHistory({ n: item.file.name, o: item.file.size, c: res.outSize, p: Math.max(0, Math.round((1 - res.outSize / item.file.size) * 100)), f: fmtMap[res.outType] ?? ext, t: Date.now() })
+        }
+      } finally {
+        const nextActive = new Set(activeIds.value)
+        nextActive.delete(item.id)
+        activeIds.value = nextActive
+        const nextProcessing = new Set(processingIds.value)
+        nextProcessing.delete(item.id)
+        processingIds.value = nextProcessing
       }
     }))
   } finally {
@@ -581,11 +727,45 @@ function retryItem(item: CompressItem) {
   void runCompress([cleared], g, { ...settings })
 }
 
-function removeItem(item: CompressItem) {
+function prefersReducedMotion() {
+  return typeof window !== 'undefined'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
+function commitRemove(item: CompressItem) {
+  // A delayed fade timer can fire after clearAll already removed the item.
+  if (!items.value.some((i) => i.id === item.id)) return
   URL.revokeObjectURL(item.url)
   if (item.outUrl) URL.revokeObjectURL(item.outUrl)
   items.value = items.value.filter((i) => i.id !== item.id)
   if (lightboxId.value === item.id) lightboxId.value = null
+  if (detailId.value === item.id) detailId.value = null
+}
+
+function removeItem(item: CompressItem) {
+  if (detailId.value === item.id) detailId.value = null
+  const nextActive = new Set(activeIds.value)
+  nextActive.delete(item.id)
+  activeIds.value = nextActive
+  const nextProcessing = new Set(processingIds.value)
+  nextProcessing.delete(item.id)
+  processingIds.value = nextProcessing
+  if (!isMobile.value || prefersReducedMotion()) {
+    commitRemove(item)
+    return
+  }
+  if (removingIds.value.has(item.id)) return
+  const next = new Set(removingIds.value)
+  next.add(item.id)
+  removingIds.value = next
+  const timer = setTimeout(() => {
+    removalTimers.delete(item.id)
+    const left = new Set(removingIds.value)
+    left.delete(item.id)
+    removingIds.value = left
+    commitRemove(item)
+  }, 200)
+  removalTimers.set(item.id, timer)
 }
 
 // Preview overlay: stores only the id, so the overlay always shows the
@@ -626,7 +806,7 @@ function selectPreview(item: CompressItem) {
   // The strip lists every item; selecting one from another page must move
   // the list there too, or the highlighted row is nowhere visible.
   const idx = items.value.findIndex((i) => i.id === item.id)
-  if (idx >= 0) page.value = Math.floor(idx / pageSize.value) + 1
+  if (idx >= 0) page.value = Math.floor(idx / PAGE_SIZE) + 1
 }
 function downloadPreview() {
   const it = previewItem.value
@@ -685,18 +865,15 @@ function onViewportResize() {
   updateStripStuck()
 }
 watch(() => items.value.length, async () => { await nextTick(); updateStripNav(); updateStripStuck() })
-// #8 results pagination: desktop shows 20 rows; phones show 12 so a page
-// fits in roughly three compact screens instead of five or six. Stats, the
-// strip and downloads stay global.
-const PAGE_SIZE_DESKTOP = 20
-const PAGE_SIZE_MOBILE = 12
-const pageSize = computed(() => (isMobile.value ? PAGE_SIZE_MOBILE : PAGE_SIZE_DESKTOP))
+// #8 results pagination: desktop keeps 20 rows per page. Phones render the
+// whole masonry (no pager) so appending a file never replaces the visible
+// page or scrolls back to the top. Stats, the strip and downloads stay global.
+const PAGE_SIZE = 20
 const page = ref(1)
-const pageCount = computed(() => Math.max(1, Math.ceil(items.value.length / pageSize.value)))
-const pagedItems = computed(() => {
-  const size = pageSize.value
-  return items.value.slice((page.value - 1) * size, page.value * size)
-})
+const pageCount = computed(() => Math.max(1, Math.ceil(items.value.length / PAGE_SIZE)))
+const pagedItems = computed(() => (isMobile.value
+  ? items.value
+  : items.value.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE)))
 watch(pageCount, () => { if (page.value > pageCount.value) page.value = pageCount.value })
 // Changing page at the bottom used to leave the viewport at the pager and
 // show the *end* of the next page. Bring the results header back into view;
@@ -711,17 +888,20 @@ if (typeof window !== 'undefined') {
   window.addEventListener('scroll', updateStripStuck, { passive: true })
 }
 
-// Preview click opens the lightbox (same enlarged compare the row thumbs
-// open). A divider drag ends in a click too, so clicks right after a drag
-// (or on the divider itself) must not open it.
-let pvLastDragEnd = 0
+// Shared with the mobile detail sheet: the slider mechanics live in one
+// composable, while both surfaces keep the same .pv-* markup.
+const {
+  pos: pvPos,
+  compareRef: pvCompareRef,
+  onDividerDown: onPvDividerDown,
+  onDividerKey: onPvDividerKey,
+  onStageClick: onPvStageClickBase,
+} = useCompareSlider(previewItem)
 function onPvStageClick(e: MouseEvent) {
-  if ((e.target as HTMLElement).closest('.pv-divider')) return
-  if (Date.now() - pvLastDragEnd < 300) return
-  if (previewItem.value) lightboxId.value = previewItem.value.id
+  onPvStageClickBase(e, () => {
+    if (previewItem.value) lightboxId.value = previewItem.value.id
+  })
 }
-const pvPos = ref(50)
-const pvCompareRef = ref<HTMLElement | null>(null)
 const pvCompSrc = computed(() => {
   const it = previewItem.value
   if (!it) return ''
@@ -736,34 +916,6 @@ const pvCompareStyle = computed(() => {
   const h = it && it.done && it.outUrl && it.outH ? it.outH : it?.origH
   return w && h ? { width: `min(100%, calc(55vh * ${w} / ${h}))` } : { width: '100%' }
 })
-function pvSetPosFromClientX(clientX: number) {
-  const el = pvCompareRef.value
-  if (!el) return
-  const r = el.getBoundingClientRect()
-  if (r.width <= 0) return
-  pvPos.value = Math.min(100, Math.max(0, ((clientX - r.left) / r.width) * 100))
-}
-function onPvDividerDown(e: PointerEvent) {
-  e.preventDefault()
-  ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
-  const move = (ev: PointerEvent) => pvSetPosFromClientX(ev.clientX)
-  let moved = false
-  const move2 = (ev: PointerEvent) => { moved = true; move(ev) }
-  const up = () => {
-    if (moved) pvLastDragEnd = Date.now()
-    window.removeEventListener('pointermove', move2)
-    window.removeEventListener('pointerup', up)
-  }
-  window.addEventListener('pointermove', move2)
-  window.addEventListener('pointerup', up)
-}
-function onPvDividerKey(e: KeyboardEvent) {
-  if (e.key === 'ArrowLeft') { pvPos.value = Math.max(0, pvPos.value - 5); e.preventDefault() }
-  else if (e.key === 'ArrowRight') { pvPos.value = Math.min(100, pvPos.value + 5); e.preventDefault() }
-  else if (e.key === 'Home') { pvPos.value = 0; e.preventDefault() }
-  else if (e.key === 'End') { pvPos.value = 100; e.preventDefault() }
-}
-
 
 // One finished image downloads as itself; a zip is only for two or more.
 function downloadAll() {
@@ -800,10 +952,10 @@ function onBeforeUnload(e: BeforeUnloadEvent) {
   e.preventDefault()
   e.returnValue = ''
 }
-watch(busy, (v) => {
-  // A fixed scrim alone still lets the page scroll behind it.
-  document.body.style.overflow = v ? 'hidden' : ''
-  if (!v) busyAddBlocked.value = false
+watch([busy, () => !!detailId.value], ([isBusy, isDetail]) => {
+  // A fixed scrim/sheet alone still lets the page scroll behind it.
+  document.body.style.overflow = isBusy || isDetail ? 'hidden' : ''
+  if (!isBusy) busyAddBlocked.value = false
 })
 async function downloadAllZip() {
   const done = items.value.filter((i) => i.done && i.outUrl)
@@ -871,12 +1023,16 @@ async function downloadAllZip() {
 }
 
 function clearAll() {
+  removalTimers.forEach((t) => clearTimeout(t))
+  removalTimers.clear()
+  removingIds.value = new Set()
   items.value.forEach((i) => {
     URL.revokeObjectURL(i.url)
     if (i.outUrl) URL.revokeObjectURL(i.outUrl)
   })
   items.value = []
   lightboxId.value = null
+  detailId.value = null
 }
 
 // Clearing is destructive and the button sits next to the primary action,
@@ -895,14 +1051,6 @@ function onClearClick() {
   clearConfirm.value = false
   page.value = 1
   clearAll()
-}
-
-// The More menu now owns Clear on phones (the sticky bar keeps only Add and
-// Download all so 320px German labels fit). Keep the menu open for the second
-// tap of the two-step confirm; close it only after the list is actually empty.
-function onMoreClear() {
-  onClearClick()
-  if (items.value.length === 0) moreOpen.value = false
 }
 
 function onPaste(e: ClipboardEvent) {
@@ -949,10 +1097,15 @@ function onDocDrop(e: DragEvent) {
   })
 }
 
+function onDocKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && moreOpen.value) moreOpen.value = false
+}
+
 onMounted(() => {
   applyTheme(theme.value)
   setLang(lang.value)
   window.addEventListener('beforeunload', onBeforeUnload)
+  document.addEventListener('keydown', onDocKeydown)
   document.addEventListener('paste', onPaste)
   document.addEventListener('dragenter', onDocDragEnter)
   document.addEventListener('dragleave', onDocDragLeave)
@@ -961,6 +1114,8 @@ onMounted(() => {
   document.addEventListener('drop', onDocDrop)
 })
 onUnmounted(() => {
+  document.removeEventListener('keydown', onDocKeydown)
+  if (moreToastTimer) clearTimeout(moreToastTimer)
   document.removeEventListener('paste', onPaste)
   document.removeEventListener('dragenter', onDocDragEnter)
   document.removeEventListener('dragleave', onDocDragLeave)
@@ -971,6 +1126,8 @@ onUnmounted(() => {
   window.removeEventListener('scroll', updateStripStuck)
   window.removeEventListener('beforeunload', onBeforeUnload)
   if (busyAddTimer) clearTimeout(busyAddTimer)
+  removalTimers.forEach((t) => clearTimeout(t))
+  removalTimers.clear()
   document.body.style.overflow = ''
 })
 </script>
