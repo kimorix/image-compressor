@@ -1,25 +1,27 @@
 <template>
   <div class="settings">
     <div class="presets">
-      <span class="presets-label">{{ t('presetLabel') }}</span>
-      <button
-        v-for="p in PRESETS"
-        :key="p.id"
-        type="button"
-        class="preset-btn"
-        :data-preset="p.id"
-        :class="{ active: activePreset === p.id }"
-        @click="emit('preset', p.id)"
-      >{{ t('preset_' + p.id) }}</button>
+      <span class="presets-label"><span class="sec-num">1.</span>{{ t('presetLabel') }}</span>
+      <div class="preset-btns">
+        <button
+          v-for="p in PRESETS"
+          :key="p.id"
+          type="button"
+          class="preset-btn"
+          :data-preset="p.id"
+          :class="{ active: activePreset === p.id }"
+          @click="emit('preset', p.id)"
+        >{{ t('preset_' + p.id) }}</button>
+      </div>
     </div>
     <div class="field" v-show="settings.mode !== 'smart'">
-      <span class="field-label">{{ t('fmtLabel') }}</span>
+      <span class="field-label"><span class="sec-num">2.</span>{{ t('fmtLabel') }}</span>
       <div class="seg" id="formatSeg" role="group" :aria-label="t('fmtLabel')">
         <button v-for="f in FORMATS" :key="f.value" type="button" class="seg-btn" :data-format="f.value" :class="{ active: settings.format === f.value }" @click="onFormat(f.value)">{{ t(f.label) }}</button>
       </div>
     </div>
     <div class="field">
-      <span class="field-label">{{ t('modeLabel') }}</span>
+      <span class="field-label"><span class="sec-num">3.</span>{{ t('modeLabel') }}</span>
       <div class="seg" id="modeSeg" role="group" :aria-label="t('modeLabel')">
         <button type="button" class="seg-btn" data-mode="smart" :class="{ active: settings.mode === 'smart' }" @click="onMode('smart')">{{ t('modeSmart') }}</button>
         <button type="button" class="seg-btn" data-mode="quality" :class="{ active: settings.mode === 'quality' }" @click="onMode('quality')">{{ t('modeQuality') }}</button>
@@ -38,7 +40,7 @@
       <input type="range" id="quality" min="10" max="100" :value="qualityShown" :disabled="qualityLocked" @input="onQuality(($event.target as HTMLInputElement).value)" />
     </div>
     <div class="field">
-      <span class="field-label">{{ t('resizeModeLabel') }}</span>
+      <span class="field-label"><span class="sec-num">4.</span>{{ t('resizeModeLabel') }}</span>
       <div class="seg" id="resizeSeg" role="group" :aria-label="t('resizeModeLabel')">
         <button v-for="r in RESIZES" :key="r.value" type="button" class="seg-btn" :data-resize="r.value" :class="{ active: settings.resizeMode === r.value }" @click="onResizeMode(r.value)">{{ t(r.label) }}</button>
       </div>
@@ -73,6 +75,7 @@
     <div class="settings-note" id="jpegNote" v-show="settings.mode !== 'smart' && settings.format === 'image/jpeg'">{{ t('fmtJpegNote') }}</div>
     <div class="settings-note" id="webpNote" v-show="settings.mode !== 'smart' && settings.format === 'image/webp'">{{ t('fmtWebpNote') }}</div>
     <div class="settings-note" id="targetModeNote" v-show="settings.mode === 'target'">{{ t('modeTargetNote') }}</div>
+    <button type="button" class="primary start-btn" @click="emit('start')">{{ t('compressStart') }}</button>
   </div>
 </template>
 
@@ -88,6 +91,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update', patch: Partial<Settings>, immediate: boolean): void
   (e: 'preset', id: string): void
+  (e: 'start'): void
 }>()
 
 // Segmented option lists: the buttons render from these, so the label keys

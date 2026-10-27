@@ -1,0 +1,23 @@
+const { chromium } = require('playwright-core');
+const EXE = '/home/hatch/.cache/ms-playwright/chromium_headless_shell-1223/chrome-headless-shell-linux64/chrome-headless-shell';
+(async () => {
+  const browser = await chromium.launch({ executablePath: EXE });
+  const ctx = await browser.newContext({ locale: 'zh-CN', viewport: { width: 1280, height: 900 } });
+  await ctx.addInitScript(() => { try { localStorage.setItem('ic-lang', 'zh'); } catch (e) {} });
+  const page = await ctx.newPage();
+  await page.goto('http://127.0.0.1:8901/');
+  await page.waitForSelector('#dropzone');
+  await page.setInputFiles('#fileInput', '/home/hatch/workspace/image-compressor/tests/test.jpg');
+  await page.waitForFunction(() => document.querySelector('#summary')?.textContent.includes('已完成 1 张'), null, { timeout: 30000 });
+  await page.screenshot({ path: '/home/hatch/workspace/your_files/image-compressor-vue-desktop.png', fullPage: true });
+  const ctx2 = await browser.newContext({ locale: 'zh-CN', viewport: { width: 390, height: 844 } });
+  await ctx2.addInitScript(() => { try { localStorage.setItem('ic-lang', 'zh'); } catch (e) {} });
+  const m = await ctx2.newPage();
+  await m.goto('http://127.0.0.1:8901/');
+  await m.waitForSelector('#dropzone');
+  await m.setInputFiles('#fileInput', '/home/hatch/workspace/image-compressor/tests/test.jpg');
+  await m.waitForFunction(() => document.querySelector('#summary')?.textContent.includes('已完成 1 张'), null, { timeout: 30000 });
+  await m.screenshot({ path: '/home/hatch/workspace/your_files/image-compressor-vue-mobile.png', fullPage: true });
+  await browser.close();
+  console.log('shots done');
+})().catch(e => { console.error('CRASH', e.message); process.exit(1); });

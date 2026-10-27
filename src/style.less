@@ -126,7 +126,8 @@ main { max-width: 920px; margin: 0 auto; padding: 20px 16px 48px; }
 .adv-body { display: flex; flex-direction: column; gap: 2px; }
 .file-hint { margin: 8px 0 0; font-size: 13px; color: var(--subtle); }
 .presets {
-  grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+  grid-column: 1 / -1; display: flex; flex-direction: column; gap: 8px; align-items: stretch;
+  .preset-btns { display: flex; flex-wrap: wrap; gap: 8px; }
   .presets-label { font-size: 13px; color: var(--subtle); }
   .preset-btn {
     min-height: 36px; padding: 6px 12px; font-size: 13px;
@@ -177,43 +178,92 @@ button {
 // drops the double-tap zoom that kept magnifying the page on accidental
 // double taps. Deliberately not user-scalable=no: pinch zoom stays.
 html { touch-action: manipulation; }
-// Desktop, no results yet: the upload card spans both grid rows so the
-// dropzone (flex-filled, content centered) stands as tall as the settings
-// card, instead of leaving a blank strip under a short upload card.
-// align-self:stretch is load-bearing: the grid uses align-items:start,
-// so a spanning item would otherwise stay at its content height.
+// Desktop, no results yet: the upload card keeps a tall dropzone
+// (flex-filled, content centered) on its own; the right panel is a
+// viewport-height column on its own track, so there is no row-span
+// trick left to keep in sync.
 @media (min-width: 720px) {
-  main.no-result #uploadCard { grid-row: 1 / -1; align-self: stretch; display: flex; flex-direction: column; }
+  main.no-result #uploadCard { min-height: 520px; display: flex; flex-direction: column; }
   main.no-result #dropzone { flex: 1; display: flex; flex-direction: column; justify-content: center; }
 }
-// Desktop: settings are a sticky right sidebar next to upload + results,
-// so tuning never means scrolling past the list to find the controls.
-// minmax(0, 1fr) + min-width: 0 on the areas: grid items default to
+// Desktop: the middle column is just upload + results stacked, so its
+// rows are sized by their own content (the 1.0.5 two-column grid let the
+// tall settings card stretch row 1 and leave a blank gap between upload
+// and results). The third block is a sticky viewport-height right panel:
+// settings on top (collapsible), preview pinned at its bottom, never
+// scrolling away. minmax(0, 1fr) + min-width: 0: grid items default to
 // min-width: auto, so a long unbreakable content (long filename, long
 // select option) could force a column wider than its share and push the
-// sidebar off the right edge on narrow desktops (iPad landscape).
+// panel off the right edge on narrow desktops (iPad landscape).
 // With 0 minima the columns always share the viewport and the content
 // truncates inside, as .name already does with ellipsis.
 @media (min-width: 720px) {
-  main {
-    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start;
-    grid-template-areas: "upload settings" "result settings";
-  }
-  #uploadCard { grid-area: upload; min-width: 0; }
-  #settingsCard { grid-area: settings; position: sticky; top: 20px; min-width: 0; }
-  #resultCard { grid-area: result; min-width: 0; }
+  header { padding-right: 376px; }
+  main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  #uploadCard { padding-bottom: 16px; }
+  #resultCard { padding-top: 16px; }
+  #uploadCard, #resultCard { min-width: 0; }
   .card { margin-bottom: 0; }
+  #rightPanel {
+    position: fixed; top: 20px; left: calc(50% + min(1400px, 100vw) / 2 - 356px);
+    width: 340px; height: calc(100vh - 40px);
+    display: flex; flex-direction: column; overflow-y: auto;
+  }
+  #rightPanel #settingsCard { flex: none; }
+  #rightPanel #previewCard { flex: 1; min-height: 400px; display: flex; flex-direction: column; }
+  #rightPanel .pv-stage { flex: 1; min-height: 0; max-height: none; overflow: auto; display: flex; align-items: flex-start; }
+  #rightPanel .pv-compare:not(.zoomed) { margin: auto; }
+  // Specificity beats the global .settings-head{display:none} below:
+  // same-specificity order would let the later hide rule win everywhere.
+  #settingsCard .settings-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px;
+    h3 { margin: 0; font-size: 16px; font-weight: 600; }
+  }
+  .settings-collapse-btn {
+    padding: 4px 12px; font-size: 13px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--surface-2); color: var(--text); cursor: pointer; flex-shrink: 0;
+  }
+  // Table rows (mock columns): thumbnail + name + original + compressed +
+  // saving + dims + status + actions. Every row's row-main shares one
+  // template and one width, so columns line up across rows without
+  // subgrid (which sized tracks by content in the headless build instead
+  // of the parent's tracks). min-width + #list scroll keeps narrow
+  // desktops (panel beside a cramped middle column) usable, not crushed.
+  #list { overflow-x: auto; }
+  .item {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 10px 8px; align-items: center; padding: 12px 0; min-width: 640px;
+  }
+  .item .thumb { width: 48px; height: 48px; }
+  .item .row-main { grid-column: 2; display: grid; grid-template-columns: minmax(96px, 1fr) 68px 68px 48px 76px 60px auto; gap: 10px 6px; align-items: center; }
+  .item .cell-name { grid-column: 1; min-width: 0; }
+  .item .orig-size { grid-column: 2; }
+  .item .comp-size { grid-column: 3; }
+  .item .save-cell { grid-column: 4; }
+  #list .item .dims { grid-column: 5; min-width: 0; font-size: 12px; }
+  .item .cell-status { grid-column: 6; }
+  .item .item-actions { grid-column: 7; gap: 8px; }
+  #list .item .item-actions button, #list .item .item-actions a.dl-icon { min-width: 36px; min-height: 36px; }
+  .item .note-row { grid-column: 1 / -1; grid-row: 2; }
 }
 // Mobile with images: results jump above the settings card (upload ->
-// results -> settings), the settings fold to a one-line summary, and a
-// sticky bottom bar replaces the top actions. Desktop keeps the grid.
+// results -> preview -> settings), the settings fold to a one-line
+// summary, and a sticky bottom bar replaces the top actions.
 .settings-summary { display: none; }
+.settings-head { display: none; }
+.settings-body-collapsed { display: none; }
+#rightPanel { display: flex; flex-direction: column; gap: 20px; }
+#rightPanel .card { margin-bottom: 0; }
 .sticky-bar, .sticky-spacer { display: none; }
 @media (max-width: 719px) {
   main { display: flex; flex-direction: column; }
   #uploadCard { order: 1; }
   #resultCard { order: 2; }
-  #settingsCard { order: 3; }
+  #rightPanel #previewCard { order: 1; }
+  #rightPanel #settingsCard { order: 2; }
+  // Mobile table cells read as one line: original → compressed −%.
+  .comp-size::before { content: '→ '; }
   // Top actions are redundant once the sticky bar exists.
   #resultCard .actions { display: none; }
   .settings-summary {
@@ -222,7 +272,6 @@ html { touch-action: manipulation; }
     background: transparent; border: none; color: var(--text);
     font-size: 14px; font-weight: 600; text-align: left; cursor: pointer;
   }
-  .settings-body-collapsed { display: none; }
   .sticky-bar {
     display: flex; align-items: center; gap: 10px;
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
@@ -249,16 +298,13 @@ html { touch-action: manipulation; }
 }
 @keyframes stripes { to { background-position: 16px 0; } }
 .item {
-  display: flex; gap: 16px; align-items: center; flex-wrap: wrap; padding: 18px 0; border-top: 1px solid var(--border);
+  display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 12px; align-items: start; padding: 18px 0; border-top: 1px solid var(--border);
   &:first-child { border-top: none; }
-  .meta { flex: 1; min-width: 0; }
   .name { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .sizes {
-    color: var(--subtle); font-size: 14px; margin-top: 4px;
-  }
-  .dims {
-    color: var(--subtle); font-size: 13px; margin-top: 2px;
-  }
+  .orig-size { color: var(--subtle); font-size: 14px; }
+  .comp-size { font-size: 14px; }
+  .dims { color: var(--subtle); font-size: 13px; display: flex; flex-direction: column; align-items: flex-start; line-height: 1.35; white-space: nowrap; }
+  .dims-arrow { color: var(--subtle); font-size: 10px; line-height: 1.2; }
   .retry-btn {
     background: transparent; border: none; padding: 0; margin-left: 8px;
     color: var(--accent); font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer;
@@ -285,8 +331,14 @@ html { touch-action: manipulation; }
   }
   .error { color: var(--red); font-size: 14px; margin-top: 4px; }
 }
+.row-main { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.cell-name { flex-basis: 100%; display: flex; flex-direction: column; gap: 2px; align-items: flex-start; min-width: 0; }
+.row-main .dims { flex-basis: 100%; }
+.row-main .cell-status { flex: none; }
+.row-main .item-actions { flex-basis: 100%; }
+.row-main .note-row { flex-basis: 100%; }
 .thumb {
-  position: relative; width: 104px; height: 104px; flex-shrink: 0; cursor: default;
+  position: relative; width: 84px; height: 84px; flex-shrink: 0; cursor: default;
   overflow: hidden; border-radius: 8px; background: var(--surface-2);
   &.clickable { cursor: pointer; }
   img.layer {
@@ -396,21 +448,180 @@ footer { max-width: 920px; margin: 0 auto; padding: 0 16px 40px; color: var(--su
   main { padding: 16px 12px 40px; }
   .card { padding: 16px; }
   #dropzone { padding: 28px 16px; }
-  .item {
-    display: grid; grid-template-columns: 84px 1fr; grid-template-areas: "thumb meta" "thumb actions"; gap: 6px 12px; align-items: start;
-    .sizes { font-size: 14px; }
-  }
-  .thumb { grid-area: thumb; width: 84px; height: 84px; }
-  .item .meta { grid-area: meta; }
-  .item-actions {
-    grid-area: actions; gap: 8px;
-    button { padding: 8px 14px; font-size: 14px; min-height: 40px; }
-    button.remove-btn { padding: 0; }
-    button.copy-btn, button.share-btn { padding: 0; }
-    a.dl-icon { min-height: 40px; }
-  }
+  .item-actions { gap: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .thumb img.layer { transition: none; }
   .progress .fill { animation: none; }
 }
+
+/* ===== 1.0.4 按稿换壳：浅蓝浅色主题 + 三栏布局 + 导航/统计/Tab ===== */
+:root[data-theme="light"] {
+  --bg: #eef4ff;
+  --surface-2: #f0f6ff;
+  --border: #dbe7ff;
+  --card-shadow: 0 1px 2px rgba(15, 23, 42, .06), 0 8px 24px rgba(37, 99, 235, .08);
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+}
+header { max-width: 1400px; }
+main { max-width: none; margin: 0; padding: 0; min-width: 0; }
+.layout { max-width: 1400px; margin: 0 auto; padding: 20px 16px 48px; }
+#sideNav { display: none; }
+@media (min-width: 720px) {
+  // Two tracks below the sidebar breakpoint: middle column + right panel.
+  // The history view spans both (there is no sidebar track to sit beside).
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; align-items: start; }
+  #historyView { grid-column: 1 / -1; }
+}
+@media (min-width: 1080px) {
+  .layout { display: grid; grid-template-columns: 220px minmax(0, 1fr) 340px; gap: 20px; align-items: start; }
+  #sideNav { display: block; position: sticky; top: 20px; }
+  #historyView { grid-column: auto; }
+}
+.side-links { display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px; }
+.side-links button {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  background: transparent; border: 1px solid transparent; color: var(--text);
+  padding: 10px 12px; font-size: 14px; font-weight: 500;
+}
+.side-links button svg { width: 18px; height: 18px; flex: none; }
+.side-links button.active { background: var(--accent-soft); border-color: var(--border); color: var(--accent); }
+.side-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; box-shadow: var(--card-shadow); }
+.side-card strong { font-size: 13px; }
+.side-card p { font-size: 12px; color: var(--subtle); margin: 6px 0 0; line-height: 1.6; }
+.side-card .side-formats { color: var(--text-2); font-weight: 500; }
+/* 双行徽章：主行 + 副行 */
+.badge-text { display: inline-flex; flex-direction: column; line-height: 1.25; text-align: left; }
+.badge-sub { font-size: 10px; font-weight: 400; opacity: .85; }
+.badge svg { width: 14px; height: 14px; flex: none; }
+/* 设置分节编号 */
+.sec-num { color: var(--accent); font-weight: 700; margin-right: 2px; }
+.start-btn { width: 100%; margin-top: 16px; }
+/* 历史记录 */
+#historyView { min-width: 0; }
+.hist-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.hist-head h2 { margin: 0; font-size: 18px; }
+.link-btn { background: transparent; border: none; color: var(--accent); font-size: 13px; padding: 6px 4px; min-height: auto; }
+.hist-summary { font-size: 14px; color: var(--muted); margin: 8px 0 12px; }
+.hist-empty { font-size: 14px; color: var(--subtle); margin: 12px 0 4px; }
+.hist-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.hist-list li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); font-size: 13px; }
+.hist-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hist-sizes { color: var(--muted); white-space: nowrap; }
+.hist-pct { color: var(--green); font-weight: 600; white-space: nowrap; }
+.hist-date { color: var(--subtle); white-space: nowrap; }
+/* 移动端底部 Tab 栏 + 更多菜单（桌面隐藏） */
+.tab-bar, .more-menu { display: none; }
+@media (max-width: 719px) {
+  .layout { padding: 16px 12px 40px; }
+  .sticky-bar { bottom: calc(56px + env(safe-area-inset-bottom)); padding-bottom: 10px; }
+  .sticky-spacer { height: calc(120px + env(safe-area-inset-bottom)); }
+  .tab-bar {
+    display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 31;
+    padding-bottom: env(safe-area-inset-bottom);
+    background: var(--card); border-top: 1px solid var(--border);
+  }
+  .tab-bar button {
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    background: transparent; border: none; color: var(--subtle);
+    font-size: 11px; font-weight: 500; padding: 8px 4px 6px; min-height: 56px;
+  }
+  .tab-bar button svg { width: 20px; height: 20px; }
+  .tab-bar button.active { color: var(--accent); }
+  .more-menu {
+    display: flex; flex-direction: column; position: fixed; right: 12px; z-index: 32;
+    bottom: calc(56px + env(safe-area-inset-bottom) + 8px);
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .18); padding: 6px; min-width: 160px;
+  }
+  .more-menu button, .more-menu a {
+    background: transparent; border: none; color: var(--text); text-decoration: none;
+    font-size: 14px; text-align: left; padding: 10px 12px; min-height: 44px; border-radius: 8px;
+  }
+}
+
+/* ===== 1.0.4 结果区：统计条 + 行标签/pill + 上传区按钮/chips ===== */
+.stat-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+.stat { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow: hidden; }
+.stat-label { font-size: 12px; color: var(--subtle); }
+.stat-value { font-size: 16px; font-weight: 600; white-space: nowrap; }
+.stat-sub { font-size: 12px; color: var(--muted); }
+@media (max-width: 880px) {
+  .stat-strip { grid-template-columns: repeat(2, 1fr); }
+}
+.fmt-tag { font-size: 11px; color: var(--subtle); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; line-height: 1.6; }
+.status-pill { font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.status-pill.done { background: var(--green-soft); color: var(--green); }
+.status-pill.processing { background: var(--accent-soft); color: var(--accent); }
+.status-pill.fail { border: 1px solid var(--red); color: var(--red); }
+.drop-actions { display: flex; gap: 10px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
+.drop-chips { display: flex; gap: 8px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
+.chip { font-size: 12px; color: var(--subtle); border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; }
+.paste-note { font-size: 13px; color: var(--subtle); margin-top: 10px; }
+
+/* ===== 1.0.5 中间块：结果标题头 + 缩略图条 ===== */
+.result-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.result-head h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.result-head .actions { margin-top: 0; padding-top: 0; border-top: none; }
+.thumb-strip { display: none; }
+@media (min-width: 720px) {
+  // Manual carousel: one row, no wrap, arrows page the viewport.
+  // No autoplay, no dots. Nav buttons hide when tiles fit (see App.vue).
+  .thumb-strip { display: flex; gap: 8px; align-items: stretch; margin-top: 16px; }
+  .strip-viewport { flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: none; }
+  .strip-viewport::-webkit-scrollbar { display: none; }
+  .strip-track { display: flex; gap: 12px; width: max-content; }
+  .strip-nav { flex: none; width: 32px; min-height: auto; padding: 0; font-size: 22px; line-height: 1; border-radius: 8px; }
+  .strip-nav:disabled { opacity: .35; }
+  .strip-tile { position: relative; width: 96px; text-align: left; background: transparent; border: none; padding: 0; cursor: pointer; }
+  .strip-thumb { width: 96px; height: 64px; object-fit: cover; border-radius: 8px; display: block; background: var(--surface-2); }
+  .strip-tile.selected .strip-thumb { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .strip-name { display: block; font-size: 12px; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .strip-size { display: block; font-size: 11px; color: var(--subtle); }
+  .strip-remove { position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; min-height: auto; padding: 0; border: none; border-radius: 50%; background: rgba(0, 0, 0, .55); color: #fff; font-size: 13px; line-height: 1; }
+}
+
+// Bottom-right compare preview card (mock layout): same slider/zoom
+// mechanism as the lightbox, in a compact card. The wrapper shrink-wraps
+// the base image, so the clipped original layer shares its exact box.
+.pv-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.pv-head h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.pv-close { border: none; background: transparent; color: var(--text); opacity: .7; font-size: 22px; line-height: 1; padding: 2px 6px; cursor: pointer; }
+.pv-stage { max-height: 520px; overflow: auto; border-radius: 8px; background: var(--surface-2); cursor: zoom-in; }
+.pv-compare { position: relative; display: inline-block; line-height: 0; }
+.pv-img { display: block; max-width: 100%; }
+.pv-compare.zoomed .pv-img { max-width: none; width: 100%; }
+.pv-orig-clip { position: absolute; inset: 0; }
+.pv-orig-clip .pv-img { width: 100%; height: 100%; }
+.pv-divider {
+  position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; z-index: 4;
+  background: #fff; box-shadow: 0 0 6px rgba(0,0,0,.6); cursor: ew-resize; touch-action: none;
+  &::before { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 44px; transform: translateX(-50%); }
+}
+.pv-handle {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 36px; height: 36px; border-radius: 50%; background: #fff; color: #111;
+  display: flex; align-items: center; justify-content: center; font-size: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.5); pointer-events: none;
+}
+.pv-side-tag {
+  position: absolute; top: 8px; z-index: 3; background: rgba(0,0,0,.75);
+  border: 1px solid rgba(255,255,255,.25);
+  color: #fff; font-size: 12px; padding: 1px 7px; border-radius: 999px; pointer-events: none;
+  &.left { left: 8px; }
+  &.right { right: 8px; }
+}
+.pv-zoom { display: flex; gap: 6px; margin-top: 12px; }
+.pv-zoom-btn {
+  padding: 5px 12px; font-size: 13px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface-2); color: var(--text); cursor: pointer;
+  &.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+}
+.pv-info { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; font-size: 13px; }
+.pv-save { font-size: 20px; font-weight: 700; color: var(--green); }
+.pv-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv-actions { display: flex; gap: 8px; margin-top: 12px; }
+.pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 16px; }
+.pager-label { font-size: 13px; color: var(--subtle); }
+.pager button { min-height: 36px; padding: 6px 14px; }
