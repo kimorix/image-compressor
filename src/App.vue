@@ -183,8 +183,8 @@
   </div>
   <div class="sticky-spacer" v-show="items.length > 0 && view === 'tool'" aria-hidden="true"></div>
   <nav class="tab-bar" :inert="busy || detailId ? true : undefined">
-    <button type="button" :class="{ active: view === 'tool' }" @click="goHome"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8" /><path d="M5 9v11h14V9" /></svg>{{ t('tabHome') }}</button>
-    <button type="button" @click="goSettings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></svg>{{ t('tabSettings') }}</button>
+    <button type="button" :class="{ active: view === 'tool' && !moreOpen && !settingsInView }" @click="goHome"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8" /><path d="M5 9v11h14V9" /></svg>{{ t('tabHome') }}</button>
+    <button type="button" :class="{ active: view === 'tool' && !moreOpen && settingsInView }" @click="goSettings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></svg>{{ t('tabSettings') }}</button>
     <button type="button" :class="{ active: moreOpen || view === 'history' }" :aria-expanded="moreOpen" @click="moreOpen = !moreOpen"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>{{ t('tabMore') }}</button>
   </nav>
   <div v-if="moreOpen" class="more-backdrop" @click="moreOpen = false"></div>
@@ -270,6 +270,12 @@ const isMobile = ref(typeof window !== 'undefined' ? window.innerWidth < 720 : f
 // bar switch between them; settings is an action (expand + scroll), not a
 // view, because the panel already lives on the tool page.
 const view = ref<'tool' | 'history'>('tool')
+// Mobile tab bar: Settings is a section of the tool view, not a view of its
+// own, so its tab lights up while the settings card sits in the middle band
+// of the viewport (and Home lights up otherwise). Without this, tapping
+// Settings with a long result list scrolled away and left no tab active.
+const settingsInView = ref(false)
+let settingsObserver: IntersectionObserver | null = null
 const moreOpen = ref(false)
 const moreToast = ref<string | null>(null)
 let moreToastTimer: ReturnType<typeof setTimeout> | null = null
@@ -399,6 +405,7 @@ function goTool() {
 // Tab bar Home: back to the tool, scrolled to the top. (Templates cannot
 // reach window, so this lives in script: the old inline call threw.)
 function goHome() {
+  settingsInView.value = false
   goTool()
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
@@ -411,6 +418,7 @@ async function goSettings() {
   view.value = 'tool'
   moreOpen.value = false
   settingsCollapsed.value = false
+  settingsInView.value = true
   await nextTick()
   document.getElementById('settingsCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
@@ -1102,6 +1110,14 @@ function onDocKeydown(e: KeyboardEvent) {
 }
 
 onMounted(() => {
+  const settingsEl = document.getElementById('settingsCard')
+  if (settingsEl && typeof IntersectionObserver !== 'undefined') {
+    settingsObserver = new IntersectionObserver(
+      (entries) => { for (const e of entries) settingsInView.value = e.isIntersecting },
+      { rootMargin: '-35% 0px -35% 0px' },
+    )
+    settingsObserver.observe(settingsEl)
+  }
   applyTheme(theme.value)
   setLang(lang.value)
   window.addEventListener('beforeunload', onBeforeUnload)
@@ -1114,6 +1130,7 @@ onMounted(() => {
   document.addEventListener('drop', onDocDrop)
 })
 onUnmounted(() => {
+  settingsObserver?.disconnect()
   document.removeEventListener('keydown', onDocKeydown)
   if (moreToastTimer) clearTimeout(moreToastTimer)
   document.removeEventListener('paste', onPaste)
