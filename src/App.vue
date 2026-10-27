@@ -104,22 +104,23 @@
             <span v-if="previewItem.done && previewItem.outUrl" class="pv-side-tag right">{{ t('tagComp') }}</span>
           </div>
         </div>
-        <div class="pv-zoom">
-          <button type="button" class="pv-zoom-btn" :class="{ active: pvZoom === 'fit' }" :aria-pressed="pvZoom === 'fit'" @click="pvZoom = 'fit'">{{ t('lbFit') }}</button>
-          <button type="button" class="pv-zoom-btn" :class="{ active: pvZoom === '100' }" :aria-pressed="pvZoom === '100'" @click="pvZoom = '100'">100%</button>
-          <button type="button" class="pv-zoom-btn" :class="{ active: pvZoom === '200' }" :aria-pressed="pvZoom === '200'" @click="pvZoom = '200'">200%</button>
-        </div>
         <div class="pv-info">
-          <span class="pv-name">{{ previewItem.file.name }}</span>
-          <span v-if="previewItem.done && previewItem.outUrl" class="pv-save">−{{ previewPct }}% · {{ t('pvSaved') }} {{ fmtSize(previewItem.file.size - previewItem.outSize) }}</span>
-          <span v-if="previewItem.done && previewItem.outUrl">{{ fmtSize(previewItem.file.size) }} → {{ fmtSize(previewItem.outSize) }} (−{{ previewPct }}%)</span>
-          <span v-if="previewItem.done && previewItem.origW">{{ previewItem.origW }}×{{ previewItem.origH }} → {{ previewItem.outW }}×{{ previewItem.outH }}</span>
-          <span v-if="previewItem.error">{{ t('statusFailed') }}</span>
-          <span v-if="!previewItem.done && !previewItem.error">{{ t('statusProcessing') }}</span>
+          <template v-if="previewItem.done && previewItem.outUrl">
+            <span>{{ fmtSize(previewItem.file.size) }} → {{ fmtSize(previewItem.outSize) }}</span>
+            <span class="pv-pct">−{{ previewPct }}%</span>
+            <span v-if="previewItem.origW && (previewItem.origW !== previewItem.outW || previewItem.origH !== previewItem.outH)" class="pv-dims">{{ previewItem.origW }}×{{ previewItem.origH }} → {{ previewItem.outW }}×{{ previewItem.outH }}</span>
+          </template>
+          <span v-else-if="previewItem.error">{{ t('statusFailed') }}</span>
+          <span v-else>{{ t('statusProcessing') }}</span>
         </div>
-        <div class="pv-actions" v-if="(previewItem.done && previewItem.outUrl) || previewItem.error">
-          <button v-if="previewItem.done && previewItem.outUrl" type="button" class="primary" @click="downloadPreview">{{ t('pvDownload') }}</button>
-          <button v-if="previewItem.error" type="button" @click="retryItem(previewItem)">{{ t('retryBtn') }}</button>
+        <div class="pv-toolbar">
+          <div class="pv-zoom">
+            <button type="button" class="pv-zoom-btn" :class="{ active: pvZoom === 'fit' }" :aria-pressed="pvZoom === 'fit'" @click="pvZoom = 'fit'">{{ t('lbFit') }}</button>
+            <button type="button" class="pv-zoom-btn" :class="{ active: pvZoom === '100' }" :aria-pressed="pvZoom === '100'" @click="pvZoom = '100'">100%</button>
+            <button type="button" class="pv-zoom-btn" :class="{ active: pvZoom === '200' }" :aria-pressed="pvZoom === '200'" @click="pvZoom = '200'">200%</button>
+          </div>
+          <button v-if="previewItem.done && previewItem.outUrl" type="button" class="primary pv-dl" @click="downloadPreview">{{ t('pvDownload') }}</button>
+          <button v-else-if="previewItem.error" type="button" class="pv-dl" @click="retryItem(previewItem)">{{ t('retryBtn') }}</button>
         </div>
       </div>
   </div>
@@ -649,7 +650,16 @@ const pvBaseW = computed(() => {
   return w > 0 ? w : 0
 })
 const pvCompareStyle = computed(() => {
-  if (pvZoom.value === 'fit' || !pvBaseW.value) return {}
+  if (pvZoom.value === 'fit') {
+    // Fit: fill the card width, but cap tall (portrait) images at 55vh by
+    // narrowing the wrapper to the matching width, so both layers stay
+    // aligned and the slider still spans the whole picture.
+    const it = previewItem.value
+    const w = it && it.done && it.outUrl && it.outW ? it.outW : it?.origW
+    const h = it && it.done && it.outUrl && it.outH ? it.outH : it?.origH
+    return w && h ? { width: `min(100%, calc(55vh * ${w} / ${h}))` } : { width: '100%' }
+  }
+  if (!pvBaseW.value) return {}
   const factor = pvZoom.value === '200' ? 2 : 1
   return { width: `${pvBaseW.value * factor}px` }
 })

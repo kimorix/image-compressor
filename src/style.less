@@ -211,8 +211,8 @@ html { touch-action: manipulation; }
     display: flex; flex-direction: column; overflow-y: auto;
   }
   #rightPanel #settingsCard { flex: none; }
-  #rightPanel #previewCard { flex: 1; min-height: 400px; display: flex; flex-direction: column; }
-  #rightPanel .pv-stage { flex: 1; min-height: 0; max-height: none; overflow: auto; display: flex; align-items: flex-start; }
+  #rightPanel #previewCard { flex: none; }
+  #rightPanel .pv-stage { display: flex; align-items: flex-start; }
   #rightPanel .pv-compare:not(.zoomed) { margin: auto; }
   // Specificity beats the global .settings-head{display:none} below:
   // same-specificity order would let the later hide rule win everywhere.
@@ -238,11 +238,11 @@ html { touch-action: manipulation; }
   }
   .item .thumb { width: 48px; height: 48px; }
   .item .row-main { grid-column: 2; display: grid; grid-template-columns: minmax(96px, 1fr) 68px 68px 48px 76px 60px auto; gap: 10px 6px; align-items: center; }
-  .item .cell-name { grid-column: 1; min-width: 0; }
+  .item .cell-name { grid-column: 1; min-width: 0; padding-right: 8px; }
   .item .orig-size { grid-column: 2; }
   .item .comp-size { grid-column: 3; }
   .item .save-cell { grid-column: 4; }
-  #list .item .dims { grid-column: 5; min-width: 0; font-size: 12px; }
+  #list .item .dims { grid-column: 5; min-width: 0; font-size: 12px; align-items: center; }
   .item .cell-status { grid-column: 6; }
   .item .item-actions { grid-column: 7; gap: 8px; }
   #list .item .item-actions button, #list .item .item-actions a.dl-icon { min-width: 36px; min-height: 36px; }
@@ -301,7 +301,9 @@ html { touch-action: manipulation; }
 .item {
   display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 12px; align-items: start; padding: 18px 0; border-top: 1px solid var(--border);
   &:first-child { border-top: none; }
-  .name { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .name { display: flex; max-width: 100%; font-weight: 600; font-size: 14px; white-space: nowrap; }
+  .name-stem { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .name-ext { flex: none; }
   .orig-size { color: var(--subtle); font-size: 14px; }
   .comp-size { font-size: 14px; }
   .dims { color: var(--subtle); font-size: 13px; display: flex; flex-direction: column; align-items: flex-start; line-height: 1.35; white-space: nowrap; }
@@ -483,6 +485,13 @@ main { max-width: none; margin: 0; padding: 0; min-width: 0; }
   #sideNav { display: block; position: sticky; top: 20px; }
   #historyView { grid-column: auto; }
 }
+// Wide desktops: a wider right panel so the compare preview is big
+// enough to judge quality (340px left the picture ~290px wide).
+@media (min-width: 1600px) {
+  .layout { grid-template-columns: 220px minmax(0, 1fr) 400px; }
+  header { padding-right: 436px; }
+  #rightPanel { left: calc(50% + min(1400px, 100vw) / 2 - 416px); width: 400px; }
+}
 .side-links { display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px; }
 .side-links button {
   display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
@@ -574,7 +583,7 @@ main { max-width: none; margin: 0; padding: 0; min-width: 0; }
   .thumb-strip { display: flex; gap: 8px; align-items: stretch; margin-top: 16px; }
   .strip-viewport { flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: none; }
   .strip-viewport::-webkit-scrollbar { display: none; }
-  .strip-track { display: flex; gap: 12px; width: max-content; }
+  .strip-track { display: flex; gap: 12px; width: max-content; padding: 4px; } // room for the selected outline (2px + 2px offset), the scroller clips both axes
   .strip-nav { flex: none; width: 32px; min-height: auto; padding: 0; font-size: 22px; line-height: 1; border-radius: 8px; }
   .strip-nav:disabled { opacity: .35; }
   .strip-tile { position: relative; width: 96px; text-align: left; background: transparent; border: none; padding: 0; cursor: pointer; }
@@ -588,13 +597,13 @@ main { max-width: none; margin: 0; padding: 0; min-width: 0; }
 // Bottom-right compare preview card (mock layout): same slider/zoom
 // mechanism as the lightbox, in a compact card. The wrapper shrink-wraps
 // the base image, so the clipped original layer shares its exact box.
-.pv-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-.pv-head h3 { margin: 0; font-size: 16px; font-weight: 600; }
-.pv-close { border: none; background: transparent; color: var(--text); opacity: .7; font-size: 22px; line-height: 1; padding: 2px 6px; cursor: pointer; }
-.pv-stage { max-height: 520px; overflow: auto; border-radius: 8px; background: var(--surface-2); cursor: zoom-in; }
-.pv-compare { position: relative; display: inline-block; line-height: 0; }
-.pv-img { display: block; max-width: 100%; }
-.pv-compare.zoomed .pv-img { max-width: none; width: 100%; }
+.pv-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.pv-head h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.pv-close { border: none; background: transparent; color: var(--text); opacity: .6; font-size: 18px; line-height: 1; padding: 2px 4px; cursor: pointer; }
+.pv-stage { max-height: 60vh; overflow: auto; border-radius: 8px; background: var(--surface-2); cursor: zoom-in; }
+.pv-compare { position: relative; display: block; line-height: 0; margin: 0 auto; }
+.pv-img { display: block; width: 100%; height: auto; }
+.pv-compare.zoomed { margin: 0; }
 .pv-orig-clip { position: absolute; inset: 0; }
 .pv-orig-clip .pv-img { width: 100%; height: 100%; }
 .pv-divider {
@@ -609,22 +618,23 @@ main { max-width: none; margin: 0; padding: 0; min-width: 0; }
   box-shadow: 0 2px 8px rgba(0,0,0,.5); pointer-events: none;
 }
 .pv-side-tag {
-  position: absolute; top: 8px; z-index: 3; background: rgba(0,0,0,.75);
-  border: 1px solid rgba(255,255,255,.25);
-  color: #fff; font-size: 12px; padding: 1px 7px; border-radius: 999px; pointer-events: none;
-  &.left { left: 8px; }
-  &.right { right: 8px; }
+  position: absolute; top: 6px; z-index: 3; background: rgba(0,0,0,.6);
+  color: #fff; font-size: 11px; line-height: 16px; padding: 1px 6px; border-radius: 999px; pointer-events: none;
+  &.left { left: 6px; }
+  &.right { right: 6px; }
 }
-.pv-zoom { display: flex; gap: 6px; margin-top: 12px; }
+.pv-info { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin-top: 10px; font-size: 12px; color: var(--subtle); }
+.pv-pct { font-weight: 600; color: var(--green); }
+.pv-dims { flex-basis: 100%; }
+.pv-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
+.pv-zoom { display: flex; gap: 4px; }
 .pv-zoom-btn {
-  padding: 5px 12px; font-size: 13px; border: 1px solid var(--border); border-radius: 6px;
+  padding: 3px 8px; font-size: 12px; line-height: 18px; border: 1px solid var(--border); border-radius: 6px;
   background: var(--surface-2); color: var(--text); cursor: pointer;
   &.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 }
-.pv-info { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; font-size: 13px; }
-.pv-save { font-size: 20px; font-weight: 700; color: var(--green); }
-.pv-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pv-actions { display: flex; gap: 8px; margin-top: 12px; }
+#previewCard .pv-zoom-btn { min-height: 0; min-width: 0; }
+#previewCard button.pv-dl { min-height: 0; padding: 4px 12px; font-size: 12px; line-height: 18px; border-radius: 6px; }
 .pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 16px; }
 .pager-label { font-size: 13px; color: var(--subtle); }
 .pager button { min-height: 36px; padding: 6px 14px; }
