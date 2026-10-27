@@ -24,7 +24,7 @@
 
     <div class="card" id="resultCard" v-show="items.length > 0">
       <ProgressBar :finished="finishedCount" :total="items.length" :t="t" />
-      <div id="summary" :class="{ updating: recompressing }" v-html="summaryHtml"></div>
+      <div id="summary" v-html="summaryHtml"></div>
       <div id="list">
         <ImageItem
           v-for="item in items"
@@ -101,10 +101,6 @@ const summaryHtml = computed(() => {
   const doneOrig = doneItems.reduce((s, i) => s + i.file.size, 0)
   const saved = doneOrig > 0 ? Math.max(0, Math.round((1 - comp / doneOrig) * 100)) : 0
   const detail = t('summaryDetail', items.value.length, doneCount.value, fmtSize(orig), fmtSize(comp))
-    // The spinner slot is always in the DOM (invisible when idle): the old
-    // "updating…" text grew the line on narrow screens and pushed the whole
-    // settings card — including the preset just tapped — down mid-click.
-    + ' <span class="sum-spin" aria-hidden="true"></span>'
   // No big figure when nothing was saved yet (or everything was already
   // optimal): the per-item already-best badge carries that case.
   const body = (doneCount.value === 0 || saved === 0)

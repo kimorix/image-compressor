@@ -200,18 +200,20 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
         if (q100.size <= targetBytes) {
           blob = q100; targetNote = t('targetBest'); fitted = true
         } else {
-          // Old code binary-searched the whole [10,100] range at full
-          // resolution (up to 7 encodes after the q100 probe). Stop once
-          // the window is 4 wide: a few quality points are invisible,
-          // and bestBlob only ever holds a fitting encode, so the size
-          // guarantee (output <= target) is unchanged. The two fancier
-          // options were evaluated and rejected: starting from q80
-          // averages the same (5 steps when it fits, 7 when it misses,
-          // vs 6 always here), and a downscaled probe needs stacked
-          // heuristics (cross-scale size ratio + quality slope) yet its
-          // window would still need ~5 full-res encodes to verify.
+          // Binary-search the whole [10,100] range down to a 1-wide
+          // window: the exact highest fitting quality. An early stop
+          // (window 4) saved ~2 encodes but left outputs up to ~30%
+          // under target on graphic content, where adjacent quality
+          // points jump in size; bestBlob only ever holds a fitting
+          // encode, so the size guarantee (output <= target) is
+          // unchanged. The two fancier options were evaluated and
+          // rejected: starting from q80 averages the same (5 steps when
+          // it fits, 7 when it misses, vs 6 always here), and a
+          // downscaled probe needs stacked heuristics (cross-scale size
+          // ratio + quality slope) yet its window would still need ~5
+          // full-res encodes to verify.
           let lo = 10, hi = 100, bestBlob: Blob | null = null, bestQ = 10
-          while (hi - lo > 4) {
+          while (hi - lo > 1) {
             const mid = Math.floor((lo + hi) / 2)
             const b = await encodeAt(width, height, mid / 100)
             if (b.size <= targetBytes) { bestQ = mid; bestBlob = b; lo = mid + 1 }
@@ -227,11 +229,11 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
           blob = full; targetNote = t('targetUnder')
         } else {
           let lo = 0.1, hi = 1, best: Blob | null = null, bestW = width, bestH = height
-          // Same tolerance idea as the quality search: stop once the
-          // scale interval is 0.05 wide (dimension within 5%, invisible),
-          // instead of a fixed 7 rounds. best only holds fitting encodes,
-          // so the size guarantee is unchanged.
-          while (hi - lo > 0.05) {
+          // Same idea as the quality search: stop once the scale
+          // interval is 0.02 wide (dimension within 2%), instead of a
+          // fixed 7 rounds. best only holds fitting encodes, so the
+          // size guarantee is unchanged.
+          while (hi - lo > 0.02) {
             const sc = (lo + hi) / 2
             const w = Math.max(1, Math.round(width * sc)), h = Math.max(1, Math.round(height * sc))
             const b = await encodeAt(w, h, q)

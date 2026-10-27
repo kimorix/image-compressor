@@ -34,7 +34,7 @@
     </div>
     <div class="field" id="targetField" v-show="settings.mode === 'target'">
       <label for="targetSize">{{ t('targetLabel') }}</label>
-      <input type="number" id="targetSize" min="10" max="51200" :value="settings.targetSize" @input="onTargetDebounced(($event.target as HTMLInputElement).value)" />
+      <input type="number" id="targetSize" min="10" max="51200" :value="settings.targetSize" @input="onTargetDebounced(($event.target as HTMLInputElement).value)" @blur="onTargetBlur(($event.target as HTMLInputElement))" />
     </div>
     <div class="field" id="qualityField" v-show="settings.mode !== 'target'">
       <label for="quality" class="qlabel"><span>{{ t('qualityLabel') }}</span> <span class="value" id="qualityValue">{{ qualityShown }}%</span></label>
@@ -56,7 +56,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { Settings } from '../types'
-import { matchPreset, PRESETS } from '../lib/presets'
+import { DEFAULT_SETTINGS, matchPreset, PRESETS } from '../lib/presets'
 
 const props = defineProps<{
   settings: Settings
@@ -91,9 +91,13 @@ const showPngHint = computed(() => props.settings.format === 'image/png' && !pro
 const showQuantHint = computed(() => props.settings.format === 'image/png' && props.settings.quantize && props.settings.mode !== 'target')
 
 let timer: ReturnType<typeof setTimeout> | null = null
+// Whether the shared debounce slot currently holds a target patch (vs a
+// maxSize patch): the blur handler needs to know whether clearing the
+// timer drops a stale target value.
+let pendingTarget = false
 function debounce(patch: Partial<Settings>) {
   if (timer) clearTimeout(timer)
-  timer = setTimeout(() => emit('update', patch, true), 500)
+  timer = setTimeout(() => { timer = null; pendingTarget = false; emit('update', patch, true) }, 500)
 }
 
 function onFormat(v: string) { emit('update', { format: v }, true) }
@@ -101,8 +105,37 @@ function onMode(v: string) { emit('update', { mode: v as Settings['mode'] }, tru
 // Number inputs commit through the debounced input handler only. A @change
 // handler on top of it would fire again on blur and start a duplicate
 // recompress — which can even remove the download button mid-click.
-function onTargetDebounced(v: string) { debounce({ targetSize: parseInt(v, 10) || 200 }) }
-function onMaxDebounced(v: string) { debounce({ maxSize: parseInt(v, 10) || 0 }) }
+// Empty while editing is not a value: clearing the target field must not
+// snap back to 200 mid-typing (parseInt('') is NaN, NaN || 200 is 200).
+// The field stays empty until blur, which commits the current content:
+// empty refills the default, a number commits immediately (this also
+// clears any pending debounced patch, so it cannot land after a preset
+// tapped right after blur and clobber the preset's value).
+function onTargetDebounced(v: string) {
+  if (v.trim() === '') {
+    // Clearing must also cancel a pending patch from keystrokes just
+    // before the clear: otherwise it fires mid-pause and refills the
+    // field with the just-deleted value — the same "refill while the
+    // user is still editing" bug the blur rule exists to fix. Only a
+    // pending target patch is cancelled; a maxSize patch in the shared
+    // slot (pendingTarget false) is left alone.
+    if (pendingTarget) { if (timer) clearTimeout(timer); timer = null; pendingTarget = false }
+    return
+  }
+  pendingTarget = true
+  debounce({ targetSize: parseInt(v, 10) || 200 })
+}
+function onTargetBlur(el: HTMLInputElement) {
+  const v = el.value.trim()
+  if (pendingTarget) { if (timer) clearTimeout(timer); timer = null; pendingTarget = false }
+  if (v === '') {
+    el.value = String(DEFAULT_SETTINGS.targetSize)
+    emit('update', { targetSize: DEFAULT_SETTINGS.targetSize }, true)
+  } else {
+    emit('update', { targetSize: parseInt(v, 10) || DEFAULT_SETTINGS.targetSize }, true)
+  }
+}
+function onMaxDebounced(v: string) { pendingTarget = false; debounce({ maxSize: parseInt(v, 10) || 0 }) }
 function onNoUpscale(v: boolean) { emit('update', { noUpscale: v }, true) }
 function onQuantize(v: boolean) { emit('update', { quantize: v }, true) }
 function onKeepExif(v: boolean) { emit('update', { keepExif: v }, true) }
