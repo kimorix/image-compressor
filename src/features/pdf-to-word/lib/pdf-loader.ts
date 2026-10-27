@@ -26,8 +26,11 @@ export function loadPdfjs(): Promise<Pdfjs> {
 }
 
 /** docs/pdfjs/ next to docs/assets/, wherever the page itself lives. */
+// (Built from a variable on purpose: Vite rewrites `new URL('literal',
+// import.meta.url)` into a bundled asset, which these folders are not.)
+const DATA_DIR = '../pdfjs/'
 function dataUrl(sub: string): string {
-  return new URL(`../pdfjs/${sub}/`, import.meta.url).href
+  return new URL(DATA_DIR + sub + '/', import.meta.url).href
 }
 
 export class PdfPasswordError extends Error {

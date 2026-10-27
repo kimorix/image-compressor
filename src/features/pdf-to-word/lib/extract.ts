@@ -187,6 +187,14 @@ async function crop(src: HTMLCanvasElement, box: Box, scale: number): Promise<Pa
   return { ...box, data, type }
 }
 
+/** The OCR engine or its language data could not load or run. */
+export class OcrError extends Error {
+  constructor(cause: unknown) {
+    super(`OCR failed: ${cause instanceof Error ? cause.message : String(cause)}`)
+    this.name = 'OcrError'
+  }
+}
+
 function aborted(signal?: AbortSignal) {
   if (signal?.aborted) throw new DOMException('cancelled', 'AbortError')
 }
@@ -225,8 +233,13 @@ export async function extractPage(doc: PdfDoc, num: number, opts: ExtractOptions
       const canvas = await renderPage(page, scale)
       aborted(opts.signal)
       if (opts.ocr) {
-        const { ocrCanvas } = await import('./ocr')
-        model.items = await ocrCanvas(canvas, scale, opts.ocrLang, (p) => { if (p.status.startsWith('recogniz')) opts.onOcr?.(p.progress) })
+        try {
+          const { ocrCanvas } = await import('./ocr')
+          model.items = await ocrCanvas(canvas, scale, opts.ocrLang, (p) => { if (p.status.startsWith('recogniz')) opts.onOcr?.(p.progress) })
+        } catch (err) {
+          aborted(opts.signal)
+          throw new OcrError(err)
+        }
         model.ocr = true
       }
       if (!model.ocr || !model.items.length) {

@@ -338,6 +338,7 @@ async function probe(item: PdfItem, password = '') {
     } else {
       item.status = 'error'
       item.error = p('errOpen')
+      console.warn('[pdf-to-word] open failed', err)
     }
   }
   touch()
@@ -424,7 +425,7 @@ async function convertOne(item: PdfItem) {
         item.status = 'cancelled'
       } else {
         item.status = 'error'
-        item.error = err instanceof PageRangeError ? p('errRange') : p('errFailed')
+        item.error = err instanceof PageRangeError ? p('errRange') : (err as Error)?.name === 'OcrError' ? p('errOcr') : p('errFailed')
         console.error(err)
       }
     }

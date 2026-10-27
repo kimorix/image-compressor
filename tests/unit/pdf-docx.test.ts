@@ -44,6 +44,12 @@ describe('docx builder', () => {
     expect(xml).toContain('<w:framePr')
     expect(xml).toContain('<wp:anchor')
   })
+  it('layout: frames follow the reading order of two columns', async () => {
+    const pages = await fixturePages('two-column.pdf')
+    const { xml } = await docXml((await buildDocx(pages, { mode: 'layout', keepImages: true })).blob)
+    expect(xml.indexOf('LEFTEND')).toBeGreaterThan(0)
+    expect(xml.indexOf('LEFTEND')).toBeLessThan(xml.indexOf('RIGHTSTART'))
+  })
   it('scanned page without OCR becomes a picture', async () => {
     const page = { num: 1, width: 595, height: 842, items: [], images: [], background: { x: 0, y: 0, w: 595, h: 842, data: PNG_1PX, type: 'png' as const } }
     const r = await buildDocx([page], { mode: 'editable', keepImages: true })

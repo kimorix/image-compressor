@@ -638,6 +638,12 @@ export function layoutDocument(pages: PageModel[], opts: { stripPageNumbers?: bo
   return { pages: out, bodySize }
 }
 
+/** Lines of a page in reading order (columns left to right, top to bottom). */
+export function readingOrder(lines: Line[], pageWidth: number): Line[] {
+  const flows = orderFlows(lines, [], pageWidth, detectColumns(lines, pageWidth))
+  return flows.flatMap((f) => f.els.flatMap((e) => (e.t === 'line' ? [e.line] : [])))
+}
+
 /** Plain text of a block list (tests, previews). */
 export function blocksText(blocks: Block[]): string {
   return blocks.map((b) => {

@@ -30,7 +30,7 @@ import {
   type ISectionOptions,
 } from 'docx'
 import type { ConvertMode, ConvertStats, PageImage, PageModel } from '../types'
-import { buildLines, layoutDocument, type Align, type Block, type ListMarker, type Span } from './layout'
+import { buildLines, layoutDocument, readingOrder, type Align, type Block, type ListMarker, type Span } from './layout'
 
 const TWIP = 20 // twips per point
 const EMU = 12700 // EMUs per point
@@ -249,7 +249,9 @@ function buildLayout(pages: PageModel[], opts: BuildOptions, stats: ConvertStats
     }
     // The pictures anchor to one empty paragraph at the top of the page.
     children.push(new Paragraph({ spacing: { before: 0, after: 0, line: 20, lineRule: LineRuleType.EXACT }, children: pics }))
-    for (const l of buildLines(p.items)) {
+    // Frames in reading order: copy/paste and screen readers follow the
+    // columns, while each frame still sits at its PDF position.
+    for (const l of readingOrder(buildLines(p.items), p.width)) {
       const width = (l.x1 - l.x0) * 1.12 + l.size * 1.5
       children.push(new Paragraph({
         frame: {

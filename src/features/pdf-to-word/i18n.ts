@@ -24,6 +24,7 @@ const zh: Messages = {
   detailOrig: '原文件', detailWord: 'Word', detailFound: '识别', detailNote: '提示', found: (h, i, t) => `${h} 个标题 · ${i} 张图片 · ${t} 个表格`, pageSwipe: (p, n) => `第 ${p} / ${n} 页 · 左右滑动`, share: '分享 / 存储 .docx', reconvert: '重新转换', tagEditable: '可编辑模式', tagLayout: '保留版式模式',
   warnScannedAsImage: '扫描页没有识别文字，已按图片放入', warnOcrEmpty: '部分页没识别出文字，已按图片放入', warnPartial: '只转换了所选页码', twoCol: (n) => `${n} 页双栏已按阅读顺序排列`, ocrPages: (n) => `${n} 页通过 OCR 识别`,
   errOpen: '无法打开这个 PDF，文件可能已损坏', errFailed: '转换失败，请重试', errRange: '页码范围不对，请检查设置',
+  errOcr: 'OCR 组件加载失败：首次使用需要联网下载语言包',
   emptyList: '还没有 PDF，先从上面添加文件',
 }
 
@@ -44,6 +45,7 @@ const en: Messages = {
   detailOrig: 'Original', detailWord: 'Word', detailFound: 'Found', detailNote: 'Note', found: (h, i, t) => `${h} headings · ${i} images · ${t} tables`, pageSwipe: (p, n) => `Page ${p} / ${n} · swipe`, share: 'Share / save .docx', reconvert: 'Convert again', tagEditable: 'Editable', tagLayout: 'Keep layout',
   warnScannedAsImage: 'Scanned pages were not recognised and are kept as pictures', warnOcrEmpty: 'Some pages had no recognisable text and are kept as pictures', warnPartial: 'Only the selected pages were converted', twoCol: (n) => `${n} two-column pages put in reading order`, ocrPages: (n) => `${n} pages recognised with OCR`,
   errOpen: 'Cannot open this PDF; the file may be damaged', errFailed: 'Conversion failed, please retry', errRange: 'Invalid page range, check the settings',
+  errOcr: 'OCR could not load: the first use needs a connection to download the language pack',
   emptyList: 'No PDFs yet. Add files above.',
 }
 
@@ -64,6 +66,7 @@ const ja: Messages = {
   detailOrig: '元ファイル', detailWord: 'Word', detailFound: '認識', detailNote: 'ヒント', found: (h, i, t) => `見出し ${h} · 画像 ${i} · 表 ${t}`, pageSwipe: (p, n) => `${p} / ${n} ページ · 左右にスワイプ`, share: '.docx を共有 / 保存', reconvert: '再変換', tagEditable: '編集可能', tagLayout: 'レイアウト保持',
   warnScannedAsImage: 'スキャンページは文字認識されず、画像として入れました', warnOcrEmpty: '一部のページは文字を認識できず、画像として入れました', warnPartial: '選択したページだけを変換しました', twoCol: (n) => `2 段組み ${n} ページを読み順に並べました`, ocrPages: (n) => `${n} ページを OCR で認識`,
   errOpen: 'この PDF を開けません。ファイルが壊れている可能性があります', errFailed: '変換に失敗しました。再試行してください', errRange: 'ページ範囲が正しくありません。設定を確認してください',
+  errOcr: 'OCR を読み込めません。初回は言語データのダウンロードにネット接続が必要です',
   emptyList: 'まだ PDF がありません。上から追加してください',
 }
 
@@ -84,6 +87,7 @@ const ko: Messages = {
   detailOrig: '원본', detailWord: 'Word', detailFound: '인식', detailNote: '안내', found: (h, i, t) => `제목 ${h} · 이미지 ${i} · 표 ${t}`, pageSwipe: (p, n) => `${p} / ${n}쪽 · 좌우로 넘기기`, share: '.docx 공유 / 저장', reconvert: '다시 변환', tagEditable: '편집 가능', tagLayout: '레이아웃 유지',
   warnScannedAsImage: '스캔 쪽은 인식되지 않아 그림으로 넣었습니다', warnOcrEmpty: '일부 쪽은 글자를 인식하지 못해 그림으로 넣었습니다', warnPartial: '선택한 쪽만 변환했습니다', twoCol: (n) => `2단 ${n}쪽을 읽는 순서로 배치했습니다`, ocrPages: (n) => `${n}쪽을 OCR로 인식`,
   errOpen: '이 PDF를 열 수 없습니다. 파일이 손상되었을 수 있습니다', errFailed: '변환에 실패했습니다. 다시 시도해 주세요', errRange: '쪽 범위가 올바르지 않습니다. 설정을 확인해 주세요',
+  errOcr: 'OCR을 불러오지 못했습니다. 처음에는 언어 데이터를 내려받을 인터넷 연결이 필요합니다',
   emptyList: '아직 PDF가 없습니다. 위에서 추가하세요',
 }
 
@@ -104,6 +108,7 @@ const de: Messages = {
   detailOrig: 'Original', detailWord: 'Word', detailFound: 'Erkannt', detailNote: 'Hinweis', found: (h, i, t) => `${h} Überschriften · ${i} Bilder · ${t} Tabellen`, pageSwipe: (p, n) => `Seite ${p} / ${n} · wischen`, share: '.docx teilen / sichern', reconvert: 'Neu umwandeln', tagEditable: 'Bearbeitbar', tagLayout: 'Layout behalten',
   warnScannedAsImage: 'Gescannte Seiten wurden nicht erkannt und als Bild übernommen', warnOcrEmpty: 'Einige Seiten ohne erkennbaren Text wurden als Bild übernommen', warnPartial: 'Nur die gewählten Seiten wurden umgewandelt', twoCol: (n) => `${n} zweispaltige Seiten in Lesereihenfolge`, ocrPages: (n) => `${n} Seiten per OCR erkannt`,
   errOpen: 'Dieses PDF lässt sich nicht öffnen; die Datei ist vielleicht beschädigt', errFailed: 'Umwandlung fehlgeschlagen, bitte erneut versuchen', errRange: 'Ungültiger Seitenbereich, bitte Einstellungen prüfen',
+  errOcr: 'OCR konnte nicht laden: Beim ersten Mal wird eine Verbindung für das Sprachpaket gebraucht',
   emptyList: 'Noch keine PDFs. Fügen Sie oben Dateien hinzu.',
 }
 
@@ -124,6 +129,7 @@ const fr: Messages = {
   detailOrig: 'Original', detailWord: 'Word', detailFound: 'Détecté', detailNote: 'Remarque', found: (h, i, t) => `${h} titres · ${i} images · ${t} tableaux`, pageSwipe: (p, n) => `Page ${p} / ${n} · balayez`, share: 'Partager / enregistrer .docx', reconvert: 'Reconvertir', tagEditable: 'Modifiable', tagLayout: 'Mise en page',
   warnScannedAsImage: 'Les pages scannées n’ont pas été reconnues et sont gardées en image', warnOcrEmpty: 'Certaines pages sans texte reconnu sont gardées en image', warnPartial: 'Seules les pages choisies ont été converties', twoCol: (n) => `${n} pages sur deux colonnes remises dans l’ordre de lecture`, ocrPages: (n) => `${n} pages reconnues par OCR`,
   errOpen: 'Impossible d’ouvrir ce PDF ; le fichier est peut-être endommagé', errFailed: 'La conversion a échoué, réessayez', errRange: 'Plage de pages invalide, vérifiez les paramètres',
+  errOcr: 'L’OCR n’a pas pu se charger : la première fois, une connexion est nécessaire pour le pack de langue',
   emptyList: 'Aucun PDF pour l’instant. Ajoutez des fichiers ci-dessus.',
 }
 
