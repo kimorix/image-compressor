@@ -1280,7 +1280,7 @@ async function toQualityEmpty(page) {
     await p.close();
   }
 
-  // 105g3. iPad 竖屏统计条两列、特性条已删（1.0.5 后续 2）
+  // 105g3. iPad 竖屏统计条一行四列（2.1.2 统计条改为扁平单行）、特性条已删（1.0.5 后续 2）
   {
     const p = await newPage(browser, { viewport: { width: 768, height: 1024 } });
     await upload(p, [T + 'test.jpg']);
@@ -1291,7 +1291,7 @@ async function toQualityEmpty(page) {
       const r = el.getBoundingClientRect();
       return els.every((o) => o === el || r.right <= o.getBoundingClientRect().left + 1 || o.getBoundingClientRect().right <= r.left + 1 || r.bottom <= o.getBoundingClientRect().top + 1 || o.getBoundingClientRect().bottom <= r.top + 1);
     }));
-    check('iPad 竖屏统计条两列、无重叠、特性条已删', cols === 2 && !feat && statOverlap, `${cols}/${!!feat}/${statOverlap}`);
+    check('iPad 竖屏统计条四列、无重叠、特性条已删', cols === 4 && !feat && statOverlap, `${cols}/${!!feat}/${statOverlap}`);
     await p.close();
   }
 
