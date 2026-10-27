@@ -12,12 +12,12 @@
     <div class="row-main">
       <div class="cell-name">
         <div class="name" :title="item.file.name"><span class="name-stem">{{ nameParts.stem }}</span><span class="name-ext">{{ nameParts.ext }}</span></div>
-        <span class="fmt-tag">{{ fmtTag }}</span>
+        <div class="name-tags"><span class="fmt-tag">{{ fmtTag }}</span><span v-if="isAlreadyBest" class="best-tag">{{ t('alreadyBest') }}</span></div>
       </div>
       <div class="orig-size">{{ fmtSize(item.file.size) }}</div>
       <div class="comp-size">
         <span v-if="item.error" class="error">{{ item.error }}</span><button v-if="item.error" type="button" class="retry-btn" :title="t('retryBtn')" :aria-label="t('retryBtn')" @click="$emit('retry', item)">{{ t('retryBtn') }}</button>
-        <span v-else-if="item.done">{{ fmtSize(item.outSize) }}<span v-if="isAlreadyBest" class="best-tag">{{ t('alreadyBest') }}</span></span>
+        <span v-else-if="item.done">{{ fmtSize(item.outSize) }}</span>
         <span v-else>{{ t('processing') }}</span>
       </div>
       <div class="save-cell"><span v-if="item.done && !isAlreadyBest && savedPct > 0" class="save-pct"> −{{ savedPct }}%</span></div>
