@@ -1,28 +1,14 @@
 <template>
-  <header :inert="busy || sheetOpen ? true : undefined">
-    <div>
-      <h1><span>{{ t('appTitle') }}</span><span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3z" /><path d="M9 12l2 2 4-4" /></svg><span class="badge-text"><span class="badge-main">{{ t('badgeLocal') }}</span><span class="badge-sub">{{ t('badgeSub') }}</span></span></span></h1>
-      <p>{{ t('headerSub') }}</p>
-    </div>
-    <div class="header-actions">
-      <button class="gh-btn icon-btn" id="themeBtn" type="button" :title="themeTitle" :aria-label="t('themeAria')" @click="toggleTheme" v-html="themeIcon"></button>
-      <select id="langSelect" class="lang-select" :value="lang" :aria-label="t('langAria')" @change="setLang(($event.target as HTMLSelectElement).value as Lang)">
-        <option v-for="l in LANGS" :key="l.code" :value="l.code">{{ l.label }}</option>
-      </select>
-      <a class="gh-btn" href="https://github.com/kimorix/image-compressor" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z" /></svg><span class="gh-text">{{ t('githubBtn') }}</span></a>
-    </div>
-  </header>
+  <AppHeader :sub="t('headerSub')" :inert="busy || sheetOpen ? true : undefined" @lang="setLang">
+    <template #title><span>{{ t('appTitle') }}</span><span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3z" /><path d="M9 12l2 2 4-4" /></svg><span class="badge-text"><span class="badge-main">{{ t('badgeLocal') }}</span><span class="badge-sub">{{ t('badgeSub') }}</span></span></span></template>
+  </AppHeader>
   <div class="layout" :inert="busy || sheetOpen ? true : undefined">
-    <aside id="sideNav">
-      <nav class="side-links">
-        <button type="button" :class="{ active: view === 'tool' }" @click="goTool"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="M21 15l-5-5L5 21" /></svg>{{ t('navTool') }}</button>
-        <button type="button" :class="{ active: view === 'history' }" @click="goHistory"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>{{ t('navHistory') }}</button>
-      </nav>
-      <div class="side-card">
-        <strong>{{ t('sideFormats') }}</strong>
-        <p class="side-formats">JPG · PNG · WebP · AVIF · HEIC · HEIF</p>
-      </div>
-    </aside>
+    <SideNav :t="t" :active="view === 'history' ? 'history' : 'compress'" @compress="goTool" @pdf="goPdf" @history="goHistory">
+        <div class="side-card">
+          <strong>{{ t('sideFormats') }}</strong>
+          <p class="side-formats">JPG · PNG · WebP · AVIF · HEIC · HEIF</p>
+        </div>
+    </SideNav>
     <main :class="{ 'no-result': items.length === 0 }" v-show="view === 'tool'">
     <div class="card" id="uploadCard" :class="{ 'has-items': items.length > 0, 'show-hint': !!fileHint }">
       <DropZone ref="dropzoneRef" :t="t" :compact="items.length > 0" @files="addFiles" />
@@ -184,25 +170,18 @@
   <!-- The settings sheet stops above the tab bar, so the bar stays live
   there (Settings shows active; Home or Settings closes the sheet). The
   detail sheet covers it. -->
-  <nav class="tab-bar" :inert="busy || detailId ? true : undefined">
-    <button type="button" :class="{ active: view === 'tool' && !moreOpen && !settingsOpen }" @click="goHome"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8" /><path d="M5 9v11h14V9" /></svg>{{ t('tabHome') }}</button>
-    <button type="button" :class="{ active: settingsOpen && !moreOpen }" :aria-expanded="settingsOpen" @click="goSettings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></svg>{{ t('tabSettings') }}</button>
-    <button type="button" :class="{ active: moreOpen || view === 'history' }" :aria-expanded="moreOpen" @click="moreOpen = !moreOpen"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>{{ t('tabMore') }}</button>
-  </nav>
-  <div v-if="moreOpen" class="more-backdrop" @click="moreOpen = false"></div>
-  <div class="more-menu" v-show="moreOpen" :inert="busy || sheetOpen ? true : undefined">
-    <button type="button" class="more-tool" aria-disabled="true" @click="showComingSoon">
-      <span class="more-tool-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="8" height="8" rx="1" /><rect x="13" y="12" width="8" height="8" rx="1" /><path d="M13 8h6M16 5v6M11 16H5M8 13v6" /></svg></span>
-      <span class="more-tool-copy"><strong>{{ t('moreImageConvert') }}</strong><small>{{ t('moreImageConvertDesc') }}</small></span>
-      <span class="more-soon">{{ t('comingSoon') }}</span>
-    </button>
-    <button type="button" class="more-tool" aria-disabled="true" @click="showComingSoon">
-      <span class="more-tool-icon pdf" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z" /><path d="M14 3v5h5" /><path d="M8.5 15l2-4 2 4 2-4 2 4" /></svg></span>
-      <span class="more-tool-copy"><strong>{{ t('morePdfToWord') }}</strong><small>{{ t('morePdfToWordDesc') }}</small></span>
-      <span class="more-soon">{{ t('comingSoon') }}</span>
-    </button>
-  </div>
-  <div v-if="moreToast" class="more-toast" role="status">{{ moreToast }}</div>
+  <TabBar
+    :t="t"
+    :inert="busy || detailId ? true : undefined"
+    :active="moreOpen || view === 'history' ? 'more' : settingsOpen ? 'settings' : 'compress'"
+    :settings-open="settingsOpen"
+    :more-open="moreOpen"
+    @compress="goHome"
+    @pdf="goPdf"
+    @settings="goSettings"
+    @more="moreOpen = !moreOpen"
+  />
+  <MoreMenu :t="t" :open="moreOpen" :menu-inert="busy || sheetOpen" @close="moreOpen = false" />
   <!-- Blocking global loading: the scrim captures pointer/touch, the page
   sections above are inert, and the status pill stays visible above it. -->
   <div v-if="busy" class="busy-scrim" aria-hidden="true"></div>
@@ -240,31 +219,37 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue'
-import { Zip, ZipPassThrough } from 'fflate'
+import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue'
 import DropZone from './components/DropZone.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import ImageItem from './components/ImageItem.vue'
 import MobileCard from './components/MobileCard.vue'
 import MobileDetailSheet from './components/MobileDetailSheet.vue'
-import BottomSheet from './components/BottomSheet.vue'
+import BottomSheet from '../../shared/components/BottomSheet.vue'
+import AppHeader from '../../shared/components/AppHeader.vue'
+import SideNav from '../../shared/components/SideNav.vue'
+import TabBar from '../../shared/components/TabBar.vue'
+import MoreMenu from '../../shared/components/MoreMenu.vue'
 import Lightbox from './components/Lightbox.vue'
 import ProgressBar from './components/ProgressBar.vue'
-import { LANGS, initialLang, t as tx, type Lang } from './i18n'
-import { applyTheme, initialTheme, MOON_ICON, SUN_ICON, type Theme } from './lib/theme'
+import { t as tx, type Lang } from '../../shared/i18n'
+import { applyTheme } from '../../shared/lib/theme'
+import { usePrefs } from '../../shared/composables/usePrefs'
+import { useHashRoute } from '../../shared/composables/useHashRoute'
+import { downloadUrl, ymd, zipEntries } from '../../shared/lib/zip'
 import { CompressPool } from './lib/compress-pool'
-import { baseName, extOf, fmtSize, shortName } from './lib/format'
-import { filesFromDrop } from './lib/drop'
+import { baseName, extOf, fmtSize, shortName } from '../../shared/lib/format'
+import { filesFromDrop } from '../../shared/lib/drop'
 import { DEFAULT_SETTINGS, matchPreset, PRESETS } from './lib/presets'
 import { loadSavedSettings, saveSettings } from './lib/settings-store'
 import { newItem, type CompressItem, type Settings } from './types'
 import { isUnaffected } from './lib/recompress'
 import { useCompareSlider } from './composables/useCompareSlider'
 import { appendMasonry, distributeMasonry, fallbackColumnWidth, type MasonryColumns } from './lib/masonry'
-import { shareFilesOr } from './lib/share'
+import { shareFilesOr } from '../../shared/lib/share'
 
-const lang = ref<Lang>(initialLang())
-const theme = ref<Theme>(initialTheme())
+const { lang, theme, setLang: setPrefLang } = usePrefs()
+const { route, navigate, replaceSub } = useHashRoute()
 const settings = reactive<Settings>({ ...DEFAULT_SETTINGS, ...loadSavedSettings() })
 // Remember the last-used settings across visits. Writing storage never
 // mutates settings, so this watcher cannot loop.
@@ -288,13 +273,6 @@ const view = ref<'tool' | 'history'>('tool')
 // (Home otherwise), wherever the result list happens to be scrolled.
 const settingsOpen = ref(false)
 const moreOpen = ref(false)
-const moreToast = ref<string | null>(null)
-let moreToastTimer: ReturnType<typeof setTimeout> | null = null
-function showComingSoon() {
-  moreToast.value = t('comingSoon')
-  if (moreToastTimer) clearTimeout(moreToastTimer)
-  moreToastTimer = setTimeout(() => { moreToast.value = null }, 1600)
-}
 
 // Mobile detail sheet. The item id (not the object) keeps the sheet live
 // across recompresses that replace the item.
@@ -416,6 +394,15 @@ function clearHistory() {
 function goTool() {
   view.value = 'tool'
   moreOpen.value = false
+  replaceSub('')
+}
+// Sidebar / tab bar: switch to the PDF to Word feature. This view stays
+// alive (KeepAlive) so a running batch and its results survive the trip.
+function goPdf() {
+  moreOpen.value = false
+  settingsOpen.value = false
+  detailId.value = null
+  navigate('pdf')
 }
 // Tab bar Home: back to the tool, scrolled to the top. (Templates cannot
 // reach window, so this lives in script: the old inline call threw.)
@@ -428,7 +415,13 @@ function goHistory() {
   loadHistory()
   view.value = 'history'
   moreOpen.value = false
+  replaceSub('history')
 }
+// #/history (e.g. the PDF page's sidebar) opens the history view.
+watch(() => route.value.sub, (sub) => {
+  if (sub === 'history' && view.value !== 'history') goHistory()
+  else if (sub === '' && view.value === 'history') view.value = 'tool'
+}, { immediate: true })
 // Tab bar Settings (phones only; the tab bar is hidden from 720px): open
 // the settings sheet over the tool page instead of scrolling to a card.
 function goSettings() {
@@ -453,8 +446,6 @@ function t(key: string, ...args: (string | number)[]): string {
   return tx(lang.value, key, ...args)
 }
 
-const themeIcon = computed(() => (theme.value === 'dark' ? SUN_ICON : MOON_ICON))
-const themeTitle = computed(() => (theme.value === 'dark' ? t('themeToDay') : t('themeToNight')))
 
 const doneCount = computed(() => items.value.filter((i) => i.done).length)
 const finishedCount = computed(() => items.value.filter((i) => i.done || i.error).length)
@@ -586,19 +577,15 @@ async function runCompress(list: CompressItem[], g: number, snap: Settings) {
 }
 
 function setLang(l: Lang) {
-  lang.value = l
-  document.documentElement.lang = l
-  document.documentElement.dataset.lang = l
-  try { localStorage.setItem('ic-lang', l) } catch { /* ignore */ }
+  setPrefLang(l)
+  applyDocMeta()
+}
+function applyDocMeta() {
   document.title = t('docTitle')
   const md = document.querySelector('meta[name="description"]')
   if (md) md.setAttribute('content', t('metaDesc'))
 }
 
-function toggleTheme() {
-  theme.value = theme.value === 'dark' ? 'light' : 'dark'
-  applyTheme(theme.value)
-}
 
 // Transient note for files skipped by the addFiles funnel (non-images).
 const fileHint = ref<string | null>(null)
@@ -1013,57 +1000,12 @@ async function downloadAllZip() {
   // collecting a files object and then zipSync-ing a second full copy.
   zipping.value = true
   try {
-    const zipped = await new Promise<Blob>((resolve, reject) => {
-      const parts: BlobPart[] = []
-      let settled = false
-      const zip = new Zip((err, chunk, final) => {
-        if (err) {
-          if (!settled) { settled = true; reject(err) }
-          return
-        }
-        if (chunk) parts.push(chunk)
-        if (final && !settled) {
-          settled = true
-          resolve(new Blob(parts, { type: 'application/zip' }))
-        }
-      })
-      void (async () => {
-        try {
-          const used = new Set<string>()
-          for (const item of done) {
-            // Dropped folders keep their structure inside the zip.
-            let name = (item.relDir ? item.relDir + '/' : '') + (item.outName ?? item.file.name)
-            if (used.has(name)) {
-              const dot = name.lastIndexOf('.')
-              const stem = dot > 0 ? name.slice(0, dot) : name
-              const ext = dot > 0 ? name.slice(dot) : ''
-              let n = 2
-              while (used.has(`${stem}-${n}${ext}`)) n++
-              name = `${stem}-${n}${ext}`
-            }
-            used.add(name)
-            const buf = new Uint8Array(await (await fetch(item.outUrl!)).arrayBuffer())
-            const entry = new ZipPassThrough(name)
-            zip.add(entry)
-            entry.push(buf, true)
-          }
-          zip.end()
-        } catch (err) {
-          try { zip.terminate() } catch { /* already ended */ }
-          if (!settled) { settled = true; reject(err) }
-        }
-      })()
-    })
-    const url = URL.createObjectURL(zipped)
-    const a = document.createElement('a')
-    a.href = url
-    const d = new Date()
-    const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
-    a.download = `images-compressed-${ymd}-${done.length}.zip`
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    setTimeout(() => URL.revokeObjectURL(url), 5000)
+    // Dropped folders keep their structure inside the zip.
+    const zipped = await zipEntries(done.map((item) => ({
+      name: (item.relDir ? item.relDir + '/' : '') + (item.outName ?? item.file.name),
+      url: item.outUrl!,
+    })))
+    downloadUrl(zipped, `images-compressed-${ymd()}-${done.length}.zip`)
   } finally {
     zipping.value = false
   }
@@ -1144,15 +1086,20 @@ function onDocDrop(e: DragEvent) {
   })
 }
 
-function onDocKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape' && moreOpen.value) moreOpen.value = false
-}
-
 onMounted(() => {
   applyTheme(theme.value)
   setLang(lang.value)
   window.addEventListener('beforeunload', onBeforeUnload)
-  document.addEventListener('keydown', onDocKeydown)
+})
+// The shell keeps this view alive (KeepAlive) while the PDF feature is
+// shown: page-wide paste/drop only belong to the visible feature, and any
+// open phone surface closes when leaving so nothing stays scroll-locked.
+let listening = false
+onActivated(() => {
+  applyDocMeta()
+  if (busy.value || sheetOpen.value) document.body.style.overflow = 'hidden'
+  if (listening) return
+  listening = true
   document.addEventListener('paste', onPaste)
   document.addEventListener('dragenter', onDocDragEnter)
   document.addEventListener('dragleave', onDocDragLeave)
@@ -1160,15 +1107,27 @@ onMounted(() => {
   document.addEventListener('dragover', onDocDragOver)
   document.addEventListener('drop', onDocDrop)
 })
-onUnmounted(() => {
-  document.removeEventListener('keydown', onDocKeydown)
-  if (moreToastTimer) clearTimeout(moreToastTimer)
+function stopPageListeners() {
+  if (!listening) return
+  listening = false
   document.removeEventListener('paste', onPaste)
   document.removeEventListener('dragenter', onDocDragEnter)
   document.removeEventListener('dragleave', onDocDragLeave)
   document.removeEventListener('dragend', onDocDragEnd)
   document.removeEventListener('dragover', onDocDragOver)
   document.removeEventListener('drop', onDocDrop)
+}
+onDeactivated(() => {
+  stopPageListeners()
+  moreOpen.value = false
+  settingsOpen.value = false
+  detailId.value = null
+  lightboxId.value = null
+  pageDragging.value = false
+  document.body.style.overflow = ''
+})
+onUnmounted(() => {
+  stopPageListeners()
   window.removeEventListener('resize', onViewportResize)
   window.removeEventListener('scroll', updateStripStuck)
   window.removeEventListener('beforeunload', onBeforeUnload)

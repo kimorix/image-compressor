@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { canShareFiles, shareFilesOr, type ShareNavigator } from '../../src/lib/share'
+import { canShareFiles, shareFilesOr, type ShareNavigator } from '../../src/shared/lib/share'
 
 const files = [new File([new Uint8Array(3)], 'a.webp', { type: 'image/webp' }), new File([new Uint8Array(4)], 'b.jpg', { type: 'image/jpeg' })]
 

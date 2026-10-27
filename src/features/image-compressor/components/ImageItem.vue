@@ -62,7 +62,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { CompressItem } from '../types'
-import { fmtSize } from '../lib/format'
+import { fmtSize } from '../../../shared/lib/format'
 
 const props = defineProps<{
   item: CompressItem

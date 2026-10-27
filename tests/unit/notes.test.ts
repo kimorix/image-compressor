@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hasActionableNote, hasAlphaJpegNote, type NoteFields } from '../../src/lib/notes'
+import { hasActionableNote, hasAlphaJpegNote, type NoteFields } from '../../src/features/image-compressor/lib/notes'
 
 function base(over: Partial<NoteFields> = {}): NoteFields {
   return {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fmtSizeShort } from '../../src/lib/format'
+import { fmtSizeShort } from '../../src/shared/lib/format'
 
 describe('fmtSizeShort', () => {
   it('keeps bytes and rounds KB for the narrow card meta line', () => {

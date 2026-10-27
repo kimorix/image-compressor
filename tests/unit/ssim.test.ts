@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { searchQuality, ssim, toLuma } from '../../src/lib/ssim'
+import { searchQuality, ssim, toLuma } from '../../src/features/image-compressor/lib/ssim'
 
 function img(w: number, h: number, fn: (x: number, y: number) => number, alpha = 255): Uint8ClampedArray {
   const d = new Uint8ClampedArray(w * h * 4)

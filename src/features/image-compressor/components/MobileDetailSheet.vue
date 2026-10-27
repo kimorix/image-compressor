@@ -78,9 +78,9 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch, type Ref } from 'vue'
-import BottomSheet from './BottomSheet.vue'
+import BottomSheet from '../../../shared/components/BottomSheet.vue'
 import type { CompressItem } from '../types'
-import { fmtSize } from '../lib/format'
+import { fmtSize } from '../../../shared/lib/format'
 import { useCompareSlider } from '../composables/useCompareSlider'
 import { hasAlphaJpegNote } from '../lib/notes'
 

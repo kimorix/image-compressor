@@ -1,4 +1,4 @@
-import { baseName, extOf } from './format'
+import { baseName, extOf } from '../../../shared/lib/format'
 import { exceedsPixelLimit, MAX_PIXELS_MB } from './limits'
 import { restoreExif } from './exif'
 import { gifFrameCount } from './gif'

@@ -34,7 +34,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { filesFromDrop } from '../lib/drop'
+import { filesFromDrop } from '../../../shared/lib/drop'
 
 const props = defineProps<{
   t: (key: string, ...args: (string | number)[]) => string

@@ -3,7 +3,7 @@
 // its wasm `?url` imports resolve against this chunk's own URL, and its
 // dynamic imports (encoders, heic2any, piexifjs) load as sibling chunks.
 import { compressToBlob } from './compress'
-import { t as translate, type Lang } from '../i18n'
+import { t as translate, type Lang } from '../../../shared/i18n'
 import type { Settings } from '../types'
 
 export interface WorkerTask {

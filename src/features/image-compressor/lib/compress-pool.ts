@@ -4,7 +4,7 @@
 // object URLs: workers hand blobs back, the main thread turns them into
 // URLs, so revocation semantics match the old direct path exactly.
 import { compressItem, type CompressResult } from './compress'
-import { t as translate, type Lang } from '../i18n'
+import { t as translate, type Lang } from '../../../shared/i18n'
 import type { CompressItem, Settings } from '../types'
 import type { WorkerResult, WorkerTask } from './compress.worker'
 

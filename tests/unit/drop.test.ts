@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { walkEntries } from '../../src/lib/drop'
+import { walkEntries } from '../../src/shared/lib/drop'
 
 // Minimal FileSystemEntry doubles: readEntries hands out one batch, then [].
 function file(name: string) {

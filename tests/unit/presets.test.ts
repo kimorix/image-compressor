@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { DEFAULT_SETTINGS, matchPreset, PRESETS } from '../../src/lib/presets'
-import { loadSavedSettings, saveSettings } from '../../src/lib/settings-store'
+import { DEFAULT_SETTINGS, matchPreset, PRESETS } from '../../src/features/image-compressor/lib/presets'
+import { loadSavedSettings, saveSettings } from '../../src/features/image-compressor/lib/settings-store'
 
 describe('matchPreset', () => {
   it('defaults match no scene', () => {

@@ -47,7 +47,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { CompressItem } from '../types'
-import { fmtSizeShort } from '../lib/format'
+import { fmtSizeShort } from '../../../shared/lib/format'
 import { clampAspect, isTinyImage } from '../lib/masonry'
 import { hasActionableNote } from '../lib/notes'
 
