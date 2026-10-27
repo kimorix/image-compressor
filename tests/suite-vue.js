@@ -1168,16 +1168,16 @@ async function toQualityEmpty(page) {
     await p.close();
   }
 
-  // 47f3c. 第三块对比预览卡：默认第一张，点缩略图条切换，
+  // 47f3c. 第三块对比预览卡（不显示文件名，用图片 alt 识别）：默认第一张，点缩略图条切换，
   // 100% 放大生效，卡片钉在右侧栏底部；侧栏设置入口已删
   {
     const p = await newPage(browser, { viewport: { width: 1280, height: 900 } });
     await upload(p, [T + 'test.jpg', T + 'test.png']);
     await waitDone(p, 2);
-    const pvDefault = await p.$eval('#previewCard .pv-name', (el) => el.textContent);
+    const pvDefault = await p.$eval('#previewCard .pv-img', (el) => el.alt);
     const pvDivider = await p.$('#previewCard .pv-divider');
     const pvZooms = await p.$$eval('#previewCard .pv-zoom-btn', (els) => els.map((e) => e.textContent));
-    const pvDl = await p.$('#previewCard .pv-actions button.primary');
+    const pvDl = await p.$('#previewCard .pv-toolbar button.primary');
     const navCount = await p.$$eval('#sideNav .side-links button', (els) => els.length);
     const boxes = await p.$eval('#previewCard', (el) => {
       const r = el.getBoundingClientRect();
@@ -1188,8 +1188,8 @@ async function toQualityEmpty(page) {
     check('预览卡默认第一张、带分界与缩放下载', pvDefault === 'test.jpg' && !!pvDivider && pvZooms.join('/') === '适合/100%/200%' && !!pvDl, `${pvDefault}/${!!pvDivider}/${pvZooms.join('/')}/${!!pvDl}`);
     check('预览卡在第三块右侧栏内、设置下方，侧栏无设置入口', boxes.pvLeft > boxes.rcLeft && boxes.pvTop > boxes.stTop && navCount === 2, `${boxes.pvLeft}/${boxes.rcLeft}/${boxes.pvTop}/${boxes.stTop}/${navCount}`);
     await p.click('.thumb-strip .strip-tile:nth-child(2)');
-    await p.waitForFunction(() => document.querySelector('#previewCard .pv-name').textContent === 'test.png');
-    const pvSecond = await p.$eval('#previewCard .pv-name', (el) => el.textContent);
+    await p.waitForFunction(() => document.querySelector('#previewCard .pv-img').alt === 'test.png');
+    const pvSecond = await p.$eval('#previewCard .pv-img', (el) => el.alt);
     const selSecond = await p.$eval('.thumb-strip .strip-tile:nth-child(2)', (el) => el.classList.contains('selected'));
     check('点缩略图条切换预览图并高亮', pvSecond === 'test.png' && selSecond, `${pvSecond}/${selSecond}`);
     await p.click('#previewCard .pv-zoom-btn:nth-child(2)');
