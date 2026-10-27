@@ -2,18 +2,23 @@
   <div class="lb-overlay" @click.self="$emit('close')">
     <div class="lb-box">
       <div class="lb-bar">
+        <div class="lb-zoom">
+          <button type="button" class="lb-zoom-btn" :class="{ active: zoomLevel === 'fit' }" :aria-pressed="zoomLevel === 'fit'" @click="zoomLevel = 'fit'">{{ t('lbFit') }}</button>
+          <button type="button" class="lb-zoom-btn" :class="{ active: zoomLevel === '100' }" :aria-pressed="zoomLevel === '100'" @click="zoomLevel = '100'">100%</button>
+          <button type="button" class="lb-zoom-btn" :class="{ active: zoomLevel === '200' }" :aria-pressed="zoomLevel === '200'" @click="zoomLevel = '200'">200%</button>
+        </div>
         <button class="lb-close" :title="t('lbClose')" :aria-label="t('lbClose')" @click="$emit('close')">×</button>
       </div>
-      <div class="lb-stage" :class="{ zoomed }">
-        <div class="lb-compare" ref="compareRef">
+      <div class="lb-stage" :class="{ zoomed: zoomLevel !== 'fit' }">
+        <div class="lb-compare" ref="compareRef" :style="compareStyle">
           <!-- Base layer: compressed when done, else the original (same
           fallback as the row thumbnail, covers the recompress window). -->
-          <img class="lb-img" :src="compSrc" :alt="item.file.name" @click="zoomed = !zoomed" />
+          <img class="lb-img" :src="compSrc" :alt="item.file.name" @click="cycleZoom" />
           <!-- Original layer, clipped to the left of the divider. Both
           layers share the wrapper's box, so they stay aligned at any zoom
           and scroll together when the stage pans. -->
           <div class="lb-orig-clip" :style="{ clipPath: `inset(0 ${100 - pos}% 0 0)` }">
-            <img class="lb-img" :src="item.url" :alt="item.file.name" @click="zoomed = !zoomed" />
+            <img class="lb-img" :src="item.url" :alt="item.file.name" @click="cycleZoom" />
           </div>
           <div
             class="lb-divider"
@@ -71,7 +76,24 @@ const dimsText = computed(() => {
   return `${it.origW}×${it.origH} → ${it.outW}×${it.outH}`
 })
 
-const zoomed = ref(false)
+// Zoom levels: fit (default), 100% (natural size), 200% (doubled).
+// Both layers share the wrapper's box, so scaling the wrapper scales them
+// together. The base width comes from the item fields, not the DOM:
+// compressed → outW, else original → origW (covers the recompress window).
+const zoomLevel = ref<'fit' | '100' | '200'>('fit')
+const baseW = computed(() => {
+  const it = props.item
+  const w = it.done && it.outUrl && it.outW ? it.outW : it.origW
+  return w > 0 ? w : 0
+})
+const compareStyle = computed(() => {
+  if (zoomLevel.value === 'fit' || !baseW.value) return {}
+  const factor = zoomLevel.value === '200' ? 2 : 1
+  return { width: `${baseW.value * factor}px` }
+})
+function cycleZoom() {
+  zoomLevel.value = zoomLevel.value === 'fit' ? '100' : zoomLevel.value === '100' ? '200' : 'fit'
+}
 const pos = ref(50)
 const compareRef = ref<HTMLElement | null>(null)
 

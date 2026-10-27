@@ -15,7 +15,7 @@
   >
     <template v-if="!compact">
       <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4m0 0L8 8m4-4l4 4" /><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" /></svg>
-      <strong>{{ t('dropTitle') }}</strong>
+      <strong>{{ isTouch ? t('dropTitleTouch') : t('dropTitle') }}</strong>
       <p>{{ isTouch ? t('dropSubTouch') : t('dropSub') }}</p>
     </template>
     <strong v-else class="add-more">{{ t('addMore') }}</strong>

@@ -1,5 +1,7 @@
 import { baseName, extOf } from './format'
 import { restoreExif } from './exif'
+import { gifFrameCount } from './gif'
+import { canEmbedPng, embedIcc, extractIcc, isDisplayP3 } from './icc'
 import type { CompressItem, Settings } from '../types'
 import {
   decodeHeicToPngBlob,
@@ -28,6 +30,11 @@ export interface CompressBlobSuccess {
   outName: string
   targetNote: string | null
   typeNote: string | null
+  // Final output type (after any canvas fallback flip), whether any pixel
+  // was transparent, and whether the input was an animated GIF.
+  outType: string
+  hasAlpha: boolean
+  isAnimatedGif: boolean
 }
 
 export interface CompressBlobFailure {
@@ -50,6 +57,9 @@ export interface CompressSuccess {
   view: 'comp'
   targetNote: string | null
   typeNote: string | null
+  outType: string
+  hasAlpha: boolean
+  isAnimatedGif: boolean
 }
 
 export interface CompressFailure {
@@ -73,10 +83,13 @@ function loadImage(blob: Blob, t: T): Promise<HTMLImageElement> {
 // use createImageBitmap (which also decodes off the caller's thread); the
 // main thread keeps <img> for its wider format coverage (SVG on older
 // Safari). Either way the caller gets a drawable source plus its size.
-async function decodeSource(blob: Blob, t: T): Promise<{ src: CanvasImageSource; w: number; h: number }> {
+async function decodeSource(blob: Blob, t: T, keepValues = false): Promise<{ src: CanvasImageSource; w: number; h: number }> {
   if (typeof document === 'undefined') {
     try {
-      const bmp = await createImageBitmap(blob)
+      // P3 path: 'none' keeps the source values intact for the display-p3
+      // canvas; the default would pre-convert them to sRGB, which the P3
+      // tag would then mislabel.
+      const bmp = await createImageBitmap(blob, keepValues ? { colorSpaceConversion: 'none' } : undefined)
       return { src: bmp, w: bmp.width, h: bmp.height }
     } catch {
       throw new Error(t('decodeError'))
@@ -121,31 +134,72 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
     const source: Blob = isHeic(file)
       ? await decodeHeicToPngBlob(file)
       : file
-    const decoded = await decodeSource(source, t)
+    // Animated GIF: walked from the file bytes (cheap, no decode), so the
+    // row can carry the "first frame only" tag even before compressing.
+    const isAnimatedGif = (file.type === 'image/gif' || /\.gif$/i.test(file.name))
+      ? gifFrameCount(new Uint8Array(await file.arrayBuffer())) > 1
+      : false
+    // Display P3: extract the profile from the source blob (for HEIC this
+    // is the decoded PNG, so a preserved iCCP still works). Only JPEG /
+    // WebP / PNG-with-compression can carry the profile back out; AVIF
+    // cannot, so it stays on the sRGB path rather than risk a mistag.
+    const srcIcc = await extractIcc(source)
+    let outType = s.format === 'original' ? file.type : s.format
+    if (isHeic(file) && s.format === 'original') outType = 'image/jpeg'
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/avif'].includes(outType)) outType = 'image/png'
+    let useP3 = srcIcc !== null && isDisplayP3(srcIcc)
+      && (outType === 'image/jpeg' || outType === 'image/webp'
+        || (outType === 'image/png' && canEmbedPng()))
+    const decoded = await decodeSource(source, t, useP3)
     const origW = decoded.w
     const origH = decoded.h
     let width = origW
     let height = origH
     const max = s.maxSize || 0
-    if (max > 0) {
-      const m = Math.max(width, height)
-      if (m > max) {
-        const scale = max / m
-        width = Math.round(width * scale)
-        height = Math.round(height * scale)
-      } else if (m < max && !s.noUpscale) {
-        // noUpscale off means upscaling to the longest side is genuinely allowed.
-        const scale = max / m
-        width = Math.round(width * scale)
-        height = Math.round(height * scale)
+    const mode = s.resizeMode ?? 'longest'
+    if (mode === 'percent') {
+      // Percent: 100 = unchanged, 0 (legacy "no limit") = unchanged.
+      if (max > 0 && max !== 100) {
+        let scale = max / 100
+        if (s.noUpscale && scale > 1) scale = 1
+        width = Math.max(1, Math.round(width * scale))
+        height = Math.max(1, Math.round(height * scale))
+      }
+    } else if (max > 0) {
+      if (mode === 'width' || mode === 'height') {
+        const dim = mode === 'width' ? width : height
+        if (dim > max || !s.noUpscale) {
+          const scale = max / dim
+          width = Math.max(1, Math.round(width * scale))
+          height = Math.max(1, Math.round(height * scale))
+        }
+      } else {
+        const m = Math.max(width, height)
+        if (m > max) {
+          const scale = max / m
+          width = Math.max(1, Math.round(width * scale))
+          height = Math.max(1, Math.round(height * scale))
+        } else if (m < max && !s.noUpscale) {
+          // noUpscale off means upscaling to the longest side is genuinely allowed.
+          const scale = max / m
+          width = Math.max(1, Math.round(width * scale))
+          height = Math.max(1, Math.round(height * scale))
+        }
       }
     }
-    const canvas = makeCanvas()
-    const ctx = canvas.getContext('2d', { willReadFrequently: true })!
-
-    let outType = s.format === 'original' ? file.type : s.format
-    if (isHeic(file) && s.format === 'original') outType = 'image/jpeg'
-    if (!['image/jpeg', 'image/png', 'image/webp', 'image/avif'].includes(outType)) outType = 'image/png'
+    let canvas = makeCanvas()
+    let ctx = canvas.getContext('2d', { willReadFrequently: true, ...(useP3 ? { colorSpace: 'display-p3' } : {}) })!
+    if (useP3) {
+      // A mistagged output (P3 tag on sRGB pixels) is worse than no tag:
+      // only proceed when the canvas really honors display-p3. Browsers
+      // without getContextAttributes fall back to the sRGB path.
+      const attrs = (ctx as unknown as { getContextAttributes?: () => { colorSpace?: string } }).getContextAttributes?.()
+      if (!attrs || attrs.colorSpace !== 'display-p3') {
+        useP3 = false
+        canvas = makeCanvas()
+        ctx = canvas.getContext('2d', { willReadFrequently: true })!
+      }
+    }
     let targetNote: string | null = null
     let typeNote: string | null = null
 
@@ -154,12 +208,34 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
 
     // Draw at (w, h), read pixels, encode. Mutates outType/typeNote only on
     // the canvas fallback path (Safari WebP -> JPEG).
+    // Transparency is scanned once per run, on a bare canvas before any
+    // JPEG fill: the fill would destroy the alpha channel. It survives
+    // resizing except for pathological single-pixel cases, and the flag
+    // only feeds the JPEG note, so one pass is enough.
+    let alphaScan: boolean | null = null
     const encodeAt = async (w: number, h: number, q?: number): Promise<Blob> => {
       canvas.width = w
       canvas.height = h
-      if (outType === 'image/jpeg') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h) }
+      if (alphaScan === null) {
+        // Scan on a bare canvas: the JPEG white fill below would destroy
+        // the alpha channel before the read, so the first candidate is
+        // drawn twice (once unfilled, just for the scan).
+        const ac = makeCanvas()
+        ac.width = w
+        ac.height = h
+        const actx = ac.getContext('2d', { willReadFrequently: true })!
+        actx.drawImage(decoded.src, 0, 0, w, h)
+        const d = actx.getImageData(0, 0, w, h).data
+        let has = false
+        for (let i = 3; i < d.length; i += 4) {
+          if (d[i] < 255) { has = true; break }
+        }
+        alphaScan = has
+      }
+      if (outType === 'image/jpeg') { ctx.fillStyle = s.jpegFill || '#ffffff'; ctx.fillRect(0, 0, w, h) }
       ctx.drawImage(decoded.src, 0, 0, w, h)
       const pixels: RgbaImage = ctx.getImageData(0, 0, w, h)
+      let out: Blob
       try {
         let buf: ArrayBuffer
         if (outType === 'image/jpeg') buf = await encodeMozjpeg(pixels, Math.round((q ?? 0.8) * 100))
@@ -167,7 +243,7 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
         else if (outType === 'image/avif') buf = await encodeAvif(pixels, Math.round((q ?? 0.8) * 100))
         else if (s.quantize) buf = await encodePngQuantized(pixels, Math.round((q ?? 0.8) * 100))
         else buf = await encodePng(pixels)
-        return new Blob([buf], { type: outType })
+        out = new Blob([buf], { type: outType })
       } catch (err) {
         // WASM unavailable: canvas fallback for the formats canvas can do.
         // A warning, not silence: a fallback that nobody can see is a bug
@@ -183,12 +259,20 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
           typeNote = t('typeNoteWebp')
           const jpeg = await canvasEncode('image/jpeg', q)
           if (!jpeg) throw new Error(t('formatError'))
-          return jpeg
+          out = jpeg
+        } else {
+          const fallback = await canvasEncode(outType, outType === 'image/png' ? undefined : q)
+          if (!fallback || fallback.type !== outType) throw new Error(t('formatError'))
+          out = fallback
         }
-        const fallback = await canvasEncode(outType, outType === 'image/png' ? undefined : q)
-        if (!fallback || fallback.type !== outType) throw new Error(t('formatError'))
-        return fallback
       }
+      // P3: tag every candidate, so the size search sees the true final
+      // size (tag included) and the target guarantee still holds exactly.
+      if (useP3 && srcIcc) {
+        const bytes = new Uint8Array(await out.arrayBuffer())
+        out = new Blob([await embedIcc(bytes, outType, srcIcc)], { type: outType })
+      }
+      return out
     }
 
     let blob: Blob | null = null
@@ -281,6 +365,9 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
         outName: file.name,
         targetNote: t('alreadyBest'),
         typeNote: null,
+        outType: file.type,
+        hasAlpha: alphaScan ?? false,
+        isAnimatedGif,
       }
     }
     return {
@@ -293,9 +380,12 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
       outSize: blob!.size,
       outW: width,
       outH: height,
-      outName: baseName(file.name) + '-compressed.' + extOf(outType),
+      outName: baseName(file.name) + (s.keepOriginalName ? '' : '-compressed') + '.' + extOf(outType),
       targetNote,
       typeNote,
+      outType,
+      hasAlpha: alphaScan ?? false,
+      isAnimatedGif,
     }
   } catch (err) {
     return { done: false, error: err instanceof Error ? err.message : t('compressFail') }
@@ -320,5 +410,8 @@ export async function compressItem(item: CompressItem, s: Settings, t: T, canvas
     view: 'comp',
     targetNote: res.targetNote,
     typeNote: res.typeNote,
+    outType: res.outType,
+    hasAlpha: res.hasAlpha,
+    isAnimatedGif: res.isAnimatedGif,
   }
 }

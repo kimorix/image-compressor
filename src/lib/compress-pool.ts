@@ -123,6 +123,9 @@ export class CompressPool {
         view: 'comp',
         targetNote: res.targetNote ?? null,
         typeNote: res.typeNote ?? null,
+        outType: res.outType ?? ctx.item.file.type,
+        hasAlpha: res.hasAlpha ?? false,
+        isAnimatedGif: res.isAnimatedGif ?? false,
       })
       return
     }

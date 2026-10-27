@@ -27,6 +27,9 @@ export interface WorkerResult {
   typeNote?: string | null
   blob?: Blob | null
   alreadyBest?: boolean
+  outType?: string
+  hasAlpha?: boolean
+  isAnimatedGif?: boolean
   error?: string
 }
 
@@ -52,6 +55,9 @@ self.onmessage = async (e: MessageEvent<WorkerTask>) => {
       typeNote: res.typeNote,
       blob: res.alreadyBest ? null : res.outBlob,
       alreadyBest: res.alreadyBest,
+      outType: res.outType,
+      hasAlpha: res.hasAlpha,
+      isAnimatedGif: res.isAnimatedGif,
     })
   } catch (err) {
     self.postMessage({

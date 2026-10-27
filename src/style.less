@@ -33,8 +33,10 @@ header {
   p { color: var(--subtle); margin: 8px 0 0; font-size: 14px; }
 }
 .badge {
-  display: inline-block; background: var(--surface-2); color: var(--muted);
-  font-size: 12px; padding: 2px 8px; border-radius: 999px; margin-left: 8px; vertical-align: middle;
+  display: inline-flex; align-items: center; gap: 4px;
+  background: var(--green); color: #fff;
+  font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; margin-left: 8px; vertical-align: middle;
+  svg { width: 12px; height: 12px; display: block; }
 }
 .header-actions { display: flex; gap: 10px; align-items: center; }
 .gh-btn {
@@ -99,6 +101,7 @@ main { max-width: 920px; margin: 0 auto; padding: 20px 16px 48px; }
     display: flex; align-items: center; gap: 8px; margin-top: 10px;
     font-size: 14px; color: var(--text); cursor: pointer;
     input[type="checkbox"] { width: 18px; height: 18px; margin: 0; flex-shrink: 0; }
+    input[type="color"] { width: 36px; height: 26px; padding: 2px; margin: 0; flex-shrink: 0; border: 1px solid var(--border); border-radius: 6px; background: none; cursor: pointer; }
   }
 }
 .settings-note { grid-column: 1 / -1; font-size: 13px; color: var(--subtle); }
@@ -108,7 +111,7 @@ main { max-width: 920px; margin: 0 auto; padding: 20px 16px 48px; }
   .presets-label { font-size: 13px; color: var(--subtle); }
   .preset-btn {
     min-height: 36px; padding: 6px 12px; font-size: 13px;
-    &.active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+    &.active { border-color: var(--accent); color: var(--accent); background: rgba(94,106,210,.22); }
   }
 }
 .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
@@ -151,6 +154,15 @@ button {
 // drops the double-tap zoom that kept magnifying the page on accidental
 // double taps. Deliberately not user-scalable=no: pinch zoom stays.
 html { touch-action: manipulation; }
+// Desktop, no results yet: the upload card spans both grid rows so the
+// dropzone (flex-filled, content centered) stands as tall as the settings
+// card, instead of leaving a blank strip under a short upload card.
+// align-self:stretch is load-bearing: the grid uses align-items:start,
+// so a spanning item would otherwise stay at its content height.
+@media (min-width: 720px) {
+  main.no-result #uploadCard { grid-row: 1 / -1; align-self: stretch; display: flex; flex-direction: column; }
+  main.no-result #dropzone { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+}
 // Desktop: settings are a sticky right sidebar next to upload + results,
 // so tuning never means scrolling past the list to find the controls.
 @media (min-width: 720px) {
@@ -218,6 +230,19 @@ html { touch-action: manipulation; }
   .dims {
     color: var(--subtle); font-size: 13px; margin-top: 2px;
   }
+  .small-note, .alpha-note {
+    color: var(--subtle); font-size: 13px; margin-top: 2px;
+  }
+  .gif-tag {
+    display: inline-block; margin-top: 4px; padding: 1px 9px; border-radius: 999px;
+    background: var(--surface-2); border: 1px solid var(--border); color: var(--subtle); font-size: 12px; font-weight: 700;
+  }
+  // Inline text button inside a note (e.g. "use WebP instead"): no chrome,
+  // just an accent-coloured underlined action.
+  .link-btn {
+    background: none; border: none; padding: 0; margin: 0; min-height: 0;
+    color: var(--accent); font-size: inherit; font-weight: 600; text-decoration: underline; cursor: pointer;
+  }
   // Row main line is one line only: sizes + inline saving percent.
   .save-pct { color: var(--green); font-weight: 700; }
   // 0% is not a success: the already-best badge is grey, not green.
@@ -240,11 +265,16 @@ html { touch-action: manipulation; }
 // Both row icons are flex-centered the same way: the old <button> relied on
 // baseline alignment, which sat the trash icon a pixel or two off the
 // download icon.
-.item-actions button.remove-btn {
+.item-actions button.remove-btn,
+.item-actions button.copy-btn,
+.item-actions button.share-btn {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 44px; min-height: 44px; padding: 0; font-size: 22px; line-height: 1;
   &:hover:not(:disabled) { color: var(--red); border-color: var(--red); }
 }
+.item-actions button.copy-btn:hover:not(:disabled),
+.item-actions button.share-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.item-actions .copy-ok { font-size: 20px; color: var(--green); }
 .item-actions a.dl-icon {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 44px; min-height: 44px; border-radius: 8px;
@@ -254,22 +284,29 @@ html { touch-action: manipulation; }
 .item-actions svg { width: 20px; height: 20px; display: block; }
 .lb-overlay {
   position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;
-  background: rgba(0,0,0,.82); padding: 16px; overscroll-behavior: contain;
+  background: #000; padding: 16px; overscroll-behavior: contain;
 }
 .lb-box { max-width: 94vw; max-height: 94vh; display: flex; flex-direction: column; gap: 10px; }
 .lb-bar { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
 .lb-close { min-width: 44px; min-height: 44px; padding: 0; font-size: 22px; line-height: 1; }
 .lb-stage {
-  overflow: auto; display: flex; align-items: center; justify-content: center;
+  overflow: auto; display: flex;
 }
 // Compare slider: the wrapper shrink-wraps the base (compressed) image,
 // so the original layer (absolute, inset 0) shares its exact box at any
 // zoom, and scrolling the stage pans both layers together.
 // line-height 0: template whitespace between the layers must not add a
 // line box to the wrapper's height.
-.lb-compare { position: relative; display: inline-block; line-height: 0; }
+// margin:auto on the wrapper (not flex centering on the stage): a
+// zoomed image wider than the stage would otherwise clip its left side
+// unreachable, because flex centering overflows symmetrically.
+// flex-shrink:0 is load-bearing: without it the wrapper shrinks to the
+// stage width at 200% and there is nothing to pan.
+.lb-compare { position: relative; display: inline-block; line-height: 0; margin: auto; flex-shrink: 0; }
 .lb-img { display: block; max-width: 92vw; max-height: 76vh; object-fit: contain; cursor: zoom-in; }
-.lb-stage.zoomed .lb-img { max-width: none; max-height: none; cursor: zoom-out; }
+// At a zoom level the base image fills the wrapper's explicit width, so
+// both layers scale together (the original layer already fills it).
+.lb-stage.zoomed .lb-img { max-width: none; max-height: none; width: 100%; cursor: zoom-out; }
 .lb-orig-clip { position: absolute; inset: 0; }
 .lb-orig-clip .lb-img { width: 100%; height: 100%; }
 .lb-divider {
@@ -293,10 +330,18 @@ html { touch-action: manipulation; }
   box-shadow: 0 2px 8px rgba(0,0,0,.5); pointer-events: none;
 }
 .lb-side-tag {
-  position: absolute; top: 8px; z-index: 3; background: rgba(0,0,0,.65);
+  position: absolute; top: 8px; z-index: 3; background: rgba(0,0,0,.75);
+  border: 1px solid rgba(255,255,255,.25);
   color: #fff; font-size: 12px; padding: 1px 7px; border-radius: 999px; pointer-events: none;
   &.left { left: 8px; }
   &.right { right: 8px; }
+}
+// Zoom level buttons: fit / 100% / 200%, same row as the close button.
+.lb-zoom { display: flex; gap: 6px; margin-right: auto; }
+.lb-zoom-btn {
+  min-width: 44px; min-height: 36px; padding: 6px 10px; font-size: 13px;
+  background: rgba(255,255,255,.12); border-color: transparent; color: #fff;
+  &.active { background: #fff; border-color: #fff; color: #111; }
 }
 .lb-hint { text-align: center; color: #bbb; font-size: 13px; }
 .lb-info { text-align: center; color: #bbb; font-size: 13px; }
@@ -305,8 +350,16 @@ html { touch-action: manipulation; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 footer { max-width: 920px; margin: 0 auto; padding: 0 16px 40px; color: var(--subtle); font-size: 13px; line-height: 1.7; }
 @media (max-width: 600px) {
-  header { padding: 24px 16px 0; }
+  header { padding: 24px 16px 0; flex-wrap: nowrap; align-items: center; gap: 10px; }
   header h1 { font-size: 26px; }
+  // Mobile: the subtitle goes away and the three top controls shrink to
+  // icons beside the title, instead of taking their own row.
+  header p { display: none; }
+  .header-actions { gap: 6px; flex-shrink: 0; }
+  .gh-btn .gh-text { display: none; }
+  .gh-btn { padding: 9px 10px; }
+  .gh-btn svg { width: 18px; height: 18px; display: block; }
+  .lang-select { padding: 9px 28px 9px 10px; }
   main { padding: 16px 12px 40px; }
   .card { padding: 16px; }
   #dropzone { padding: 28px 16px; }
@@ -320,6 +373,7 @@ footer { max-width: 920px; margin: 0 auto; padding: 0 16px 40px; color: var(--su
     grid-area: actions; gap: 8px;
     button { padding: 8px 14px; font-size: 14px; min-height: 40px; }
     button.remove-btn { padding: 0; }
+    button.copy-btn, button.share-btn { padding: 0; }
     a.dl-icon { min-height: 40px; }
   }
 }
