@@ -94,6 +94,13 @@ const items = shallowRef<CompressItem[]>([])
 // are visible right under the upload area.
 const settingsCollapsed = ref(true)
 const settingsSummary = computed(() => {
+  // Smart mode has no format/quality to show: it picks per image.
+  if (settings.mode === 'smart') {
+    const parts = [t('modeSmart')]
+    if (settings.smartKeepOriginal) parts.push(t('smartKeepOriginalShort'))
+    if (settings.maxSize) parts.push(settings.resizeMode === 'percent' ? `${settings.maxSize}%` : `${settings.maxSize}px`)
+    return parts.join(' · ')
+  }
   const fmt = settings.format === 'original' ? t('fmtOriginal')
     : settings.format === 'image/webp' ? 'WebP' : settings.format.split('/')[1].toUpperCase()
   const mode = settings.mode === 'target' ? `≤${settings.targetSize}KB` : `${settings.quality}%`
@@ -252,7 +259,7 @@ function isUnaffected(item: CompressItem, next: Settings): boolean {
   if (!item.done || item.outSize < item.file.size) return false
   const prev = item.lastSettings
   if (!prev) return false
-  if (prev.format !== next.format || prev.mode !== next.mode || prev.quantize !== next.quantize) return false
+  if (prev.format !== next.format || prev.mode !== next.mode || prev.quantize !== next.quantize || prev.smartKeepOriginal !== next.smartKeepOriginal) return false
   if (next.mode === 'quality' && next.quality < prev.quality) return false
   if (next.mode === 'target' && next.targetSize < prev.targetSize) return false
   const origMax = Math.max(item.origW, item.origH)

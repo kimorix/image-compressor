@@ -31,7 +31,7 @@ export interface CompressItem {
 
 export interface Settings {
   format: string
-  mode: 'quality' | 'target'
+  mode: 'quality' | 'target' | 'smart'
   targetSize: number
   quality: number
   maxSize: number
@@ -43,8 +43,9 @@ export interface Settings {
   keepExif: boolean
   // JPEG fill for transparent pixels (default white); empty = white.
   jpegFill: string
-  // Output name keeps the original filename instead of adding -compressed.
-  keepOriginalName: boolean
+  // Smart mode: keep the input's own format instead of auto-picking
+  // WebP/PNG. Quality/size rules still apply (q80, resize, PNG quantize).
+  smartKeepOriginal: boolean
 }
 
 export function newItem(file: File): CompressItem {

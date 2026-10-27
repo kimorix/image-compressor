@@ -1,9 +1,10 @@
 import type { Settings } from '../types'
 
-// The settings the app starts with.
+// The settings the app starts with. Smart is the default: most users
+// just want smaller files, not format/quality homework.
 export const DEFAULT_SETTINGS: Settings = {
   format: 'image/webp',
-  mode: 'quality',
+  mode: 'smart',
   targetSize: 200,
   quality: 80,
   maxSize: 1920,
@@ -13,6 +14,7 @@ export const DEFAULT_SETTINGS: Settings = {
   keepExif: false,
   jpegFill: '#ffffff',
   keepOriginalName: false,
+  smartKeepOriginal: false,
 }
 
 // One-tap scenes: WeChat chat images (JPEG, 1920), WeChat article images
@@ -29,7 +31,8 @@ export const PRESETS: { id: string; patch: Partial<Settings> }[] = [
 
 // Which preset (if any) the current settings match. Shared by the settings
 // panel (active highlight) and the app (click = apply; clicking the active
-// preset again is a no-op, only a manual tweak clears the highlight).
+// preset again cancels back to the pre-preset snapshot). Smart mode never
+// matches a preset (presets are quality/target by definition).
 // Presets are longest-side by definition, so a width/height/percent resize
 // never matches one even when the value coincides.
 export function matchPreset(s: Settings): string | null {
