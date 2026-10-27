@@ -163,6 +163,36 @@ html { touch-action: manipulation; }
   #resultCard { grid-area: result; }
   .card { margin-bottom: 0; }
 }
+// Mobile with images: results jump above the settings card (upload ->
+// results -> settings), the settings fold to a one-line summary, and a
+// sticky bottom bar replaces the top actions. Desktop keeps the grid.
+.settings-summary { display: none; }
+.sticky-bar, .sticky-spacer { display: none; }
+@media (max-width: 719px) {
+  main { display: flex; flex-direction: column; }
+  #uploadCard { order: 1; }
+  #resultCard { order: 2; }
+  #settingsCard { order: 3; }
+  // Top actions are redundant once the sticky bar exists.
+  #resultCard .actions { display: none; }
+  .settings-summary {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    width: 100%; padding: 12px 4px; margin-bottom: 4px;
+    background: transparent; border: none; color: var(--text);
+    font-size: 14px; font-weight: 600; text-align: left; cursor: pointer;
+  }
+  .settings-body-collapsed { display: none; }
+  .sticky-bar {
+    display: flex; align-items: center; gap: 10px;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+    padding: 10px 12px; padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    background: var(--card); border-top: 1px solid var(--border);
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, .15);
+  }
+  .sticky-bar .sticky-download { flex: 1; }
+  .sticky-bar .sticky-clear { background: transparent; }
+  .sticky-spacer { display: block; height: calc(64px + env(safe-area-inset-bottom)); }
+}
 .progress {
   margin-bottom: 14px;
   .bar {
@@ -184,6 +214,9 @@ html { touch-action: manipulation; }
   .name { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sizes {
     color: var(--subtle); font-size: 14px; margin-top: 4px;
+  }
+  .dims {
+    color: var(--subtle); font-size: 13px; margin-top: 2px;
   }
   // Row main line is one line only: sizes + inline saving percent.
   .save-pct { color: var(--green); font-weight: 700; }
@@ -221,7 +254,7 @@ html { touch-action: manipulation; }
 .item-actions svg { width: 20px; height: 20px; display: block; }
 .lb-overlay {
   position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;
-  background: rgba(0,0,0,.82); padding: 16px;
+  background: rgba(0,0,0,.82); padding: 16px; overscroll-behavior: contain;
 }
 .lb-box { max-width: 94vw; max-height: 94vh; display: flex; flex-direction: column; gap: 10px; }
 .lb-bar { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }

@@ -16,6 +16,7 @@
         <span v-else-if="item.done"><span v-html="t('sizes', fmtSize(item.file.size), fmtSize(item.outSize))"></span><span v-if="!isAlreadyBest && savedPct > 0" class="save-pct"> −{{ savedPct }}%</span><span v-if="isAlreadyBest" class="best-tag">{{ t('alreadyBest') }}</span></span>
         <span v-else>{{ fmtSize(item.file.size) }} · {{ t('processing') }}</span>
       </div>
+      <div v-if="dimsChanged" class="dims">{{ item.origW }}×{{ item.origH }} → {{ item.outW }}×{{ item.outH }}</div>
     </div>
     <div class="item-actions">
       <a v-if="item.done && item.outUrl" class="dl-icon" :href="item.outUrl" :download="item.outName ?? undefined" :title="t('btnDownload')" :aria-label="t('btnDownload')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></a>
@@ -114,4 +115,12 @@ const savedPct = computed(() => {
 // so done + outSize >= file.size is exactly the already-best case, and it
 // can never go stale across recompresses.
 const isAlreadyBest = computed(() => props.item.done && props.item.outSize >= props.item.file.size)
+
+// Dims line shows only when the output was actually resized (and kept):
+// already-best keeps the original file, so its dims are equal and no line
+// appears; outW/outH at 0 (never assigned) also hides it.
+const dimsChanged = computed(() => props.item.done
+  && props.item.origW > 0 && props.item.origH > 0
+  && props.item.outW > 0 && props.item.outH > 0
+  && (props.item.origW !== props.item.outW || props.item.origH !== props.item.outH))
 </script>

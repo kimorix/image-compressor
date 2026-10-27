@@ -105,6 +105,31 @@ function onDividerKey(e: KeyboardEvent) {
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape') emit('close')
 }
-onMounted(() => window.addEventListener('keydown', onKey))
-onUnmounted(() => window.removeEventListener('keydown', onKey))
+// Scroll lock: while the preview is open, swipes on the overlay must not
+// scroll the page behind (iOS Safari chains them to the document).
+// overflow:hidden alone still lets iOS scroll through a fixed overlay, so
+// the body itself is pinned: position fixed + top offset preserves the
+// visual position, and unmount restores it. The stage keeps its own
+// overflow:auto, so zoomed panning still works.
+let savedY = 0
+function lockScroll() {
+  savedY = window.scrollY
+  const b = document.body
+  b.style.position = 'fixed'
+  b.style.top = `-${savedY}px`
+  b.style.left = '0'
+  b.style.right = '0'
+  b.style.width = '100%'
+}
+function unlockScroll() {
+  const b = document.body
+  b.style.position = ''
+  b.style.top = ''
+  b.style.left = ''
+  b.style.right = ''
+  b.style.width = ''
+  window.scrollTo(0, savedY)
+}
+onMounted(() => { window.addEventListener('keydown', onKey); lockScroll() })
+onUnmounted(() => { window.removeEventListener('keydown', onKey); unlockScroll() })
 </script>

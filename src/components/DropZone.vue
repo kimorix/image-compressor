@@ -41,6 +41,7 @@ const isTouch = typeof window !== 'undefined'
 function openPicker() {
   fileInput.value?.click()
 }
+defineExpose({ openPicker })
 
 function onPick() {
   const files = fileInput.value?.files

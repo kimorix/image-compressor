@@ -14,12 +14,17 @@
   </header>
   <main>
     <div class="card" id="uploadCard">
-      <DropZone :t="t" :compact="items.length > 0" @files="addFiles" />
+      <DropZone ref="dropzoneRef" :t="t" :compact="items.length > 0" @files="addFiles" />
       <p v-if="fileHint" class="file-hint">{{ fileHint }}</p>
     </div>
 
     <div class="card" id="settingsCard">
-      <SettingsPanel :settings="settings" :t="t" @update="onSettingsUpdate" @preset="onPreset" />
+      <button v-if="items.length > 0" class="settings-summary" type="button" :aria-expanded="!settingsCollapsed" @click="settingsCollapsed = !settingsCollapsed">
+        <span>{{ settingsSummary }}</span><span class="settings-caret">{{ settingsCollapsed ? '▾' : '▴' }}</span>
+      </button>
+      <div :class="{ 'settings-body-collapsed': items.length > 0 && settingsCollapsed }">
+        <SettingsPanel :settings="settings" :t="t" @update="onSettingsUpdate" @preset="onPreset" />
+      </div>
     </div>
 
     <div class="card" id="resultCard" v-show="items.length > 0">
@@ -42,9 +47,15 @@
       </div>
     </div>
   </main>
-  <!-- Global recompress indicator: the summary spinner is easy to scroll
-  past, so a floating pill shows the same state anywhere on the page.
-  pointer-events none: it must never block taps while a run is in flight. -->
+  <div class="sticky-bar" v-show="items.length > 0">
+    <button class="sticky-add" type="button" @click="openPicker">{{ t('addBtn') }}</button>
+    <button class="sticky-clear" type="button" :disabled="items.length === 0" @click="onClearClick">{{ clearConfirm ? t('clearConfirm') : t('clearAll') }}</button>
+    <button class="sticky-download primary" type="button" :disabled="doneCount === 0 || zipping" @click="downloadAll">{{ t('downloadAll') }}</button>
+  </div>
+  <div class="sticky-spacer" v-show="items.length > 0" aria-hidden="true"></div>
+  <!-- Global recompress indicator: the centered "processing" pill is the
+  single loading indicator. pointer-events none: it must never block taps
+  while a run is in flight. -->
   <div class="global-loading" :class="{ show: recompressing }" aria-hidden="true"><span class="gl-spin"></span><span>{{ t('processing') }}</span></div>
   <div v-if="pageDragging" class="page-drop-hint" aria-hidden="true">{{ t('dropAnywhere') }}</div>
   <Lightbox v-if="lbItem" :item="lbItem" :t="t" @close="lightboxId = null" />
@@ -76,6 +87,24 @@ watch(settings, () => saveSettings(settings), { deep: true })
 // shallowRef on purpose: File/Blob objects must never be wrapped by Vue's
 // reactive proxy (it breaks platform brand checks like createObjectURL).
 const items = shallowRef<CompressItem[]>([])
+
+// Mobile settings collapse: with images, the settings card folds to a
+// one-line summary (tapping it expands). Default collapsed so the results
+// are visible right under the upload area.
+const settingsCollapsed = ref(true)
+const settingsSummary = computed(() => {
+  const fmt = settings.format === 'original' ? t('fmtOriginal')
+    : settings.format === 'image/webp' ? 'WebP' : settings.format.split('/')[1].toUpperCase()
+  const mode = settings.mode === 'target' ? `≤${settings.targetSize}KB` : `${settings.quality}%`
+  const parts = [fmt, mode]
+  if (settings.maxSize) parts.push(`${settings.maxSize}px`)
+  return parts.join(' · ')
+})
+
+// Sticky-bar "+ Add" reuses the dropzone's picker (a label for the hidden
+// file input is unreliable on iOS Safari; a programmatic click is not).
+const dropzoneRef = ref<{ openPicker: () => void } | null>(null)
+function openPicker() { dropzoneRef.value?.openPicker() }
 
 function t(key: string, ...args: (string | number)[]): string {
   return tx(lang.value, key, ...args)
