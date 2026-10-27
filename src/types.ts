@@ -27,28 +27,39 @@ export interface CompressItem {
   // each item against its own snapshot, so interleaved runs can't
   // wrongly skip an item whose displayed result predates the snapshot.
   lastSettings: Settings | null
+  // Folder the file came from when a directory was dropped ('' otherwise);
+  // the zip keeps this structure.
+  relDir: string
 }
 
 export interface Settings {
+  // 'auto' picks per image from its pixels (photo -> WebP, few colors ->
+  // palette PNG, transparency kept); 'original' keeps the input's own
+  // format; anything else is an output MIME type.
   format: string
-  mode: 'quality' | 'target' | 'smart'
+  // How quality is chosen, independent of the format: 'auto' searches the
+  // lowest quality whose SSIM against the source stays above a threshold;
+  // 'quality' is a fixed value; 'target' fits a file-size cap.
+  mode: 'auto' | 'quality' | 'target'
   targetSize: number
   quality: number
   maxSize: number
   // How maxSize is read: longest side (default), exact width, exact height,
-  // or a percent of the original size.
-  resizeMode: 'longest' | 'width' | 'height' | 'percent'
+  // a percent of the original size, or 'exact': scale to cover
+  // maxSize x maxHeight and center-crop (ID photos).
+  resizeMode: 'longest' | 'width' | 'height' | 'percent' | 'exact'
+  // Height for resizeMode 'exact' (ignored otherwise).
+  maxHeight: number
   noUpscale: boolean
   quantize: boolean
   keepExif: boolean
   // JPEG fill for transparent pixels (default white); empty = white.
   jpegFill: string
-  // Smart mode: keep the input's own format instead of auto-picking
-  // WebP/PNG. Quality/size rules still apply (q80, resize, PNG quantize).
-  smartKeepOriginal: boolean
+  // Download names without the -compressed suffix.
+  keepOriginalName: boolean
 }
 
-export function newItem(file: File): CompressItem {
+export function newItem(file: File, relDir = ''): CompressItem {
   return {
     id: Date.now() + '-' + Math.random().toString(36).slice(2, 8),
     file,
@@ -69,5 +80,6 @@ export function newItem(file: File): CompressItem {
     hasAlpha: false,
     isAnimatedGif: false,
     lastSettings: null,
+    relDir,
   }
 }
