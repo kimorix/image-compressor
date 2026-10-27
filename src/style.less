@@ -2349,3 +2349,165 @@ main {
     min-height: 44px;
   }
 }
+
+/* ===== 移动端紧凑结果布局 =====
+   Phones have ~250px of usable height after the header, upload and summary.
+   The old row used five stacked lines plus a full-width action row (~250px
+   per image), so one screen showed barely one result. The compact row keeps
+   the same information hierarchy in three lines: name + format, sizes, and
+   status + actions; dimensions move to the lightbox, and the redundant
+   upload card is replaced by the sticky "add" button once results exist. */
+.row-bottom {
+  display: contents;
+}
+@media (max-width: 719px) {
+  // The sticky bar already has "添加"; a second large dashed dropzone above
+  // the list only pushed the results below the fold.
+  #uploadCard.has-items:not(.show-hint) {
+    display: none;
+  }
+  #resultCard {
+    padding: 12px 12px 8px;
+  }
+  #resultCard .result-head {
+    margin-bottom: 8px;
+  }
+  #resultCard .result-head h3 {
+    font-size: 14px;
+  }
+  .stat-strip {
+    padding: 6px 0;
+    border-radius: 8px;
+  }
+  .stat {
+    gap: 0;
+    padding: 0 4px;
+  }
+  .stat-label {
+    font-size: 10px;
+  }
+  .stat-value {
+    font-size: 13px;
+    line-height: 1.25;
+  }
+  // The absolute saved bytes are secondary; the percent and all-item totals
+  // remain. This drops one line from the summary on every phone.
+  .stat-sub {
+    display: none;
+  }
+  .item {
+    grid-template-columns: 56px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    padding: 11px 0;
+  }
+  .item .thumb {
+    width: 56px;
+    height: 56px;
+  }
+  .item .row-main {
+    gap: 3px 6px;
+    align-items: center;
+  }
+  // Name and format share one line; the name truncates, the tags stay whole.
+  .item .cell-name {
+    flex-basis: 100%;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 5px;
+  }
+  .item .cell-name .name {
+    flex: 0 1 auto;
+    min-width: 0;
+    font-size: 13px;
+  }
+  .item .name-tags {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    gap: 3px;
+  }
+  .item .fmt-tag,
+  .item .best-tag {
+    font-size: 10px;
+    line-height: 1.5;
+    padding: 0 4px;
+  }
+  .item .orig-size,
+  .item .comp-size,
+  .item .save-cell {
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .item .save-pct {
+    font-size: 12px;
+  }
+  // Dimensions are in the lightbox; keeping them here cost a full line for
+  // every finished image and was the main reason rows felt long.
+  .item .dims {
+    display: none;
+  }
+  .item .row-bottom {
+    display: flex;
+    flex-basis: 100%;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px 6px;
+  }
+  .row-bottom .cell-status {
+    flex: none;
+  }
+  .row-bottom .item-actions {
+    flex-basis: auto;
+    margin-left: auto;
+    gap: 4px;
+  }
+  // Keep 44px finger targets even though the icons are 20px.
+  .row-bottom .item-actions button,
+  .row-bottom .item-actions a.dl-icon {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .row-bottom .status-pill {
+    font-size: 10px;
+    line-height: 1.6;
+    padding: 0 6px;
+  }
+  .item .note-row {
+    margin-top: 2px;
+  }
+  // Three buttons do not fit 320px in German ("+ Hinzufügen / Liste leeren /
+  // Alle herunterladen" overflowed by 8px). Clearing is available in More,
+  // so the sticky bar keeps only the two actions that must be one tap away.
+  .sticky-bar .sticky-clear {
+    display: none;
+  }
+  // iOS zooms the whole page when a focused form control is under 16px. The
+  // language select and the settings selects were 14px, so switching language
+  // on a phone could visibly zoom the layout and break the 320px shell. Keep
+  // every text control at 16px on phones (the number inputs already were).
+  .lang-select,
+  .settings .srow select,
+  .settings input[type="number"],
+  .settings input[type="text"] {
+    font-size: 16px;
+  }
+}
+
+/* At 320–360px the two-column settings grid leaves ~150px for a select;
+   German/French option labels ("Benutzerdefiniert", "Personnalisé") need
+   more than that at the 16px phone size. Stack label above control instead
+   of clipping the selected text. */
+@media (max-width: 360px) {
+  .settings {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px 0;
+  }
+  .settings .srow-label {
+    padding-top: 0;
+    max-width: none;
+  }
+  .settings .srow-ctl {
+    gap: 8px;
+  }
+}

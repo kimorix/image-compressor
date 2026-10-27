@@ -24,7 +24,7 @@
       </div>
     </aside>
     <main :class="{ 'no-result': items.length === 0 }" v-show="view === 'tool'">
-    <div class="card" id="uploadCard">
+    <div class="card" id="uploadCard" :class="{ 'has-items': items.length > 0, 'show-hint': !!fileHint }">
       <DropZone ref="dropzoneRef" :t="t" :compact="items.length > 0" @files="addFiles" />
       <p v-if="fileHint" class="file-hint">{{ fileHint }}</p>
     </div>
@@ -80,10 +80,10 @@
           @retry="retryItem"
         />
       </div>
-      <div v-if="items.length > PAGE_SIZE" class="pager">
-        <button type="button" :disabled="page <= 1" @click="page--">{{ t('pagePrev') }}</button>
+      <div v-if="items.length > pageSize" class="pager">
+        <button type="button" :disabled="page <= 1" @click="goPage(-1)">{{ t('pagePrev') }}</button>
         <span class="pager-label">{{ t('pageLabel', page, pageCount) }}</span>
-        <button type="button" :disabled="page >= pageCount" @click="page++">{{ t('pageNext') }}</button>
+        <button type="button" :disabled="page >= pageCount" @click="goPage(1)">{{ t('pageNext') }}</button>
       </div>
       <div v-if="allAlreadyBest" class="dl-note">{{ t('allBestNote', items.length) }}</div>
     </div>
@@ -170,7 +170,7 @@
     <button type="button" @click="goHistory">{{ t('navHistory') }}</button>
     <button type="button" @click="toggleTheme(); moreOpen = false">{{ t('moreTheme') }}</button>
     <a href="https://github.com/kimorix/image-compressor" target="_blank" rel="noopener">{{ t('githubBtn') }}</a>
-    <button type="button" :disabled="items.length === 0" @click="onClearClick(); moreOpen = false">{{ t('clearAll') }}</button>
+    <button type="button" :disabled="items.length === 0" @click="onMoreClear">{{ clearConfirm ? t('clearConfirm') : t('clearAll') }}</button>
   </div>
   <!-- Blocking global loading: the scrim captures pointer/touch, the page
   sections above are inert, and the status pill stays visible above it. -->
@@ -626,7 +626,7 @@ function selectPreview(item: CompressItem) {
   // The strip lists every item; selecting one from another page must move
   // the list there too, or the highlighted row is nowhere visible.
   const idx = items.value.findIndex((i) => i.id === item.id)
-  if (idx >= 0) page.value = Math.floor(idx / PAGE_SIZE) + 1
+  if (idx >= 0) page.value = Math.floor(idx / pageSize.value) + 1
 }
 function downloadPreview() {
   const it = previewItem.value
@@ -685,12 +685,27 @@ function onViewportResize() {
   updateStripStuck()
 }
 watch(() => items.value.length, async () => { await nextTick(); updateStripNav(); updateStripStuck() })
-// #8 results pagination: 20 rows per page; stats, strip and downloads stay global.
-const PAGE_SIZE = 20
+// #8 results pagination: desktop shows 20 rows; phones show 12 so a page
+// fits in roughly three compact screens instead of five or six. Stats, the
+// strip and downloads stay global.
+const PAGE_SIZE_DESKTOP = 20
+const PAGE_SIZE_MOBILE = 12
+const pageSize = computed(() => (isMobile.value ? PAGE_SIZE_MOBILE : PAGE_SIZE_DESKTOP))
 const page = ref(1)
-const pageCount = computed(() => Math.max(1, Math.ceil(items.value.length / PAGE_SIZE)))
-const pagedItems = computed(() => items.value.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE))
+const pageCount = computed(() => Math.max(1, Math.ceil(items.value.length / pageSize.value)))
+const pagedItems = computed(() => {
+  const size = pageSize.value
+  return items.value.slice((page.value - 1) * size, page.value * size)
+})
 watch(pageCount, () => { if (page.value > pageCount.value) page.value = pageCount.value })
+// Changing page at the bottom used to leave the viewport at the pager and
+// show the *end* of the next page. Bring the results header back into view;
+// on phones that means the first compact rows are immediately visible.
+async function goPage(delta: number) {
+  page.value = Math.min(pageCount.value, Math.max(1, page.value + delta))
+  await nextTick()
+  document.getElementById('resultCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
 if (typeof window !== 'undefined') {
   window.addEventListener('resize', onViewportResize)
   window.addEventListener('scroll', updateStripStuck, { passive: true })
@@ -880,6 +895,14 @@ function onClearClick() {
   clearConfirm.value = false
   page.value = 1
   clearAll()
+}
+
+// The More menu now owns Clear on phones (the sticky bar keeps only Add and
+// Download all so 320px German labels fit). Keep the menu open for the second
+// tap of the two-step confirm; close it only after the list is actually empty.
+function onMoreClear() {
+  onClearClick()
+  if (items.value.length === 0) moreOpen.value = false
 }
 
 function onPaste(e: ClipboardEvent) {
