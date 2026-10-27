@@ -732,11 +732,16 @@ async function toQualityEmpty(page) {
   const maxTop1 = await page.$eval('#maxSize', (el) => el.getBoundingClientRect().top);
   check('开关量化不顶动最长边输入框', maxTop0 === maxTop1, `${maxTop0}/${maxTop1}`);
   await page.close();
-  // 44c. 质量标签：名称在左、数值在右（统一样式）
+  // 44c. 画质滑杆与数值同一行、数值在右（2.1：参数紧跟在压缩按钮下）
   page = await newPage(browser);
-  const qLabelStyle = await page.$eval('.field label.qlabel', (el) => { const cs = getComputedStyle(el); return cs.display + '/' + cs.justifyContent; });
+  await toQualityEmpty(page);
+  const qLayout = await page.evaluate(() => {
+    const r = document.querySelector('#quality').getBoundingClientRect();
+    const v = document.querySelector('#qualityValue').getBoundingClientRect();
+    return { sameLine: Math.abs((r.top + r.bottom) / 2 - (v.top + v.bottom) / 2) < 8, right: v.left >= r.right };
+  });
   const qVal = await page.$eval('#qualityValue', (el) => el.textContent);
-  check('质量标签左右分栏、数值在右', qLabelStyle === 'flex/space-between' && qVal === '80%', `${qLabelStyle}/${qVal}`);
+  check('画质滑杆与数值同一行、数值在右', qLayout.sameLine && qLayout.right && qVal === '80%', `${JSON.stringify(qLayout)}/${qVal}`);
   await page.close();
 
   // 44d. 预设一键场景：证件照 / 微信发图 / 公众号配图
