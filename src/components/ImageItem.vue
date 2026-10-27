@@ -12,7 +12,7 @@
     <div class="meta">
       <div class="name" :title="item.file.name">{{ shortName(item.file.name) }}</div>
       <div class="sizes">
-        <span v-if="item.error" class="error">{{ item.error }}</span>
+        <span v-if="item.error" class="error">{{ item.error }}</span><button v-if="item.error" type="button" class="retry-btn" :title="t('retryBtn')" :aria-label="t('retryBtn')" @click="$emit('retry', item)">{{ t('retryBtn') }}</button>
         <span v-else-if="item.done"><span v-html="t('sizes', fmtSize(item.file.size), fmtSize(item.outSize))"></span><span v-if="!isAlreadyBest && savedPct > 0" class="save-pct"> −{{ savedPct }}%</span><span v-if="isAlreadyBest" class="best-tag">{{ t('alreadyBest') }}</span></span>
         <span v-else>{{ fmtSize(item.file.size) }} · {{ t('processing') }}</span>
       </div>
@@ -45,6 +45,7 @@ const emit = defineEmits<{
   (e: 'preview', item: CompressItem): void
   (e: 'view-change', item: CompressItem, view: 'orig' | 'comp'): void
   (e: 'use-webp', item: CompressItem): void
+  (e: 'retry', item: CompressItem): void
 }>()
 
 const layerA = ref<HTMLImageElement | null>(null)

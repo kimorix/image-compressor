@@ -12,27 +12,19 @@
         @click="emit('preset', p.id)"
       >{{ t('preset_' + p.id) }}</button>
     </div>
-    <div class="field">
-      <label for="format" v-show="settings.mode !== 'smart'">{{ t('fmtLabel') }}</label>
-      <select id="format" v-show="settings.mode !== 'smart'" :value="settings.format" @change="onFormat(($event.target as HTMLSelectElement).value)">
-        <option value="original">{{ t('fmtOriginal') }}</option>
-        <option value="image/jpeg">{{ t('fmtJpeg') }}</option>
-        <option value="image/png">{{ t('fmtPng') }}</option>
-        <option value="image/webp">{{ t('fmtWebp') }}</option>
-        <option value="image/avif">{{ t('fmtAvif') }}</option>
-      </select>
-      <label class="check" v-show="settings.mode !== 'smart' && settings.format === 'image/png'"><input type="checkbox" id="quantize" :checked="settings.quantize" @change="onQuantize(($event.target as HTMLInputElement).checked)" /> <span>{{ t('quantizeLabel') }}</span></label>
-      <label class="check" v-show="settings.mode !== 'smart' && settings.format === 'image/jpeg'"><input type="checkbox" id="keepExif" :checked="settings.keepExif" @change="onKeepExif(($event.target as HTMLInputElement).checked)" /> <span>{{ t('keepExifLabel') }}</span></label>
-      <label class="check" v-show="settings.mode !== 'smart' && settings.format === 'image/jpeg'"><input type="color" id="jpegFill" :value="settings.jpegFill" @change="onJpegFill(($event.target as HTMLInputElement).value)" /> <span>{{ t('jpegFillLabel') }}</span></label>
-      <label class="check"><input type="checkbox" id="keepOriginalName" :checked="settings.keepOriginalName" @change="onKeepOriginalName(($event.target as HTMLInputElement).checked)" /> <span>{{ t('keepOriginalNameLabel') }}</span></label>
+    <div class="field" v-show="settings.mode !== 'smart'">
+      <span class="field-label">{{ t('fmtLabel') }}</span>
+      <div class="seg" id="formatSeg" role="group" :aria-label="t('fmtLabel')">
+        <button v-for="f in FORMATS" :key="f.value" type="button" class="seg-btn" :data-format="f.value" :class="{ active: settings.format === f.value }" @click="onFormat(f.value)">{{ t(f.label) }}</button>
+      </div>
     </div>
     <div class="field">
-      <label for="mode">{{ t('modeLabel') }}</label>
-      <select id="mode" :value="settings.mode" @change="onMode(($event.target as HTMLSelectElement).value)">
-        <option value="smart">{{ t('modeSmart') }}</option>
-        <option value="quality">{{ t('modeQuality') }}</option>
-        <option value="target">{{ t('modeTarget') }}</option>
-      </select>
+      <span class="field-label">{{ t('modeLabel') }}</span>
+      <div class="seg" id="modeSeg" role="group" :aria-label="t('modeLabel')">
+        <button type="button" class="seg-btn" data-mode="smart" :class="{ active: settings.mode === 'smart' }" @click="onMode('smart')">{{ t('modeSmart') }}</button>
+        <button type="button" class="seg-btn" data-mode="quality" :class="{ active: settings.mode === 'quality' }" @click="onMode('quality')">{{ t('modeQuality') }}</button>
+        <button type="button" class="seg-btn" data-mode="target" :class="{ active: settings.mode === 'target' }" @click="onMode('target')">{{ t('modeTarget') }}</button>
+      </div>
     </div>
     <div class="field" v-show="settings.mode === 'smart'">
       <label class="check"><input type="checkbox" id="smartKeepOriginal" :checked="settings.smartKeepOriginal" @change="onSmartKeepOriginal(($event.target as HTMLInputElement).checked)" /> <span>{{ t('smartKeepOriginalLabel') }}</span></label>
@@ -46,18 +38,27 @@
       <input type="range" id="quality" min="10" max="100" :value="qualityShown" :disabled="qualityLocked" @input="onQuality(($event.target as HTMLInputElement).value)" />
     </div>
     <div class="field">
-      <label for="resizeMode">{{ t('resizeModeLabel') }}</label>
-      <select id="resizeMode" :value="settings.resizeMode" @change="onResizeMode(($event.target as HTMLSelectElement).value)">
-        <option value="longest">{{ t('resizeLongest') }}</option>
-        <option value="width">{{ t('resizeWidth') }}</option>
-        <option value="height">{{ t('resizeHeight') }}</option>
-        <option value="percent">{{ t('resizePercent') }}</option>
-      </select>
+      <span class="field-label">{{ t('resizeModeLabel') }}</span>
+      <div class="seg" id="resizeSeg" role="group" :aria-label="t('resizeModeLabel')">
+        <button v-for="r in RESIZES" :key="r.value" type="button" class="seg-btn" :data-resize="r.value" :class="{ active: settings.resizeMode === r.value }" @click="onResizeMode(r.value)">{{ t(r.label) }}</button>
+      </div>
     </div>
     <div class="field">
       <label for="maxSize">{{ resizeValueLabel }}</label>
       <input type="number" id="maxSize" :min="settings.resizeMode === 'percent' ? 1 : 0" :max="settings.resizeMode === 'percent' ? 100 : 20000" :value="settings.maxSize" @input="onMaxDebounced(($event.target as HTMLInputElement).value)" />
       <label class="check"><input type="checkbox" id="noUpscale" :checked="settings.noUpscale" @change="onNoUpscale(($event.target as HTMLInputElement).checked)" /> <span>{{ t('noUpscale') }}</span></label>
+    </div>
+    <!-- Advanced group: the pro options, grouped under one heading instead
+    of scattered through the format row. Expanded by default (the settings
+    card itself already folds on mobile); the header collapses it. -->
+    <div class="adv">
+      <button type="button" class="adv-head" :aria-expanded="advOpen" @click="advOpen = !advOpen"><span>{{ t('advLabel') }}</span><span class="adv-caret">{{ advOpen ? '▴' : '▾' }}</span></button>
+      <div class="adv-body" v-show="advOpen">
+        <label class="check" v-show="settings.mode !== 'smart' && settings.format === 'image/png'"><input type="checkbox" id="quantize" :checked="settings.quantize" @change="onQuantize(($event.target as HTMLInputElement).checked)" /> <span>{{ t('quantizeLabel') }}</span></label>
+        <label class="check" v-show="settings.mode !== 'smart' && settings.format === 'image/jpeg'"><input type="checkbox" id="keepExif" :checked="settings.keepExif" @change="onKeepExif(($event.target as HTMLInputElement).checked)" /> <span>{{ t('keepExifLabel') }}</span></label>
+        <label class="check" v-show="settings.mode !== 'smart' && settings.format === 'image/jpeg'"><input type="color" id="jpegFill" :value="settings.jpegFill" @change="onJpegFill(($event.target as HTMLInputElement).value)" /> <span>{{ t('jpegFillLabel') }}</span></label>
+        <label class="check"><input type="checkbox" id="keepOriginalName" :checked="settings.keepOriginalName" @change="onKeepOriginalName(($event.target as HTMLInputElement).checked)" /> <span>{{ t('keepOriginalNameLabel') }}</span></label>
+      </div>
     </div>
     <!-- PNG notes live in their own full-width row below the grid, not
     inside a field cell: toggling quantization used to change the quality
@@ -88,6 +89,23 @@ const emit = defineEmits<{
   (e: 'update', patch: Partial<Settings>, immediate: boolean): void
   (e: 'preset', id: string): void
 }>()
+
+// Segmented option lists: the buttons render from these, so the label keys
+// stay the single source of truth (no duplicated option text in markup).
+const FORMATS = [
+  { value: 'original', label: 'fmtOriginal' },
+  { value: 'image/jpeg', label: 'fmtJpeg' },
+  { value: 'image/png', label: 'fmtPng' },
+  { value: 'image/webp', label: 'fmtWebp' },
+  { value: 'image/avif', label: 'fmtAvif' },
+]
+const RESIZES = [
+  { value: 'longest', label: 'resizeLongest' },
+  { value: 'width', label: 'resizeWidth' },
+  { value: 'height', label: 'resizeHeight' },
+  { value: 'percent', label: 'resizePercent' },
+]
+const advOpen = ref(true)
 
 // Active preset is derived from the settings themselves, so a manual tweak
 // that leaves a preset's values automatically clears the highlight.

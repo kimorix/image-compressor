@@ -19,10 +19,10 @@
     </div>
 
     <div class="card" id="settingsCard">
-      <button v-if="items.length > 0" class="settings-summary" type="button" :aria-expanded="!settingsCollapsed" @click="settingsCollapsed = !settingsCollapsed">
+      <button class="settings-summary" type="button" :aria-expanded="!settingsCollapsed" @click="settingsCollapsed = !settingsCollapsed">
         <span>{{ settingsSummary }}</span><span class="settings-caret">{{ settingsCollapsed ? '▾' : '▴' }}</span>
       </button>
-      <div :class="{ 'settings-body-collapsed': items.length > 0 && settingsCollapsed }">
+      <div :class="{ 'settings-body-collapsed': settingsCollapsed }">
         <SettingsPanel :settings="settings" :t="t" @update="onSettingsUpdate" @preset="onPreset" />
       </div>
     </div>
@@ -39,6 +39,7 @@
           @remove="removeItem"
           @preview="lightboxId = $event.id"
           @use-webp="onUseWebp"
+          @retry="retryItem"
         />
       </div>
       <div v-if="allAlreadyBest" class="dl-note">{{ t('allBestNote', items.length) }}</div>
@@ -346,6 +347,16 @@ function onPreset(id: string) {
   presetSnapshot = { ...settings }
   Object.assign(settings, p.patch)
   void recompressAll()
+}
+
+// Retry a failed item under the current settings: the row first clears
+// the stale error (so it reads "processing" while the new run is in
+// flight); runCompress then replaces it with the fresh result.
+function retryItem(item: CompressItem) {
+  const cleared = { ...item, error: null }
+  replaceItem(cleared)
+  const g = ++runGen
+  void runCompress([cleared], g, { ...settings })
 }
 
 function removeItem(item: CompressItem) {
