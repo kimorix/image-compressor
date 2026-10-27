@@ -75,6 +75,18 @@ async function setQuality(page, q) {
 async function upload(page, files) {
   await page.setInputFiles('#fileInput', files);
 }
+// Browser-generated SVG fixtures let the mobile-only tests run without the
+// original camera/photo fixture folder.
+function svgFile(name, width, height, color = '#5b8cff') {
+  return {
+    name,
+    mimeType: 'image/svg+xml',
+    buffer: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="${color}"/></svg>`),
+  };
+}
+async function masonryMap(page) {
+  return page.$$eval('.masonry-card', (els) => Object.fromEntries(els.map((el) => [el.dataset.id, el.closest('.masonry-col').dataset.col])));
+}
 // 2.1 settings: scene / format / size are selects, the custom size inputs
 // and the advanced checkboxes live behind a dropdown choice / fold.
 // pickPreset keeps the old chip semantics: picking the active scene again
@@ -407,12 +419,14 @@ async function toQualityEmpty(page) {
   check('完整文件名在 title 里', fullTitle === 'dji_20251026143022_grassland_photo.jpg', fullTitle);
   await page.close();
 
-  // 28. 移动端移除按钮保持 44px 触摸区
+  // 28. 移动端详情里的删除按钮保持 44px 触摸区
   page = await newPage(browser, { viewport: { width: 390, height: 844 } });
   await upload(page, T + 'test.jpg');
   await waitDone(page, 1);
-  const rmBox = await page.$eval('.item .remove-btn', (el) => { const r = el.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; });
-  check('移动端移除按钮 44px 触摸区', rmBox[0] >= 44 && rmBox[1] >= 44, JSON.stringify(rmBox));
+  await page.click('.masonry-card .m-open');
+  await page.waitForSelector('.sheet');
+  const rmBox = await page.$eval('.sheet-actions .danger', (el) => { const r = el.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; });
+  check('移动端删除按钮 44px 触摸区', rmBox[0] >= 44 && rmBox[1] >= 44, JSON.stringify(rmBox));
   await page.close();
 
   // 29-32. 主题
@@ -590,15 +604,223 @@ async function toQualityEmpty(page) {
   check('HEIC 转 WebP 成功', dlH.suggestedFilename() === 'sample-compressed.webp' && hBuf.subarray(0, 4).toString('latin1') === 'RIFF' && hBuf.subarray(8, 12).toString('latin1') === 'WEBP', dlH.suggestedFilename() + ' ' + hBuf.length);
   await page.close();
 
-  // 41. 移动端结果卡片布局
+  // 41. 移动端双列瀑布流
   page = await newPage(browser, { viewport: { width: 390, height: 844 } });
-  await upload(page, T + 'test.jpg');
-  await waitDone(page, 1);
-  const itemDisplay = await page.$eval('.item', (el) => getComputedStyle(el).display);
-  const thumbW = await page.$eval('.thumb', (el) => getComputedStyle(el).width);
-  const overflowX = await page.evaluate(() => document.documentElement.scrollWidth <= 390);
-  check('移动端结果卡片为 grid 布局、缩略图 84px、无横向溢出', itemDisplay === 'grid' && thumbW === '84px' && overflowX, `${itemDisplay}/${thumbW}/${overflowX}`);
+  await page.setInputFiles('#fileInput', [
+    svgFile('masonry-a.svg', 600, 600, '#5b8cff'),
+    svgFile('masonry-b.svg', 600, 600, '#27a644'),
+    svgFile('masonry-c.svg', 600, 600, '#e5484d'),
+    svgFile('masonry-d.svg', 600, 600, '#f5a524'),
+  ]);
+  await waitDone(page, 4);
+  const masonry = await page.evaluate(() => {
+    const cards = [...document.querySelectorAll('.masonry-card')];
+    const cols = [...document.querySelectorAll('.masonry-col')];
+    const sticky = document.querySelector('.sticky-bar').getBoundingClientRect();
+    const bottoms = cols.map((c) => Math.max(0, ...[...c.querySelectorAll('.masonry-card')].map((x) => x.getBoundingClientRect().bottom)));
+    return {
+      display: getComputedStyle(document.querySelector('#masonry')).display,
+      list: !!document.querySelector('#list'),
+      cards: cards.length,
+      cols: cols.map((c) => c.querySelectorAll('.masonry-card').length),
+      firstCols: ['masonry-a.svg', 'masonry-b.svg'].map((name) => cards.find((c) => c.querySelector('.m-name-stem')?.textContent === name.slice(0, -4))?.closest('.masonry-col').dataset.col),
+      gap: getComputedStyle(document.querySelector('#masonry')).columnGap,
+      radius: getComputedStyle(cards[0]).borderRadius,
+      full: cards.filter((c) => c.getBoundingClientRect().bottom <= sticky.top + 1).length,
+      diff: Math.round(Math.abs(bottoms[0] - bottoms[1])),
+      maxH: Math.round(Math.max(...cards.map((c) => c.getBoundingClientRect().height))),
+      lazy: [...document.querySelectorAll('.m-thumb img')].every((i) => i.loading === 'lazy' && i.decoding === 'async'),
+      overflow: document.documentElement.scrollWidth <= 390,
+    };
+  });
+  check('移动端双列瀑布流：2 列、首两张左右分列、8px 间距、12px 圆角、无横向溢出', masonry.display === 'flex' && !masonry.list && masonry.cards === 4 && masonry.cols[0] > 0 && masonry.cols[1] > 0 && masonry.firstCols[0] === '0' && masonry.firstCols[1] === '1' && masonry.gap === '8px' && masonry.radius === '12px' && masonry.overflow, JSON.stringify(masonry));
+  check('390×844 首屏至少 4 张完整卡片、两列底部差不超过一张卡', masonry.full >= 4 && masonry.diff <= masonry.maxH, `${masonry.full}/${masonry.diff}/${masonry.maxH}`);
+  check('移动端缩略图 lazy + async', masonry.lazy, String(masonry.lazy));
   await page.close();
+
+  // 41b. 极端宽高比、8×8 小图、长文件名
+  page = await newPage(browser, { viewport: { width: 390, height: 844 } });
+  await page.setInputFiles('#fileInput', [
+    svgFile('tall-1080x6000.png', 1080, 6000, '#e5484d'),
+    svgFile('wide-6000x1000.png', 6000, 1000, '#f5a524'),
+    svgFile('tiny-8x8.png', 8, 8, '#8e4ec6'),
+    svgFile('这是一个非常非常长的中文文件名用于测试两行省略和扩展名显示.png', 1200, 800, '#00a2c7'),
+    svgFile('a-very-long-english-file-name-for-testing-two-line-ellipsis-and-extension.png', 800, 1200, '#d6409f'),
+  ]);
+  await waitDone(page, 5);
+  const extremes = await page.evaluate(() => {
+    const cards = [...document.querySelectorAll('.masonry-card')];
+    const thumbs = [...document.querySelectorAll('.m-thumb')];
+    return {
+      ratios: thumbs.map((t) => { const r = t.getBoundingClientRect(); return r.width / r.height; }),
+      tiny: document.querySelectorAll('.m-thumb.tiny').length,
+      tinyFit: getComputedStyle(document.querySelector('.m-thumb.tiny img')).objectFit,
+      names: [...document.querySelectorAll('.m-name')].map((n) => n.innerText),
+      overflow: document.documentElement.scrollWidth <= 390,
+      cards: cards.length,
+    };
+  });
+  check('超长截图/超宽横幅比例限制在 3:4–4:3、8×8 小图 contain、长文件名不溢出', extremes.cards === 5 && extremes.ratios.every((r) => r >= 0.74 && r <= 1.34) && extremes.tiny === 1 && extremes.tinyFit === 'contain' && extremes.names.every((n) => n.includes('.png')) && extremes.overflow, JSON.stringify(extremes));
+  await page.close();
+
+  // 41c. 详情面板：打开、对比、关闭、遮罩、Esc、删除淡出
+  page = await newPage(browser, { viewport: { width: 390, height: 844 } });
+  await page.setInputFiles('#fileInput', [svgFile('sheet-a.svg', 600, 600), svgFile('sheet-b.svg', 600, 600, '#27a644')]);
+  await waitDone(page, 2);
+  await page.click('.masonry-card .m-open');
+  await page.waitForSelector('.sheet');
+  const sheetInfo = await page.evaluate(() => ({
+    role: document.querySelector('.sheet').getAttribute('role'),
+    modal: document.querySelector('.sheet').getAttribute('aria-modal'),
+    compare: !!document.querySelector('.sheet .pv-compare'),
+    actions: [...document.querySelectorAll('.sheet-actions button')].map((b) => b.textContent.trim()),
+    locked: document.body.style.overflow,
+    focus: document.activeElement?.className,
+  }));
+  check('点击卡片打开详情面板：dialog/modal、对比滑块、复制/删除/下载、锁定背景', sheetInfo.role === 'dialog' && sheetInfo.modal === 'true' && sheetInfo.compare && sheetInfo.actions.length === 3 && sheetInfo.locked === 'hidden', JSON.stringify(sheetInfo));
+  await page.waitForTimeout(300);
+  const sheetStage = await page.$eval('.sheet-stage', (el) => { const r = el.getBoundingClientRect(); return { x: r.x + r.width * 0.25, y: r.y + r.height / 2 }; });
+  await page.mouse.click(sheetStage.x, sheetStage.y);
+  await page.waitForSelector('.lb-overlay', { timeout: 5000 });
+  check('点详情里的对比图进入 Lightbox', !(await page.$('.sheet')), 'lightbox');
+  await page.click('.lb-close');
+  await page.waitForFunction(() => !document.querySelector('.lb-overlay'), null, { timeout: 3000 });
+  await page.click('.masonry-card .m-open');
+  await page.waitForSelector('.sheet');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('.sheet'), null, { timeout: 3000 });
+  check('Esc 关闭详情面板并恢复滚动', (await page.evaluate(() => document.body.style.overflow)) === '', 'esc');
+  await page.click('.masonry-card .m-open');
+  await page.waitForSelector('.sheet');
+  await page.waitForTimeout(300);
+  const drag = await page.$eval('.sheet-drag', (el) => { const r = el.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+  await page.mouse.move(drag.x, drag.y);
+  await page.mouse.down();
+  await page.mouse.move(drag.x, drag.y + 150, { steps: 4 });
+  await page.mouse.up();
+  await page.waitForFunction(() => !document.querySelector('.sheet'), null, { timeout: 3000 });
+  check('下滑关闭详情面板', (await page.evaluate(() => document.body.style.overflow)) === '', 'swipe');
+  await page.click('.masonry-card .m-open');
+  await page.waitForSelector('.sheet');
+  await page.click('.sheet-overlay', { position: { x: 4, y: 4 } });
+  await page.waitForFunction(() => !document.querySelector('.sheet'), null, { timeout: 3000 });
+  check('点遮罩关闭详情面板', true, 'overlay');
+  await page.click('.masonry-card .m-open');
+  await page.waitForSelector('.sheet');
+  await page.click('.sheet-actions .danger');
+  await page.waitForSelector('.masonry-card.leaving', { timeout: 2000 });
+  await page.waitForFunction(() => document.querySelectorAll('.masonry-card').length === 1, null, { timeout: 3000 });
+  check('详情删除：卡片淡出后移除并重新平衡', true, 'delete');
+  await page.close();
+
+  // 41d. 更多菜单只保留两个待上线工具，点击轻提示，三种关闭方式
+  page = await newPage(browser, { viewport: { width: 390, height: 844 } });
+  await page.click('.tab-bar button:nth-child(3)');
+  await page.waitForSelector('.more-menu');
+  const more = await page.evaluate(() => {
+    const menu = document.querySelector('.more-menu');
+    return {
+      width: Math.round(menu.getBoundingClientRect().width),
+      radius: getComputedStyle(menu).borderRadius,
+      items: [...menu.querySelectorAll('.more-tool')].map((b) => ({
+        title: b.querySelector('strong').textContent,
+        desc: b.querySelector('small').textContent,
+        soon: b.querySelector('.more-soon').textContent,
+        aria: b.getAttribute('aria-disabled'),
+        icon: Math.round(b.querySelector('.more-tool-icon').getBoundingClientRect().width),
+      })),
+      old: menu.textContent.includes('切换主题') || menu.textContent.includes('GitHub') || menu.textContent.includes('清空列表') || menu.textContent.includes('历史记录'),
+    };
+  });
+  check('更多菜单：约 290px/14px 圆角、2 个 32px 图标工具、无主题/GitHub/清空/历史', more.width === 290 && more.radius === '14px' && more.items.length === 2 && more.items.every((i) => i.aria === 'true' && i.icon === 32 && i.soon) && !more.old, JSON.stringify(more));
+  await page.$eval('.more-tool', (el) => el.click());
+  await page.waitForSelector('.more-toast');
+  check('点击待上线工具只显示“即将推出”提示', (await page.$eval('.more-toast', (el) => el.textContent.trim())) === '即将推出', 'toast');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => getComputedStyle(document.querySelector('.more-menu')).display === 'none', null, { timeout: 3000 });
+  await page.click('.tab-bar button:nth-child(3)');
+  await page.click('.tab-bar button:nth-child(3)');
+  await page.waitForFunction(() => getComputedStyle(document.querySelector('.more-menu')).display === 'none', null, { timeout: 3000 });
+  await page.click('.tab-bar button:nth-child(3)');
+  await page.click('.more-backdrop');
+  await page.waitForFunction(() => getComputedStyle(document.querySelector('.more-menu')).display === 'none', null, { timeout: 3000 });
+  check('更多菜单可再点“更多”、点遮罩、按 Esc 关闭', true, 'close');
+  await page.close();
+
+  // 41e. 新增图片不自动回顶、不把已有卡片换列
+  page = await newPage(browser, { viewport: { width: 390, height: 844 } });
+  await page.setInputFiles('#fileInput', [svgFile('stable-a.svg', 600, 600), svgFile('stable-b.svg', 600, 600), svgFile('stable-c.svg', 600, 600)]);
+  await waitDone(page, 3);
+  const mapBefore = await masonryMap(page);
+  await page.setInputFiles('#fileInput', [svgFile('stable-d.svg', 600, 600), svgFile('stable-e.svg', 600, 600)]);
+  await waitDone(page, 5);
+  const mapAfter = await masonryMap(page);
+  const moved = Object.entries(mapBefore).filter(([id, col]) => mapAfter[id] !== col);
+  await page.evaluate(() => window.scrollTo(0, 300));
+  const y0 = await page.evaluate(() => window.scrollY);
+  await page.setInputFiles('#fileInput', [svgFile('stable-f.svg', 600, 600)]);
+  await waitDone(page, 6);
+  const y1 = await page.evaluate(() => window.scrollY);
+  check('新增图片不自动滚动、已有卡片不跳列', moved.length === 0 && Math.abs(y1 - y0) <= 2, `${JSON.stringify(moved)}/${y0}/${y1}`);
+  await page.close();  // 41f. 详情面板/卡片的下载、复制、重试仍可用
+  page = await newPage(browser, { viewport: { width: 390, height: 844 } });
+  await page.setInputFiles('#fileInput', [svgFile('download-me.svg', 600, 600)]);
+  await waitDone(page, 1);
+  const [dlCard] = await Promise.all([
+    page.waitForEvent('download', { timeout: 10000 }),
+    page.click('.m-dl'),
+  ]);
+  check('移动端卡片下载按钮可用', !!dlCard.suggestedFilename(), dlCard.suggestedFilename());
+  await page.evaluate(() => {
+    window.ClipboardItem = window.ClipboardItem || class { constructor(o) { this.types = Object.keys(o); } };
+    if (navigator.clipboard) navigator.clipboard.write = async (items) => { window.__copied = items.map((i) => i.types); };
+  });
+  await page.click('.m-open');
+  await page.waitForSelector('.sheet');
+  await page.click('.sheet-actions button');
+  await page.waitForFunction(() => !!window.__copied, null, { timeout: 5000 });
+  check('详情复制仍走 image/png 并显示已复制', JSON.stringify(await page.evaluate(() => window.__copied)) === '[["image/png"]]' && (await page.$eval('.sheet-actions button', (b) => b.textContent.trim())) === '已复制', 'copy');
+  await page.click('.sheet-close');
+  await page.waitForFunction(() => !document.querySelector('.sheet'));
+  await page.setInputFiles('#fileInput', [{ name: 'broken.png', mimeType: 'image/png', buffer: Buffer.from([1, 2, 3, 4, 5, 6, 7, 8, 9]) }]);
+  await page.waitForSelector('.m-badge.fail', { timeout: 15000 });
+  const retryButton = await page.$('.m-retry');
+  await retryButton.click();
+  await page.waitForSelector('.m-badge.fail', { timeout: 15000 });
+  check('失败卡片有重试按钮，点重试后仍正确报错', !!retryButton && !!(await page.$('.m-badge.fail')), 'retry');
+  await page.close();
+
+  // 41g. 触屏可分享时：卡片显示分享、详情主按钮为“保存到相册”并调起 share
+  {
+    const ctx = await browser.newContext({ locale: 'zh-CN', hasTouch: true, viewport: { width: 390, height: 844 } });
+    await ctx.addInitScript(() => {
+      try { localStorage.setItem('ic-lang', 'zh'); } catch (e) {}
+      const orig = window.matchMedia.bind(window);
+      window.matchMedia = (q) => (q === '(pointer: coarse)'
+        ? { matches: true, media: q, addEventListener() {}, removeEventListener() {} }
+        : orig(q));
+      Object.defineProperty(navigator, 'canShare', { value: () => true });
+      Object.defineProperty(navigator, 'share', { value: async (data) => { window.__shared = (data.files || []).map((f) => f.name); } });
+    });
+    const p = await ctx.newPage();
+    p.on('pageerror', (e) => errors.push(e.message));
+    await p.goto(BASE);
+    await p.waitForSelector('#dropzone');
+    await p.setInputFiles('#fileInput', [svgFile('share-sheet.svg', 600, 600)]);
+    await waitDone(p, 1);
+    const cardShare = await p.$eval('.m-dl', (b) => b.title);
+    await p.click('.m-dl');
+    await p.waitForFunction(() => Array.isArray(window.__shared));
+    const cardShared = await p.evaluate(() => window.__shared);
+    await p.click('.m-open');
+    await p.waitForSelector('.sheet');
+    const saveLabel = await p.$eval('.sheet-actions .primary', (b) => b.textContent.trim());
+    await p.click('.sheet-actions .primary');
+    await p.waitForFunction(() => window.__shared.length > 0);
+    check('触屏分享：卡片分享按钮、详情主按钮“保存到相册”并调起 share', cardShare === '分享' && saveLabel === '保存到相册' && cardShared.length === 1, `${cardShare}/${saveLabel}/${cardShared}`);
+    await p.close();
+    await ctx.close();
+  }
 
   // 42a. 模拟 Safari（canvas 禁 WebP）：WASM 照样出 WebP，不再回退 JPEG
   {

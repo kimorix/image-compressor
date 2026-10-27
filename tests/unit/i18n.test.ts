@@ -14,4 +14,17 @@ describe('i18n dictionaries', () => {
       }
     }
   })
+
+  it('defines the mobile masonry, detail sheet and More menu copy in every language', () => {
+    const mobile = [
+      'statusQueued', 'detailTitle', 'detailNotes', 'openDetails',
+      'moreImageConvert', 'moreImageConvertDesc', 'morePdfToWord', 'morePdfToWordDesc',
+      'comingSoon', 'saveToAlbum', 'deleteBtn',
+    ]
+    for (const messages of Object.values(MESSAGES)) {
+      for (const key of mobile) {
+        expect(messages[key]).toBeTypeOf('string')
+      }
+    }
+  })
 })
