@@ -1,5 +1,5 @@
 <template>
-  <div class="lb-overlay" @click.self="$emit('close')">
+  <div ref="overlayRef" class="lb-overlay" role="dialog" aria-modal="true" :aria-label="t('previewTitle')" @click.self="$emit('close')">
     <div class="lb-box">
       <div class="lb-bar">
         <div class="lb-zoom">
@@ -11,7 +11,7 @@
           <button type="button" class="lb-nav-btn" :disabled="!hasPrev" :aria-label="t('stripPrev')" @click="emit('prev')">‹</button>
           <button type="button" class="lb-nav-btn" :disabled="!hasNext" :aria-label="t('stripNext')" @click="emit('next')">›</button>
         </div>
-        <button class="lb-close" :title="t('lbClose')" :aria-label="t('lbClose')" @click="$emit('close')">×</button>
+        <button ref="closeBtn" type="button" class="lb-close" :title="t('lbClose')" :aria-label="t('lbClose')" @click="$emit('close')">×</button>
       </div>
       <div class="lb-stage" :class="{ zoomed: zoomLevel !== 'fit' }">
         <div class="lb-compare" ref="compareRef" :style="compareStyle">
@@ -42,14 +42,17 @@
           <span class="lb-side-tag right">{{ t('tagComp') }}</span>
         </div>
       </div>
-      <div class="lb-info" v-if="item.done && item.origW"><span :class="{ warn: upscaled }">{{ dimsText }}</span><span v-if="item.targetNote"> · {{ item.targetNote }}</span><span v-if="item.typeNote"> · {{ item.typeNote }}</span></div>
+      <div class="lb-info">
+        <span class="lb-name">{{ item.file.name }}</span>
+        <template v-if="item.done && item.origW"><span :class="{ warn: upscaled }">{{ dimsText }}</span><span v-if="item.targetNote"> · {{ item.targetNote }}</span><span v-if="item.typeNote"> · {{ item.typeNote }}</span></template>
+      </div>
       <div class="lb-hint">{{ t('lbZoomHint') }}<span class="lb-keys"> · {{ t('lbKeysHint') }}</span></div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { CompressItem } from '../types'
 
 const props = defineProps<{
@@ -57,12 +60,16 @@ const props = defineProps<{
   t: (key: string, ...args: (string | number)[]) => string
   hasPrev?: boolean
   hasNext?: boolean
+  busy?: boolean
 }>()
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'prev'): void
   (e: 'next'): void
 }>()
+
+const overlayRef = ref<HTMLElement | null>(null)
+const closeBtn = ref<HTMLButtonElement | null>(null)
 
 // Same source rule as the row thumbnail: compressed when done, else the
 // original (covers the recompress window, when outUrl is stale).
@@ -105,6 +112,14 @@ function cycleZoom() {
 const pos = ref(50)
 const compareRef = ref<HTMLElement | null>(null)
 
+// Switching images (← / → or the lightbox nav) starts a fresh comparison:
+// carrying a 200% zoom and an off-centre divider into the next image was
+// disorienting, and the old zoom made the new image look cropped.
+watch(() => props.item.id, () => {
+  zoomLevel.value = 'fit'
+  pos.value = 50
+})
+
 function setPosFromClientX(clientX: number) {
   const el = compareRef.value
   if (!el) return
@@ -126,19 +141,45 @@ function onDividerDown(e: PointerEvent) {
 }
 
 function onDividerKey(e: KeyboardEvent) {
+  if (props.busy) return
   if (e.key === 'ArrowLeft') { pos.value = Math.max(0, pos.value - 5); e.preventDefault() }
   else if (e.key === 'ArrowRight') { pos.value = Math.min(100, pos.value + 5); e.preventDefault() }
   else if (e.key === 'Home') { pos.value = 0; e.preventDefault() }
   else if (e.key === 'End') { pos.value = 100; e.preventDefault() }
 }
 
+function trapFocus(e: KeyboardEvent) {
+  const root = overlayRef.value
+  if (!root) return
+  const focusables = [...root.querySelectorAll<HTMLElement>(
+    'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  )].filter((el) => el.getClientRects().length > 0)
+  if (!focusables.length) return
+  const first = focusables[0]
+  const last = focusables[focusables.length - 1]
+  const active = document.activeElement as HTMLElement | null
+  if (e.shiftKey) {
+    if (active === first || !root.contains(active)) { e.preventDefault(); last.focus() }
+  } else if (active === last || !root.contains(active)) {
+    e.preventDefault(); first.focus()
+  }
+}
+
 // Desktop keys: Esc closes, ← / → step through the list (the divider keeps
 // its own arrows while focused), Space flips between all-original and
 // all-compressed for a quick blink comparison.
 function onKey(e: KeyboardEvent) {
+  // The blocking loading layer owns keyboard shortcuts too: no Esc, arrows or
+  // Space until the encode/zip finishes.
+  if (props.busy) return
   if (e.key === 'Escape') { emit('close'); return }
-  const onDivider = (e.target as HTMLElement | null)?.classList?.contains('lb-divider')
-  if (onDivider || e.defaultPrevented) return
+  if (e.key === 'Tab') { trapFocus(e); return }
+  const target = e.target as HTMLElement | null
+  const onDivider = target?.classList?.contains('lb-divider')
+  // A focused button/input keeps its own Space/Enter/arrow behaviour; only
+  // the stage (or body) drives the image shortcuts.
+  const onControl = target?.closest?.('button, a, input, select, textarea')
+  if (onDivider || onControl || e.defaultPrevented) return
   if (e.key === 'ArrowLeft' && props.hasPrev) { emit('prev'); e.preventDefault() }
   else if (e.key === 'ArrowRight' && props.hasNext) { emit('next'); e.preventDefault() }
   else if (e.key === ' ' || e.code === 'Space') {
@@ -171,6 +212,16 @@ function unlockScroll() {
   b.style.width = ''
   window.scrollTo(0, savedY)
 }
-onMounted(() => { window.addEventListener('keydown', onKey); lockScroll() })
-onUnmounted(() => { window.removeEventListener('keydown', onKey); unlockScroll() })
+let previousFocus: HTMLElement | null = null
+onMounted(() => {
+  previousFocus = document.activeElement as HTMLElement | null
+  window.addEventListener('keydown', onKey)
+  lockScroll()
+  void nextTick(() => closeBtn.value?.focus())
+})
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKey)
+  unlockScroll()
+  if (previousFocus?.isConnected) previousFocus.focus()
+})
 </script>

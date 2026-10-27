@@ -1,37 +1,52 @@
 <template>
-  <div class="item">
+  <div class="item" :title="item.file.name">
     <div
       class="thumb"
       :class="{ clickable: item.done }"
       :title="item.done ? t('thumbTitle') : ''"
+      :role="item.done ? 'button' : undefined"
+      :tabindex="item.done ? 0 : undefined"
+      :aria-label="item.done ? t('thumbTitle') : undefined"
       @click="onThumbClick"
+      @keydown.enter="onThumbClick"
+      @keydown.space.prevent="onThumbClick"
     >
-      <img ref="layerA" class="layer top" :alt="item.file.name" />
-      <img v-if="item.done" ref="layerB" class="layer" alt="" />
+      <img ref="layerA" class="layer top" :alt="item.file.name" decoding="async" />
+      <img v-if="item.done" ref="layerB" class="layer" alt="" decoding="async" />
     </div>
     <div class="row-main">
       <div class="cell-name">
+        <span class="sr-only">{{ t('thName') }}</span>
         <div class="name" :title="item.file.name"><span class="name-stem">{{ nameParts.stem }}</span><span class="name-ext">{{ nameParts.ext }}</span></div>
-        <div class="name-tags"><span class="fmt-tag">{{ fmtTag }}</span><span v-if="isAlreadyBest" class="best-tag">{{ t('alreadyBest') }}</span></div>
+        <div class="name-tags"><span class="sr-only">{{ t('thFormat') }}</span><span class="fmt-tag">{{ fmtTag }}</span><span v-if="isAlreadyBest" class="best-tag">{{ t('alreadyBest') }}</span><span v-if="showSmallTag" class="best-tag">{{ smallTagText }}</span></div>
       </div>
-      <div class="orig-size">{{ fmtSize(item.file.size) }}</div>
-      <div class="comp-size">
-        <span v-if="item.error" class="error">{{ item.error }}</span><button v-if="item.error" type="button" class="retry-btn" :title="t('retryBtn')" :aria-label="t('retryBtn')" @click="$emit('retry', item)">{{ t('retryBtn') }}</button>
+      <div class="orig-size"><span class="sr-only">{{ t('thOrig') }}</span>{{ fmtSize(item.file.size) }}</div>
+      <div class="comp-size" :class="{ done: item.done && !item.error }">
+        <span class="sr-only">{{ t('thComp') }}</span>
+        <span v-if="item.error" class="error" :class="{ cancelled: item.cancelled }">{{ item.error }}</span>
         <span v-else-if="item.done">{{ fmtSize(item.outSize) }}</span>
         <span v-else>{{ t('processing') }}</span>
       </div>
-      <div class="save-cell"><span v-if="item.done && !isAlreadyBest && savedPct > 0" class="save-pct"> −{{ savedPct }}%</span></div>
-      <div v-if="dimsShown" class="dims" :title="`${item.origW}×${item.origH} → ${item.outW || item.origW}×${item.outH || item.origH}`"><span class="dims-orig">{{ item.origW }}×{{ item.origH }}</span><span class="dims-arrow">↓</span><span class="dims-comp">{{ item.outW || item.origW }}×{{ item.outH || item.origH }}</span></div>
-      <div class="cell-status"><span :class="['status-pill', pillClass]">{{ pillText }}</span></div>
+      <div class="save-cell"><span v-if="item.done && !isAlreadyBest && savedPct > 0" class="save-pct"><span class="sr-only">{{ t('thSave') }}</span> −{{ savedPct }}%</span></div>
+      <div v-if="dimsShown" class="dims" :title="`${item.origW}×${item.origH} → ${outW}×${outH}`">
+        <span class="sr-only">{{ t('thDims') }}</span>
+        <template v-if="dimsChanged">
+          <span class="dims-orig">{{ item.origW }}×{{ item.origH }}</span>
+          <span class="dims-arrow">→</span>
+          <span class="dims-comp">{{ outW }}×{{ outH }}</span>
+        </template>
+        <span v-else class="dims-same">{{ item.origW }}×{{ item.origH }} → {{ outW }}×{{ outH }}</span>
+      </div>
+      <div class="cell-status"><span class="sr-only">{{ t('thStatus') }}</span><span :class="['status-pill', pillClass]">{{ pillText }}</span></div>
       <div class="item-actions">
+        <button v-if="item.error && item.retryable !== false" type="button" class="retry-icon" :title="t('retryBtn')" :aria-label="t('retryBtn')" @click="$emit('retry', item)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 3v6h-6" /></svg></button>
         <button v-if="item.done && item.outUrl" class="copy-btn" :title="copyOk ? t('copied') : t('copyBtn')" :aria-label="t('copyBtn')" @click="onCopy"><span v-if="copyOk" class="copy-ok">✓</span><svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15V5a2 2 0 012-2h10" /></svg></button>
         <button v-if="shareable" class="share-btn" :title="t('shareBtn')" :aria-label="t('shareBtn')" @click="onShare"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4m0 0L8 8m4-4l4 4" /><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" /></svg></button>
         <a v-else-if="item.done && item.outUrl" class="dl-icon" :href="item.outUrl" :download="item.outName ?? undefined" :title="t('btnDownload')" :aria-label="t('btnDownload')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></a>
         <button class="remove-btn" :title="t('btnRemove')" :aria-label="t('btnRemove')" @click="$emit('remove', item)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 7V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2m-7 0l1 13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-13"/></svg></button>
       </div>
-      <div v-if="item.isAnimatedGif || showSmallNote || showAlphaNote || copyFailed" class="note-row">
+      <div v-if="item.isAnimatedGif || showAlphaNote || copyFailed" class="note-row">
         <div v-if="item.isAnimatedGif" class="gif-tag">{{ t('gifFirstFrame') }}</div>
-        <div v-if="showSmallNote" class="small-note">{{ smallNoteText }}</div>
         <div v-if="showAlphaNote" class="alpha-note">{{ t('alphaJpegNote') }} <button type="button" class="link-btn" @click="$emit('use-webp', item)">{{ t('useWebpBtn') }}</button></div>
         <div v-if="copyFailed" class="error">{{ t('copyFailed') }}</div>
       </div>
@@ -40,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { CompressItem } from '../types'
 import { fmtSize } from '../lib/format'
 
@@ -78,7 +93,10 @@ function srcFor(view: 'orig' | 'comp'): string {
 function initLayers() {
   if (!layerA.value) return
   layerA.value.src = srcFor('comp')
-  const top = props.item.view === 'comp' ? layerA.value : layerB.value
+  // A pending/errored item has no original layer (layerB is v-if="done").
+  // Without this fallback, initLayers removed `.top` from the only layer and
+  // the row thumbnail was invisible (opacity 0) until the compression ended.
+  const top = props.item.view === 'comp' || !layerB.value ? layerA.value : layerB.value
   const bottom = top === layerA.value ? layerB.value : layerA.value
   if (top) top.classList.add('top')
   if (bottom) bottom.classList.remove('top')
@@ -88,8 +106,11 @@ function initLayers() {
 }
 
 onMounted(initLayers)
-watch(() => props.item.done, async () => {
-  // Recompressing or freshly done: rebuild layers from the current view.
+// Re-init on a new result, not just the first success: a recompress keeps
+// `done` true while outUrl changes, and the old URL is revoked by App. Without
+// the outUrl dependency the imperative <img> kept a dead URL after every
+// settings change (broken thumbnail until the next remount).
+watch([() => props.item.done, () => props.item.outUrl], async () => {
   await nextTick()
   initLayers()
 })
@@ -137,8 +158,8 @@ const fmtTag = computed(() => {
   if (props.item.done && props.item.outType) return map[props.item.outType] ?? props.item.outType
   return props.item.file.name.split('.').pop()?.toUpperCase() ?? ''
 })
-const pillClass = computed(() => props.item.error ? 'fail' : props.item.done ? 'done' : 'processing')
-const pillText = computed(() => props.item.error ? props.t('statusFailed') : props.item.done ? props.t('statusDone') : props.t('statusProcessing'))
+const pillClass = computed(() => props.item.cancelled ? 'cancelled' : props.item.error ? 'fail' : props.item.done ? 'done' : 'processing')
+const pillText = computed(() => props.item.cancelled ? props.t('cancelled') : props.item.error ? props.t('statusFailed') : props.item.done ? props.t('statusDone') : props.t('statusProcessing'))
 
 const savedPct = computed(() => {
   if (props.item.file.size <= 0) return 0
@@ -156,15 +177,23 @@ const isAlreadyBest = computed(() => props.item.done && props.item.outSize >= pr
 // the original when the encoder kept the size (already-best never assigns
 // outW/outH, so the fallback is what makes its line read unchanged).
 const dimsShown = computed(() => props.item.done && props.item.origW > 0 && props.item.origH > 0)
+// Output dimensions fall back to the input for already-best items. Unchanged
+// dimensions stay on one line; a real resize gets the vertical original ↓
+// output layout, which is easier to scan than a long horizontal "A → B".
+const outW = computed(() => props.item.outW || props.item.origW)
+const outH = computed(() => props.item.outH || props.item.origH)
+const dimsChanged = computed(() => outW.value !== props.item.origW || outH.value !== props.item.origH)
 
 // Barely-smaller output: worth one quiet line, not a green celebration.
 // PNG without quantization gets the actionable variant (quantization is
 // the lever that actually shrinks it); the snapshot proves what the
 // displayed result was computed under.
-const showSmallNote = computed(() => props.item.done && !isAlreadyBest.value && savedPct.value < 10)
-const smallNoteText = computed(() => {
+const showSmallTag = computed(() => props.item.done && !isAlreadyBest.value && savedPct.value < 10)
+// Same grey bordered tag as already-best; only the verdict differs. A
+// lossless PNG gets the actionable "try quantization" wording.
+const smallTagText = computed(() => {
   const ls = props.item.lastSettings
-  return ls && ls.format === 'image/png' && !ls.quantize ? props.t('smallSaveQuantNote') : props.t('smallSaveNote')
+  return ls && ls.format === 'image/png' && !ls.quantize ? props.t('smallSaveQuantTag') : props.t('smallSaveTag')
 })
 
 // Transparent source flattened to JPEG: the white fill is silent data
@@ -238,4 +267,6 @@ async function onCopy() {
     copyTimer = setTimeout(() => { copyFailed.value = false }, 3000)
   }
 }
+
+onUnmounted(() => { if (copyTimer) clearTimeout(copyTimer) })
 </script>

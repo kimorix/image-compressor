@@ -1,5 +1,14 @@
 <template>
-  <div class="progress" id="progress" v-show="total > 0 && finished < total">
+  <div
+    class="progress"
+    id="progress"
+    v-show="total > 0 && finished < total"
+    role="progressbar"
+    aria-valuemin="0"
+    :aria-valuemax="total"
+    :aria-valuenow="finished"
+    :aria-label="t('processingCount', finished, total)"
+  >
     <div class="bar"><div class="fill" id="progressFill" :style="{ width: pct + '%' }"></div></div>
     <div class="text" id="progressText">{{ t('processingCount', finished, total) }}</div>
   </div>

@@ -76,12 +76,12 @@
       <div class="adv-body" v-show="advOpen">
         <label class="check" v-show="showQuantize"><input type="checkbox" id="quantize" :checked="settings.quantize" @change="onQuantize(($event.target as HTMLInputElement).checked)" /> <span>{{ t('quantizeLabel') }}</span></label>
         <label class="check" v-show="showJpegOpts"><input type="checkbox" id="keepExif" :checked="settings.keepExif" @change="onKeepExif(($event.target as HTMLInputElement).checked)" /> <span>{{ t('keepExifLabel') }}</span></label>
-        <label class="check" v-show="settings.format === 'image/jpeg'"><input type="color" id="jpegFill" :value="settings.jpegFill" @change="onJpegFill(($event.target as HTMLInputElement).value)" /> <span>{{ t('jpegFillLabel') }}</span></label>
+        <label class="check" v-show="settings.format === 'image/jpeg'"><input type="color" id="jpegFill" :value="settings.jpegFill" @change="onJpegFill(($event.target as HTMLInputElement).value)" /> <span>{{ t('jpegFillLabel') }}</span><span class="hex">{{ settings.jpegFill.toUpperCase() }}</span></label>
         <label class="check" v-show="settings.resizeMode !== 'exact'"><input type="checkbox" id="noUpscale" :checked="settings.noUpscale" @change="onNoUpscale(($event.target as HTMLInputElement).checked)" /> <span>{{ t('noUpscale') }}</span></label>
         <label class="check"><input type="checkbox" id="keepOriginalName" :checked="settings.keepOriginalName" @change="onKeepOriginalName(($event.target as HTMLInputElement).checked)" /> <span>{{ t('keepOriginalNameLabel') }}</span></label>
       </div>
     </div>
-    <button type="button" class="primary start-btn" @click="emit('start')">{{ t('compressStart') }}</button>
+    <button type="button" class="primary start-btn" :disabled="!hasItems" @click="emit('start')">{{ hasItems ? t('recompressBtn') : t('compressStart') }}</button>
   </div>
 </template>
 
@@ -93,6 +93,7 @@ import { DEFAULT_SETTINGS, ID_SIZES, matchPreset, PRESETS } from '../lib/presets
 const props = defineProps<{
   settings: Settings
   t: (key: string, ...args: (string | number)[]) => string
+  hasItems: boolean
 }>()
 const emit = defineEmits<{
   (e: 'update', patch: Partial<Settings>, immediate: boolean): void

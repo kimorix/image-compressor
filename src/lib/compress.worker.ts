@@ -31,6 +31,7 @@ export interface WorkerResult {
   hasAlpha?: boolean
   isAnimatedGif?: boolean
   error?: string
+  retryable?: boolean
 }
 
 self.onmessage = async (e: MessageEvent<WorkerTask>) => {
@@ -39,7 +40,7 @@ self.onmessage = async (e: MessageEvent<WorkerTask>) => {
   try {
     const res = await compressToBlob(file, settings, tx, canvasWebp)
     if (!res.done) {
-      self.postMessage({ id, ok: false, error: res.error })
+      self.postMessage({ id, ok: false, error: res.error, retryable: res.retryable })
       return
     }
     self.postMessage({

@@ -53,4 +53,24 @@ describe('searchQuality', () => {
     const r = await searchQuality(50, 90, 4, async (q) => ({ pass: false, value: q }))
     expect(r.q).toBe(90)
   })
+  it('starts from an initial passing probe without re-testing it', async () => {
+    const tried: number[] = []
+    const r = await searchQuality(50, 90, 4, async (q) => {
+      tried.push(q)
+      return { pass: q >= 72, value: q }
+    }, { q: 80, pass: true, value: 80 })
+    expect(tried).not.toContain(80)
+    expect(r.q).toBeGreaterThanOrEqual(72)
+    expect(r.q - 72).toBeLessThanOrEqual(4)
+  })
+  it('searches upward from a failing initial probe', async () => {
+    const tried: number[] = []
+    const r = await searchQuality(50, 90, 4, async (q) => {
+      tried.push(q)
+      return { pass: q >= 85, value: q }
+    }, { q: 80, pass: false, value: 80 })
+    expect(tried).not.toContain(80)
+    expect(r.q).toBeGreaterThanOrEqual(85)
+    expect(r.q).toBeLessThanOrEqual(90)
+  })
 })

@@ -109,6 +109,16 @@ export class CompressPool {
   }
 
   private async finish(ctx: Pending, res: WorkerResult) {
+    // Deterministic failures must not be re-run on the main thread: a pixel
+    // cap error would decode the same huge image again and double peak memory.
+    if (!res.ok && res.retryable === false) {
+      ctx.resolve({
+        done: false,
+        error: res.error ?? translate(ctx.lang, 'compressFail'),
+        retryable: false,
+      })
+      return
+    }
     if (res.ok && (res.alreadyBest || res.blob)) {
       ctx.resolve({
         done: true,
@@ -160,6 +170,25 @@ export class CompressPool {
     for (const ctx of failed) {
       void this.finish(ctx, { id: -1, ok: false, error: 'worker error' })
     }
+  }
+
+  // User cancellation: resolve every queued/in-flight task with a cancelled
+  // result and terminate the workers, so a slow WASM encode actually stops
+  // instead of finishing invisibly. The pool respawns cleanly on the next run.
+  cancelAll(): void {
+    for (const { ctx } of this.queue) {
+      ctx.resolve({ done: false, error: translate(ctx.lang, 'cancelled'), cancelled: true })
+    }
+    this.queue = []
+    for (const ctx of this.pending.values()) {
+      ctx.resolve({ done: false, error: translate(ctx.lang, 'cancelled'), cancelled: true })
+    }
+    this.pending.clear()
+    for (const w of this.workers) {
+      try { w.terminate() } catch { /* already dead */ }
+    }
+    this.workers = []
+    this.idle = []
   }
 
   async run(item: CompressItem, settings: Settings, lang: Lang): Promise<CompressResult> {

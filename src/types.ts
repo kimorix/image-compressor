@@ -13,6 +13,11 @@ export interface CompressItem {
   outH: number
   view: View
   error: string | null
+  // A user cancellation is not a failure: the row keeps a neutral pill and a
+  // muted note, with Retry available.
+  cancelled: boolean
+  // False for deterministic failures (pixel cap): omit the Retry action.
+  retryable: boolean
   done: boolean
   targetNote: string | null
   typeNote: string | null
@@ -73,6 +78,8 @@ export function newItem(file: File, relDir = ''): CompressItem {
     outH: 0,
     view: 'orig',
     error: null,
+    cancelled: false,
+    retryable: true,
     done: false,
     targetNote: null,
     typeNote: null,

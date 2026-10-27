@@ -1,4 +1,5 @@
 import { baseName, extOf } from './format'
+import { exceedsPixelLimit, MAX_PIXELS_MB } from './limits'
 import { restoreExif } from './exif'
 import { gifFrameCount } from './gif'
 import { canEmbedPng, embedIcc, extractIcc, isDisplayP3 } from './icc'
@@ -41,6 +42,7 @@ export interface CompressBlobSuccess {
 export interface CompressBlobFailure {
   done: false
   error: string
+  retryable?: boolean
 }
 
 export type CompressBlobResult = CompressBlobSuccess | CompressBlobFailure
@@ -66,6 +68,11 @@ export interface CompressSuccess {
 export interface CompressFailure {
   done: false
   error: string
+  // Set when the user cancelled the run (the pool terminates its workers).
+  cancelled?: boolean
+  // False for a deterministic failure (e.g. pixel cap): retrying on the main
+  // thread would decode the same huge image a second time.
+  retryable?: boolean
 }
 
 export type CompressResult = CompressSuccess | CompressFailure
@@ -196,6 +203,14 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
     const decoded = await decodeSource(source, t, useP3)
     const origW = decoded.w
     const origH = decoded.h
+    // Fail before the smart scan / extra canvases / encoder copies. The
+    // decode itself has happened (browsers have no cheap pixel-count API),
+    // but a 100 MP source should not multiply into several 400 MB buffers.
+    if (exceedsPixelLimit(origW, origH)) {
+      const err = new Error(t('tooManyPixels', MAX_PIXELS_MB)) as Error & { retryable?: boolean }
+      err.retryable = false
+      throw err
+    }
     let width = origW
     let height = origH
     const max = s.maxSize || 0
@@ -444,11 +459,16 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
       const ref = lp ? toLuma(lp.data, width, height) : null
       const decodedLuma = ref ? await decodeLuma(blob, width, height, useP3) : null
       if (ref && decodedLuma) {
+        // q80 is encoded above as the midpoint probe. Feed it to the search
+        // as the initial result: starting the binary search at [50, 90] used
+        // to test q70 first, so on most photos the q80 encode + decode were
+        // pure overhead. This keeps the same answer with one fewer round.
+        const pass80 = ssim(ref, decodedLuma) >= SMART_SSIM
         const found = await searchQuality(SMART_Q_MIN, SMART_Q_MAX, 4, async (q) => {
-          const b = q === 80 ? blob! : await encodeAt(width, height, q / 100)
-          const l = q === 80 ? decodedLuma : await decodeLuma(b, width, height, useP3)
+          const b = await encodeAt(width, height, q / 100)
+          const l = await decodeLuma(b, width, height, useP3)
           return { pass: !!l && ssim(ref, l) >= SMART_SSIM, value: b }
-        })
+        }, { q: 80, pass: pass80, value: blob })
         blob = found.value
         targetNote = t('smartQ', found.q)
       }
@@ -507,7 +527,12 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
       isAnimatedGif,
     }
   } catch (err) {
-    return { done: false, error: err instanceof Error ? err.message : t('compressFail') }
+    const retryable = (err as { retryable?: boolean } | null)?.retryable
+    return {
+      done: false,
+      error: err instanceof Error ? err.message : t('compressFail'),
+      ...(retryable === false ? { retryable: false } : {}),
+    }
   }
 }
 

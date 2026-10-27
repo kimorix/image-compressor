@@ -68,7 +68,7 @@ let avifModule: Promise<{
 }> | null = null
 export async function encodeAvif(img: RgbaImage, quality: number): Promise<ArrayBuffer> {
   if (!avifModule) {
-    avifModule = (async () => {
+    const p = (async () => {
       const [{ default: avifFactory }, { initEmscriptenModule }, { defaultOptions }] = await Promise.all([
         import('@jsquash/avif/codec/enc/avif_enc.js'),
         import('@jsquash/avif/utils.js'),
@@ -77,6 +77,11 @@ export async function encodeAvif(img: RgbaImage, quality: number): Promise<Array
       const module = await initEmscriptenModule(avifFactory, await compileModule(avifWasmUrl))
       return { encode: module.encode.bind(module), defaults: defaultOptions as unknown as Record<string, unknown> }
     })()
+    avifModule = p
+    // Do not cache a failed load: one offline hiccup or a transient 404 would
+    // otherwise poison AVIF for the rest of the session, even after the
+    // network is back.
+    void p.catch(() => { if (avifModule === p) avifModule = null })
   }
   const { encode, defaults } = await avifModule!
   const out = encode(
@@ -113,7 +118,7 @@ let quantReady: Promise<{
 }> | null = null
 export async function encodePngQuantized(img: RgbaImage, quality: number): Promise<ArrayBuffer> {
   if (!quantReady) {
-    quantReady = (async () => {
+    const p = (async () => {
       const bg = await import('imagequant/imagequant_bg.js')
       const mod = await compileModule(quantWasmUrl)
       // wasm-pack bundler output has no init: instantiate manually. The module
@@ -131,6 +136,9 @@ export async function encodePngQuantized(img: RgbaImage, quality: number): Promi
           new bg.ImagequantImage(data, w, h, 0),
       }
     })()
+    quantReady = p
+    // Same as AVIF: a failed first load must be retryable.
+    void p.catch(() => { if (quantReady === p) quantReady = null })
   }
   const { Imagequant, makeImage } = await quantReady
   const liq = new Imagequant()

@@ -86,15 +86,27 @@ function windowSsim(a: Float32Array, b: Float32Array, stride: number, x0: number
 // reports whether it passes; the passing candidate with the lowest quality
 // is returned, or the `hi` candidate when nothing passes (complex images
 // keep the most detail the range allows, never less).
+//
+// `initial` is an already-evaluated probe inside the range. The caller has
+// usually encoded the midpoint (q80) anyway, so passing it in lets the search
+// start from that result instead of throwing it away and re-testing q80.
 export async function searchQuality<T>(
   lo: number,
   hi: number,
   precision: number,
   test: (q: number) => Promise<{ pass: boolean; value: T }>,
+  initial?: { q: number; pass: boolean; value: T },
 ): Promise<{ q: number; value: T }> {
   let best: { q: number; value: T } | null = null
-  let top: { q: number; value: T } | null = null
   let l = lo, h = hi
+  if (initial) {
+    if (initial.pass) {
+      best = { q: initial.q, value: initial.value }
+      h = initial.q
+    } else {
+      l = initial.q
+    }
+  }
   while (h - l > precision) {
     const mid = Math.round((l + h) / 2)
     const r = await test(mid)
@@ -103,6 +115,5 @@ export async function searchQuality<T>(
   }
   if (best) return best
   const r = await test(hi)
-  top = { q: hi, value: r.value }
-  return top
+  return { q: hi, value: r.value }
 }
