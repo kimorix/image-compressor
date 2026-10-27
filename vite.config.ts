@@ -46,8 +46,8 @@ export default defineConfig({
       // injectRegister defaults to 'auto': no virtual:pwa-register import in
       // main.ts, so the plugin injects the registration script itself.
       workbox: {
-        // avif_enc.wasm used to force this cap up; it no longer precaches
-        // (see below), but mozjpeg stays precached, so keep headroom.
+        // avif_enc.wasm used to force this cap up; no encoder binary is
+        // precached any more (see below), keep the headroom anyway.
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         // Default patterns omit wasm; encoder binaries must work offline too.
         globPatterns: ['**/*.{js,css,html,png,svg,wasm}'],
@@ -55,7 +55,10 @@ export default defineConfig({
         // binaries plus their emscripten JS glue) and the heic2any chunk
         // (~1.3MB) are only needed when the user actually picks those
         // paths, so they stay OUT of the precache and are cached on first
-        // use instead (CacheFirst below). The worker chunk itself stays
+        // use instead (CacheFirst below). The same goes for the MozJPEG,
+        // lossless PNG and palette-PNG (imagequant + its wasm-bindgen glue)
+        // binaries (~780KB): every install used to download all three up
+        // front although one compression only ever needs one of them. The worker chunk itself stays
         // precached: every compression needs it, and only its lazy
         // payloads move out. The JS glue must be excluded too: it matches
         // the precache's js pattern, and leaving it in silently defeats
@@ -65,7 +68,7 @@ export default defineConfig({
         // files (CMaps, fonts, decoder wasm) are fetched only when a PDF is
         // opened, so they are cached on first use too. The PDF view chunk
         // itself stays precached (small) so the page opens offline.
-        globIgnores: ['**/avif_enc*.wasm', '**/avif_enc*.js', '**/heic2any*.js', '**/webp_enc*.wasm', '**/webp_enc*.js', '**/pdf.worker*', '**/assets/pdf-*.js', '**/docx.worker*', '**/tesseract*', 'pdfjs/**'],
+        globIgnores: ['**/mozjpeg_enc*.wasm', '**/squoosh_png*.wasm', '**/imagequant_bg*', '**/avif_enc*.wasm', '**/avif_enc*.js', '**/heic2any*.js', '**/webp_enc*.wasm', '**/webp_enc*.js', '**/pdf.worker*', '**/assets/pdf-*.js', '**/docx.worker*', '**/tesseract*', 'pdfjs/**'],
         // The plugin defaults every navigation to the precached index.html
         // (SPA fallback). This app has no client routing, and the language
         // shells are real files: restrict the fallback to the root page only,
@@ -81,7 +84,7 @@ export default defineConfig({
         // on first use so they still work offline afterwards. Hashed
         // filenames make old entries harmless orphans, bounded by maxEntries.
         runtimeCaching: [{
-          urlPattern: /\/(avif_enc|webp_enc)[^/]*\.(wasm|js)$|\/heic2any[^/]*\.js$|\/pdf\.worker[^/]*\.m?js$|\/assets\/pdf-[^/]*\.js$|\/docx\.worker[^/]*\.js$|\/tesseract[^/]*\.js$|\/pdfjs\/(cmaps|standard_fonts|wasm)\//,
+          urlPattern: /\/(avif_enc|webp_enc|mozjpeg_enc|squoosh_png_bg|imagequant_bg)[^/]*\.(wasm|js)$|\/heic2any[^/]*\.js$|\/pdf\.worker[^/]*\.m?js$|\/assets\/pdf-[^/]*\.js$|\/docx\.worker[^/]*\.js$|\/tesseract[^/]*\.js$|\/pdfjs\/(cmaps|standard_fonts|wasm)\//,
           handler: 'CacheFirst',
           options: {
             cacheName: 'lazy-assets',
