@@ -7,6 +7,10 @@
           <button type="button" class="lb-zoom-btn" :class="{ active: zoomLevel === '100' }" :aria-pressed="zoomLevel === '100'" @click="zoomLevel = '100'">100%</button>
           <button type="button" class="lb-zoom-btn" :class="{ active: zoomLevel === '200' }" :aria-pressed="zoomLevel === '200'" @click="zoomLevel = '200'">200%</button>
         </div>
+        <div class="lb-nav">
+          <button type="button" class="lb-nav-btn" :disabled="!hasPrev" :aria-label="t('stripPrev')" @click="emit('prev')">‹</button>
+          <button type="button" class="lb-nav-btn" :disabled="!hasNext" :aria-label="t('stripNext')" @click="emit('next')">›</button>
+        </div>
         <button class="lb-close" :title="t('lbClose')" :aria-label="t('lbClose')" @click="$emit('close')">×</button>
       </div>
       <div class="lb-stage" :class="{ zoomed: zoomLevel !== 'fit' }">
@@ -39,7 +43,7 @@
         </div>
       </div>
       <div class="lb-info" v-if="item.done && item.origW"><span :class="{ warn: upscaled }">{{ dimsText }}</span><span v-if="item.targetNote"> · {{ item.targetNote }}</span><span v-if="item.typeNote"> · {{ item.typeNote }}</span></div>
-      <div class="lb-hint">{{ t('lbZoomHint') }}</div>
+      <div class="lb-hint">{{ t('lbZoomHint') }}<span class="lb-keys"> · {{ t('lbKeysHint') }}</span></div>
     </div>
   </div>
 </template>
@@ -51,9 +55,13 @@ import type { CompressItem } from '../types'
 const props = defineProps<{
   item: CompressItem
   t: (key: string, ...args: (string | number)[]) => string
+  hasPrev?: boolean
+  hasNext?: boolean
 }>()
 const emit = defineEmits<{
   (e: 'close'): void
+  (e: 'prev'): void
+  (e: 'next'): void
 }>()
 
 // Same source rule as the row thumbnail: compressed when done, else the
@@ -124,8 +132,19 @@ function onDividerKey(e: KeyboardEvent) {
   else if (e.key === 'End') { pos.value = 100; e.preventDefault() }
 }
 
+// Desktop keys: Esc closes, ← / → step through the list (the divider keeps
+// its own arrows while focused), Space flips between all-original and
+// all-compressed for a quick blink comparison.
 function onKey(e: KeyboardEvent) {
-  if (e.key === 'Escape') emit('close')
+  if (e.key === 'Escape') { emit('close'); return }
+  const onDivider = (e.target as HTMLElement | null)?.classList?.contains('lb-divider')
+  if (onDivider || e.defaultPrevented) return
+  if (e.key === 'ArrowLeft' && props.hasPrev) { emit('prev'); e.preventDefault() }
+  else if (e.key === 'ArrowRight' && props.hasNext) { emit('next'); e.preventDefault() }
+  else if (e.key === ' ' || e.code === 'Space') {
+    e.preventDefault()
+    pos.value = pos.value === 100 ? 0 : 100
+  }
 }
 // Scroll lock: while the preview is open, swipes on the overlay must not
 // scroll the page behind (iOS Safari chains them to the document).

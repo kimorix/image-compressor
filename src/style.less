@@ -81,34 +81,44 @@ main { max-width: 920px; margin: 0 auto; padding: 20px 16px 48px; }
   display: flex; align-items: center; justify-content: center;
   font-size: 18px; font-weight: 600; color: var(--text); pointer-events: none;
 }
-.settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
-.field {
-  label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--subtle); }
+.settings { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 14px 16px; align-items: start; }
+.settings > .settings-note, .settings > .adv, .settings > .start-btn { grid-column: 1 / -1; }
+// One settings row: the label column is shared by all rows (sized to the
+// longest label in the current language), the control takes the rest. The
+// mode's own parameter (slider, KB input, custom size) wraps under it.
+.srow {
+  display: contents;
+  .srow-label { padding-top: 11px; max-width: 9em; font-size: 13px; font-weight: 500; color: var(--subtle); }
+  .srow-ctl { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
   select {
     width: 100%; padding: 10px 36px 10px 12px; font-size: 14px; border: 1px solid var(--border);
     border-radius: 8px; background: var(--surface-2); color: var(--text); cursor: pointer;
     appearance: none; -webkit-appearance: none;
     background-image: @chevron; background-repeat: no-repeat; background-position: right 12px center; background-size: 12px 8px;
   }
+  .inline-param { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .inline-param.wrap { flex-direction: column; align-items: flex-start; }
+  input[type="range"] { flex: 1; min-width: 120px; accent-color: var(--accent); }
   input[type="number"] {
-    width: 100%; padding: 10px 12px; font-size: 16px; border: 1px solid var(--border);
+    width: 96px; padding: 8px 10px; font-size: 16px; border: 1px solid var(--border);
     border-radius: 8px; background: var(--surface-2); color: var(--text);
   }
-  input[type="range"] { width: 100%; accent-color: var(--accent); }
-  input[type="checkbox"] { accent-color: var(--accent); }
-  .value { font-size: 13px; color: var(--text); font-weight: 400; }
-  label.qlabel { display: flex; justify-content: space-between; align-items: baseline; }
-  .check {
-    display: flex; align-items: center; gap: 8px; margin-top: 10px;
-    font-size: 14px; color: var(--text); cursor: pointer;
-    input[type="checkbox"] { width: 18px; height: 18px; margin: 0; flex-shrink: 0; }
-    input[type="color"] { width: 36px; height: 26px; padding: 2px; margin: 0; flex-shrink: 0; border: 1px solid var(--border); border-radius: 6px; background: none; cursor: pointer; }
+  .value { min-width: 40px; text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .unit { font-size: 13px; color: var(--subtle); }
+  .chip-btn {
+    min-height: 32px; padding: 4px 12px; font-size: 13px; border-radius: 999px;
+    &.active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
   }
+}
+.adv-body .check {
+  display: flex; align-items: center; gap: 8px; padding: 6px 0;
+  font-size: 14px; color: var(--text); cursor: pointer;
+  input[type="checkbox"] { width: 18px; height: 18px; margin: 0; flex-shrink: 0; accent-color: var(--accent); }
+  input[type="color"] { width: 36px; height: 26px; padding: 2px; margin: 0; flex-shrink: 0; border: 1px solid var(--border); border-radius: 6px; background: none; cursor: pointer; }
 }
 .settings-note { grid-column: 1 / -1; font-size: 13px; color: var(--subtle); }
 // Segmented option groups: every option visible at once, no dropdown
 // hunting; buttons wrap on narrow cards instead of overflowing them.
-.field-label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 .seg { display: flex; flex-wrap: wrap; gap: 6px; }
 .seg-btn {
   padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px;
@@ -125,15 +135,6 @@ main { max-width: 920px; margin: 0 auto; padding: 20px 16px 48px; }
 }
 .adv-body { display: flex; flex-direction: column; gap: 2px; }
 .file-hint { margin: 8px 0 0; font-size: 13px; color: var(--subtle); }
-.presets {
-  grid-column: 1 / -1; display: flex; flex-direction: column; gap: 8px; align-items: stretch;
-  .preset-btns { display: flex; flex-wrap: wrap; gap: 8px; }
-  .presets-label { font-size: 13px; color: var(--subtle); }
-  .preset-btn {
-    min-height: 36px; padding: 6px 12px; font-size: 13px;
-    &.active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
-  }
-}
 .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
 #resultCard .actions { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
 .actions #clearAll { margin-left: auto; }
@@ -217,7 +218,7 @@ html { touch-action: manipulation; }
   // same-specificity order would let the later hide rule win everywhere.
   #settingsCard .settings-head {
     display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px;
-    h3 { margin: 0; font-size: 16px; font-weight: 600; }
+    h3 { margin: 0; min-width: 0; font-size: 16px; font-weight: 600; overflow-wrap: break-word; hyphens: auto; }
   }
   .settings-collapse-btn {
     padding: 4px 12px; font-size: 13px; border: 1px solid var(--border); border-radius: 6px;
@@ -373,6 +374,9 @@ html { touch-action: manipulation; }
 }
 .lb-box { max-width: 94vw; max-height: 94vh; display: flex; flex-direction: column; gap: 10px; }
 .lb-bar { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+.lb-nav { display: flex; gap: 6px; margin-right: 8px; }
+.lb-nav-btn { min-width: 44px; min-height: 44px; padding: 0; font-size: 22px; line-height: 1; }
+@media (pointer: coarse) { .lb-keys { display: none; } }
 .lb-close { min-width: 44px; min-height: 44px; padding: 0; font-size: 22px; line-height: 1; }
 .lb-stage {
   overflow: auto; display: flex;
@@ -496,8 +500,7 @@ main { max-width: none; margin: 0; padding: 0; min-width: 0; }
 .badge-sub { font-size: 10px; font-weight: 400; opacity: .85; }
 .badge svg { width: 14px; height: 14px; flex: none; }
 /* 设置分节编号 */
-.sec-num { color: var(--accent); font-weight: 700; margin-right: 2px; }
-.start-btn { width: 100%; margin-top: 16px; }
+.start-btn { width: 100%; margin-top: 4px; }
 /* 历史记录 */
 #historyView { min-width: 0; }
 .hist-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

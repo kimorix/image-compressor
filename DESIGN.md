@@ -374,21 +374,31 @@ clears itself after 5 seconds and never blocks the list.
 
 ### Settings Panel
 
-A responsive grid (`repeat(auto-fit, minmax(200px, 1fr))`, gap 16px).
-Every field has a 13px/500 subtle label above it. Selects and number
-inputs share the 8px radius, 1px border, raised background, and custom
-chevron; number inputs render at 16px to avoid iOS focus zoom. Range
-sliders and checkboxes use the accent color. Presets are a wrapping row
-of 36px buttons; the active one is accent-bordered, accent-texted, on an
-accent wash, and clicking it again cancels the selection. Five presets:
-WeChat image (JPEG 85, 1920), WeChat article image (JPEG 85, 900), ID
-photo (JPEG target 200KB), website/blog (WebP 80, 1600), email
-attachment (JPEG target 1000KB). Last-used settings persist to
-localStorage and are restored on the next visit; a corrupt save falls
-back to defaults per key. Conditional
-rows (quantize only for PNG, keepExif only for JPEG, target size only
-for target mode) hide with `v-show`, never unmount, so their values
-survive toggling. Setting notes are full-width 13px subtle lines.
+Four rows on a two-column grid (`max-content` label column shared by all
+rows, control column `minmax(0, 1fr)`, gap 14px 16px): scene, format,
+compression, size. Labels are 13px/500 subtle. Scene, format and size
+are selects (8px radius, raised background, custom chevron); compression
+is a three-button segmented control (Smart / Quality / Size) whose own
+parameter sits directly under it: the quality slider with its value, or
+the KB input with 200 / 500 / 1000 chips. Choosing "Custom..." in the
+size select reveals the resize segments (longest / width / height /
+percent / crop to W x H) and the number input(s) under it.
+
+Smart is the default for both format and compression. The scene select
+shows "Custom" whenever the settings match no scene; picking a scene
+applies it, picking "Custom" while a scene is active restores the
+settings from before the scene. Five scenes: WeChat image (JPEG 85,
+1920), WeChat article image (JPEG 85, 900), ID photo (1-inch 295x413
+crop, JPEG <= 200KB), website/blog (WebP 80, 1600), email attachment
+(JPEG <= 1000KB).
+
+Below the rows, at most one 13px subtle note line (AVIF download
+warning, lossless PNG, target mechanism, or what smart does), then the
+"Advanced" fold (closed by default: quantize, keep EXIF, JPEG fill,
+no-upscale, keep file name; each shown only where it applies). Hidden
+controls use `v-show`, never unmount, so their values survive toggling.
+Last-used settings persist to localStorage except the compression mode;
+a corrupt save falls back to defaults per key, and pre-2.1 saves migrate.
 
 ### Summary
 

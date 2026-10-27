@@ -25,7 +25,9 @@ async function compileModule(url: string): Promise<WebAssembly.Module> {
 
 // ---- WebP (libwebp, method 6 beats the browser's default canvas encode) ----
 let webpEncodeFn: ((data: RgbaImage, opts: Record<string, unknown>) => Promise<ArrayBuffer>) | null = null
-export async function encodeWebp(img: RgbaImage, quality: number): Promise<ArrayBuffer> {
+// alphaQuality 100 keeps the alpha plane lossless: logo and icon edges
+// stay clean while the color planes are still lossy.
+export async function encodeWebp(img: RgbaImage, quality: number, alphaQuality = 100): Promise<ArrayBuffer> {
   if (!webpEncodeFn) {
     const [{ init, default: encode }, { simd }] = await Promise.all([
       import('@jsquash/webp/encode.js'),
@@ -33,14 +35,15 @@ export async function encodeWebp(img: RgbaImage, quality: number): Promise<Array
     ])
     const mod = await compileModule((await simd()) ? webpSimdWasmUrl : webpWasmUrl)
     await init(mod)
-    webpEncodeFn = encode as typeof webpEncodeFn
+    webpEncodeFn = encode as unknown as typeof webpEncodeFn
   }
-  return webpEncodeFn(img, {
+  return webpEncodeFn!(img, {
     quality,
     // Method 4 (libwebp default, what canvas uses): method 6 squeezes ~3%
     // more but costs ~2.7s CPU per photo — 20 phone photos then take ~1
     // minute instead of seconds. Not worth it.
     method: 4,
+    alpha_quality: alphaQuality,
   })
 }
 
@@ -50,9 +53,9 @@ export async function encodeMozjpeg(img: RgbaImage, quality: number): Promise<Ar
   if (!mozjpegEncodeFn) {
     const { init, default: encode } = await import('@jsquash/jpeg/encode.js')
     await init(await compileModule(mozjpegWasmUrl))
-    mozjpegEncodeFn = encode as typeof mozjpegEncodeFn
+    mozjpegEncodeFn = encode as unknown as typeof mozjpegEncodeFn
   }
-  return mozjpegEncodeFn(img, { quality })
+  return mozjpegEncodeFn!(img, { quality })
 }
 
 // ---- AVIF (aom, single-thread) ----
@@ -72,10 +75,10 @@ export async function encodeAvif(img: RgbaImage, quality: number): Promise<Array
         import('@jsquash/avif/meta.js'),
       ])
       const module = await initEmscriptenModule(avifFactory, await compileModule(avifWasmUrl))
-      return { encode: module.encode.bind(module), defaults: defaultOptions }
+      return { encode: module.encode.bind(module), defaults: defaultOptions as unknown as Record<string, unknown> }
     })()
   }
-  const { encode, defaults } = await avifModule
+  const { encode, defaults } = await avifModule!
   const out = encode(
     new Uint8Array(img.data.buffer, img.data.byteOffset, img.data.byteLength),
     img.width,
@@ -92,9 +95,9 @@ export async function encodePng(img: RgbaImage): Promise<ArrayBuffer> {
   if (!pngEncodeFn) {
     const { init, default: encode } = await import('@jsquash/png/encode.js')
     await init(pngWasmUrl)
-    pngEncodeFn = encode as typeof pngEncodeFn
+    pngEncodeFn = encode as unknown as typeof pngEncodeFn
   }
-  return pngEncodeFn(img, {})
+  return pngEncodeFn!(img, {})
 }
 
 // ---- PNG, palette quantization (the TinyPNG approach) ----
@@ -102,6 +105,7 @@ export async function encodePng(img: RgbaImage): Promise<ArrayBuffer> {
 let quantReady: Promise<{
   Imagequant: new () => {
     set_quality: (min: number, max: number) => void
+    set_speed: (speed: number) => void
     process: (img: unknown) => Uint8Array
     free: () => void
   }

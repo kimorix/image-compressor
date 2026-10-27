@@ -2,6 +2,7 @@ import { baseName, extOf } from './format'
 import { restoreExif } from './exif'
 import { gifFrameCount } from './gif'
 import { canEmbedPng, embedIcc, extractIcc, isDisplayP3 } from './icc'
+import { searchQuality, ssim, toLuma, type Luma } from './ssim'
 import type { CompressItem, Settings } from '../types'
 import {
   decodeHeicToPngBlob,
@@ -101,6 +102,14 @@ async function decodeSource(blob: Blob, t: T, keepValues = false): Promise<{ src
 
 type AnyCanvas = HTMLCanvasElement | OffscreenCanvas
 
+type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
+
+// getContext on the AnyCanvas union types as the generic RenderingContext;
+// every call here asks for '2d', so narrow it once.
+function get2d(c: AnyCanvas, opts: CanvasRenderingContext2DSettings): Ctx2D {
+  return c.getContext('2d', opts) as Ctx2D
+}
+
 function makeCanvas(): AnyCanvas {
   if (typeof document === 'undefined') return new OffscreenCanvas(1, 1)
   return document.createElement('canvas')
@@ -111,6 +120,35 @@ async function canvasToBlob(c: AnyCanvas, type: string, q?: number): Promise<Blo
     return (c as OffscreenCanvas).convertToBlob({ type, quality: q })
   }
   return new Promise((res) => (c as HTMLCanvasElement).toBlob(res, type, type === 'image/png' ? undefined : q))
+}
+
+// Smart quality bounds and threshold. Calibrated on 1920px photos with
+// WebP: mean SSIM 0.985 on the 1024px luma lands smooth photos around
+// q60-75 and detailed ones higher, while q80 scores 0.988-0.993. q50 is the
+// floor (below it banding shows even when SSIM still passes), q90 the
+// ceiling (above it sizes balloon for no visible gain).
+const SMART_Q_MIN = 50
+const SMART_Q_MAX = 90
+const SMART_SSIM = 0.985
+
+// Decode an encoded candidate back to pixels at (w, h) for scoring. Null
+// when the browser cannot decode the type (AVIF on older Safari): the
+// caller then keeps its fixed-quality result.
+// p3: the reference pixels came from a display-p3 canvas, so read the
+// candidate's raw values too (its embedded P3 tag must not be converted).
+async function decodeLuma(blob: Blob, w: number, h: number, p3 = false): Promise<Luma | null> {
+  try {
+    const bmp = await createImageBitmap(blob, p3 ? { colorSpaceConversion: 'none' } : undefined)
+    const c = makeCanvas()
+    c.width = w
+    c.height = h
+    const cx = get2d(c, { willReadFrequently: true })
+    cx.drawImage(bmp, 0, 0, w, h)
+    bmp.close?.()
+    return toLuma(cx.getImageData(0, 0, w, h).data, w, h)
+  } catch {
+    return null
+  }
 }
 
 // Pure with respect to shared state: it never mutates its input, it returns
@@ -144,22 +182,16 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
     // WebP / PNG-with-compression can carry the profile back out; AVIF
     // cannot, so it stays on the sRGB path rather than risk a mistag.
     const srcIcc = await extractIcc(source)
-    let outType = s.format === 'original' ? file.type : s.format
+    const autoFormat = s.format === 'auto'
+    // Smart format is decided after the pixel scan; WebP is a placeholder.
+    let outType = autoFormat ? 'image/webp' : s.format === 'original' ? file.type : s.format
     if (isHeic(file) && s.format === 'original') outType = 'image/jpeg'
     if (!['image/jpeg', 'image/png', 'image/webp', 'image/avif'].includes(outType)) outType = 'image/png'
-    // Smart + keep-original: the format is the input's own, known before
-    // decode (HEIC -> JPEG, GIF/unknown -> PNG, same as 'original').
-    if (s.mode === 'smart' && s.smartKeepOriginal) {
-      outType = file.type
-      if (isHeic(file)) outType = 'image/jpeg'
-      if (!['image/jpeg', 'image/png', 'image/webp', 'image/avif'].includes(outType)) outType = 'image/png'
-    }
-    // Smart mode ignores the settings format, so its P3 decision cannot
-    // use the stale outType: smart only ever emits taggable types (WebP,
-    // or PNG when it can carry the profile), so assume taggable here and
-    // re-decide after the pixel scan picks the real type.
+    // Smart format cannot use the placeholder for its P3 decision: it only
+    // ever emits taggable types (WebP, or PNG when it can carry the
+    // profile), so assume taggable here and re-decide after the scan.
     let useP3 = srcIcc !== null && isDisplayP3(srcIcc)
-      && ((s.mode === 'smart' && !s.smartKeepOriginal) || outType === 'image/jpeg' || outType === 'image/webp'
+      && (autoFormat || outType === 'image/jpeg' || outType === 'image/webp'
         || (outType === 'image/png' && canEmbedPng()))
     const decoded = await decodeSource(source, t, useP3)
     const origW = decoded.w
@@ -168,7 +200,19 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
     let height = origH
     const max = s.maxSize || 0
     const mode = s.resizeMode ?? 'longest'
-    if (mode === 'percent') {
+    // Source rectangle drawn into the output: the whole image, except for
+    // 'exact', which scales to cover the box and crops the overflow evenly.
+    let crop = { sx: 0, sy: 0, sw: origW, sh: origH }
+    if (mode === 'exact') {
+      const bw = Math.max(1, max || origW)
+      const bh = Math.max(1, s.maxHeight || origH)
+      const scale = Math.max(bw / origW, bh / origH)
+      const sw = Math.min(origW, Math.round(bw / scale))
+      const sh = Math.min(origH, Math.round(bh / scale))
+      crop = { sx: Math.floor((origW - sw) / 2), sy: Math.floor((origH - sh) / 2), sw, sh }
+      width = bw
+      height = bh
+    } else if (mode === 'percent') {
       // Percent: 100 = unchanged, 0 (legacy "no limit") = unchanged.
       if (max > 0 && max !== 100) {
         let scale = max / 100
@@ -208,31 +252,44 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
     // carry a P3 profile, so a P3 source never ends up untagged.
     let alphaScan: boolean | null = null
     let quantize = s.quantize
-    if (s.mode === 'smart') {
+    const drawSrc = (c: Ctx2D, w: number, h: number) =>
+      c.drawImage(decoded.src, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, w, h)
+    if (autoFormat) {
       const sc = makeCanvas()
       sc.width = width
       sc.height = height
-      const sctx = sc.getContext('2d', { willReadFrequently: true })!
-      sctx.drawImage(decoded.src, 0, 0, width, height)
+      const sctx = get2d(sc, { willReadFrequently: true })
+      drawSrc(sctx, width, height)
       const d = sctx.getImageData(0, 0, width, height).data
+      // Color key includes a coarse alpha level, so a transparent logo
+      // with a few flat colors still counts as a graphic.
+      // Flatness: share of pixels identical to their left neighbor.
+      // Graphics and screenshots are mostly flat runs; photos (even
+      // grayscale ones, whose coarse color count is always tiny) are not.
       let has = false
+      let same = 0
       const colors = new Set<number>()
       for (let i = 0; i < d.length; i += 4) {
-        if (d[i + 3] < 255) { has = true; break }
-        if ((i >> 2) % 4 === 0) colors.add(((d[i] >> 4) << 8) | ((d[i + 1] >> 4) << 4) | (d[i + 2] >> 4))
+        if (d[i + 3] < 255) has = true
+        if (i >= 4 && d[i] === d[i - 4] && d[i + 1] === d[i - 3] && d[i + 2] === d[i - 2] && d[i + 3] === d[i - 1]) same++
+        if ((i >> 2) % 4 === 0 && colors.size <= 256) {
+          colors.add(((d[i + 3] >> 5) << 12) | ((d[i] >> 4) << 8) | ((d[i + 1] >> 4) << 4) | (d[i + 2] >> 4))
+        }
       }
       alphaScan = has
-      if (!s.smartKeepOriginal) {
-        if (has) outType = 'image/webp'
-        else if (colors.size <= 256 && canEmbedPng()) outType = 'image/png'
-        else outType = 'image/webp'
-        useP3 = srcIcc !== null && isDisplayP3(srcIcc)
-          && (outType === 'image/webp' || (outType === 'image/png' && canEmbedPng()))
-      }
+      const flat = same / Math.max(1, width * height)
+      // Few colors in mostly flat areas (with or without transparency) is a
+      // graphic: palette PNG keeps edges exact. Everything else is a photo:
+      // WebP, whose alpha plane stays lossless (alpha_quality 100).
+      if (colors.size <= 256 && flat >= 0.3 && canEmbedPng()) outType = 'image/png'
+      else outType = 'image/webp'
+      useP3 = srcIcc !== null && isDisplayP3(srcIcc)
+        && (outType === 'image/webp' || (outType === 'image/png' && canEmbedPng()))
+      // A graphic picked for PNG is always palette-quantized.
       quantize = outType === 'image/png'
     }
     let canvas = makeCanvas()
-    let ctx = canvas.getContext('2d', { willReadFrequently: true, ...(useP3 ? { colorSpace: 'display-p3' } : {}) })!
+    let ctx = get2d(canvas, { willReadFrequently: true, ...(useP3 ? { colorSpace: 'display-p3' as const } : {}) })
     if (useP3) {
       // A mistagged output (P3 tag on sRGB pixels) is worse than no tag:
       // only proceed when the canvas really honors display-p3. Browsers
@@ -241,7 +298,7 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
       if (!attrs || attrs.colorSpace !== 'display-p3') {
         useP3 = false
         canvas = makeCanvas()
-        ctx = canvas.getContext('2d', { willReadFrequently: true })!
+        ctx = get2d(canvas, { willReadFrequently: true })
       }
     }
     let targetNote: string | null = null
@@ -254,6 +311,7 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
     // the canvas fallback path (Safari WebP -> JPEG).
     // Transparency scan: declared before canvas creation so the smart
     // pre-scan can feed it; the first encode then skips its own pass.
+    let lastPixels: RgbaImage | null = null
     const encodeAt = async (w: number, h: number, q?: number): Promise<Blob> => {
       canvas.width = w
       canvas.height = h
@@ -264,8 +322,8 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
         const ac = makeCanvas()
         ac.width = w
         ac.height = h
-        const actx = ac.getContext('2d', { willReadFrequently: true })!
-        actx.drawImage(decoded.src, 0, 0, w, h)
+        const actx = get2d(ac, { willReadFrequently: true })
+        drawSrc(actx, w, h)
         const d = actx.getImageData(0, 0, w, h).data
         let has = false
         for (let i = 3; i < d.length; i += 4) {
@@ -274,8 +332,9 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
         alphaScan = has
       }
       if (outType === 'image/jpeg') { ctx.fillStyle = s.jpegFill || '#ffffff'; ctx.fillRect(0, 0, w, h) }
-      ctx.drawImage(decoded.src, 0, 0, w, h)
+      drawSrc(ctx, w, h)
       const pixels: RgbaImage = ctx.getImageData(0, 0, w, h)
+      lastPixels = pixels
       let out: Blob
       try {
         let buf: ArrayBuffer
@@ -311,7 +370,7 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
       // size (tag included) and the target guarantee still holds exactly.
       if (useP3 && srcIcc) {
         const bytes = new Uint8Array(await out.arrayBuffer())
-        out = new Blob([await embedIcc(bytes, outType, srcIcc)], { type: outType })
+        out = new Blob([await embedIcc(bytes, outType, srcIcc) as BlobPart], { type: outType })
       }
       return out
     }
@@ -320,7 +379,7 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
     if (s.mode === 'target') {
       const targetBytes = (s.targetSize || 200) * 1024
       let fitted = false
-      if (outType !== 'image/png' || s.quantize) {
+      if (outType !== 'image/png' || quantize) {
         const q100 = await encodeAt(width, height, 1)
         if (q100.size <= targetBytes) {
           blob = q100; targetNote = t('targetBest'); fitted = true
@@ -348,7 +407,7 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
         }
       }
       if (!fitted) {
-        const q = outType === 'image/png' && !s.quantize ? undefined : 0.1
+        const q = outType === 'image/png' && !quantize ? undefined : 0.1
         const full = outType === 'image/png' ? await encodeAt(width, height, q) : null
         if (full && full.size <= targetBytes) {
           blob = full; targetNote = t('targetUnder')
@@ -367,7 +426,7 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
           }
           if (best) {
             blob = best; width = bestW; height = bestH
-            targetNote = outType === 'image/png' && !s.quantize ? t('targetAutoSize', width, height) : t('targetAutoSizeLow', width, height)
+            targetNote = outType === 'image/png' && !quantize ? t('targetAutoSize', width, height) : t('targetAutoSizeLow', width, height)
           } else {
             width = Math.max(1, Math.round(width * 0.1)); height = Math.max(1, Math.round(height * 0.1))
             blob = await encodeAt(width, height, q)
@@ -375,8 +434,27 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
           }
         }
       }
+    } else if (s.mode === 'auto' && outType !== 'image/png') {
+      // Smart quality: the lowest quality whose decoded result stays
+      // structurally close to the source (SSIM on luma, see ssim.ts).
+      // Simple images land well below q80, detailed ones go up to q90
+      // rather than blur. Each step is one encode plus one decode.
+      blob = await encodeAt(width, height, 0.8)
+      const lp = lastPixels as RgbaImage | null
+      const ref = lp ? toLuma(lp.data, width, height) : null
+      const decodedLuma = ref ? await decodeLuma(blob, width, height, useP3) : null
+      if (ref && decodedLuma) {
+        const found = await searchQuality(SMART_Q_MIN, SMART_Q_MAX, 4, async (q) => {
+          const b = q === 80 ? blob! : await encodeAt(width, height, q / 100)
+          const l = q === 80 ? decodedLuma : await decodeLuma(b, width, height, useP3)
+          return { pass: !!l && ssim(ref, l) >= SMART_SSIM, value: b }
+        })
+        blob = found.value
+        targetNote = t('smartQ', found.q)
+      }
     } else {
-      const quality = s.mode === 'smart' ? 0.8 : s.quality / 100
+      // Fixed quality; smart quality on PNG means palette quality 80.
+      const quality = s.mode === 'auto' ? 0.8 : s.quality / 100
       blob = await encodeAt(width, height, outType === 'image/png' && !quantize ? undefined : quality)
     }
     // Optional EXIF preservation (JPEG only): re-encoding strips metadata,

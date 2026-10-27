@@ -34,12 +34,13 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { filesFromDrop } from '../lib/drop'
 
 const props = defineProps<{
   t: (key: string, ...args: (string | number)[]) => string
   compact: boolean
 }>()
-const emit = defineEmits<{ (e: 'files', files: File[]): void }>()
+const emit = defineEmits<{ (e: 'files', files: File[], dirs?: string[]): void }>()
 
 const dragover = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -88,12 +89,11 @@ function onPick() {
   if (fileInput.value) fileInput.value.value = ''
 }
 
-function onDrop(e: DragEvent) {
+// Folders are walked recursively; each file keeps its folder path.
+async function onDrop(e: DragEvent) {
   dragover.value = false
-  // No filtering here: App.addFiles is the single funnel (it also covers
-  // paste and the file picker), so a dropped file is never silently lost.
-  const files = [...(e.dataTransfer?.files ?? [])]
-  if (files.length) emit('files', files)
+  const dropped = await filesFromDrop(e.dataTransfer)
+  if (dropped.length) emit('files', dropped.map((d) => d.file), dropped.map((d) => d.dir))
 }
 
 void props

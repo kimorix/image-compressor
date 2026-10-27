@@ -19,10 +19,6 @@
         <button type="button" :class="{ active: view === 'history' }" @click="goHistory"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>{{ t('navHistory') }}</button>
       </nav>
       <div class="side-card">
-        <strong>{{ t('sideLocalTitle') }}</strong>
-        <p>{{ t('sideLocalDesc') }}</p>
-      </div>
-      <div class="side-card">
         <strong>{{ t('sideFormats') }}</strong>
         <p class="side-formats">JPG · PNG · WebP · AVIF · HEIC · HEIF</p>
       </div>
@@ -153,7 +149,7 @@
   </div>
   <div class="sticky-spacer" v-show="items.length > 0" aria-hidden="true"></div>
   <nav class="tab-bar">
-    <button type="button" :class="{ active: view === 'tool' }" @click="goTool(); window.scrollTo({ top: 0, behavior: 'smooth' })"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8" /><path d="M5 9v11h14V9" /></svg>{{ t('tabHome') }}</button>
+    <button type="button" :class="{ active: view === 'tool' }" @click="goHome"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8" /><path d="M5 9v11h14V9" /></svg>{{ t('tabHome') }}</button>
     <button type="button" @click="goSettings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></svg>{{ t('tabSettings') }}</button>
     <button type="button" :class="{ active: moreOpen }" @click="moreOpen = !moreOpen"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>{{ t('tabMore') }}</button>
   </nav>
@@ -167,7 +163,7 @@
   while a run is in flight. -->
   <div class="global-loading" :class="{ show: recompressing }" aria-hidden="true"><span class="gl-spin"></span><span>{{ t('processing') }}</span></div>
   <div v-if="pageDragging" class="page-drop-hint" aria-hidden="true">{{ t('dropAnywhere') }}</div>
-  <Lightbox v-if="lbItem" :item="lbItem" :t="t" @close="lightboxId = null" />
+  <Lightbox v-if="lbItem" :item="lbItem" :t="t" :has-prev="lbIndex > 0" :has-next="lbIndex >= 0 && lbIndex < items.length - 1" @close="lightboxId = null" @prev="lbStep(-1)" @next="lbStep(1)" />
   <footer v-html="t('footer')"></footer>
 </template>
 
@@ -183,6 +179,7 @@ import { LANGS, initialLang, t as tx, type Lang } from './i18n'
 import { applyTheme, initialTheme, MOON_ICON, SUN_ICON, type Theme } from './lib/theme'
 import { CompressPool } from './lib/compress-pool'
 import { baseName, fmtSize, shortName } from './lib/format'
+import { filesFromDrop } from './lib/drop'
 import { DEFAULT_SETTINGS, matchPreset, PRESETS } from './lib/presets'
 import { loadSavedSettings, saveSettings } from './lib/settings-store'
 import { newItem, type CompressItem, type Settings } from './types'
@@ -243,6 +240,12 @@ function goTool() {
   view.value = 'tool'
   moreOpen.value = false
 }
+// Tab bar Home: back to the tool, scrolled to the top. (Templates cannot
+// reach window, so this lives in script: the old inline call threw.)
+function goHome() {
+  goTool()
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
 function goHistory() {
   loadHistory()
   view.value = 'history'
@@ -256,23 +259,18 @@ async function goSettings() {
   document.getElementById('settingsCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 const settingsSummary = computed(() => {
-  // Smart mode has no format/quality to show: it picks per image.
-  if (settings.mode === 'smart') {
-    const parts = [t('modeSmart')]
-    if (settings.smartKeepOriginal) parts.push(t('smartKeepOriginalShort'))
-    if (settings.maxSize) parts.push(settings.resizeMode === 'percent' ? `${settings.maxSize}%` : `${settings.maxSize}px`)
-    return parts.join(' · ')
-  }
-  const fmt = settings.format === 'original' ? t('fmtOriginal')
+  const fmt = settings.format === 'auto' ? t('fmtAutoShort')
+    : settings.format === 'original' ? t('fmtOriginal')
     : settings.format === 'image/webp' ? 'WebP' : settings.format.split('/')[1].toUpperCase()
-  const mode = settings.mode === 'target' ? `≤${settings.targetSize}KB` : `${settings.quality}%`
-  const parts = [fmt, mode]
-  if (settings.maxSize) parts.push(settings.resizeMode === 'percent' ? `${settings.maxSize}%` : `${settings.maxSize}px`)
+  const parts = [fmt]
+  if (settings.mode === 'target') parts.push(`≤${settings.targetSize}KB`)
+  else if (settings.mode === 'quality') parts.push(`${settings.quality}%`)
+  else if (settings.format !== 'auto') parts.push(t('modeAuto'))
+  if (settings.resizeMode === 'exact') parts.push(`${settings.maxSize}×${settings.maxHeight}`)
+  else if (settings.maxSize) parts.push(settings.resizeMode === 'percent' ? `${settings.maxSize}%` : `${settings.maxSize}px`)
   return parts.join(' · ')
 })
 
-// Sticky-bar "+ Add" reuses the dropzone's picker (a label for the hidden
-// file input is unreliable on iOS Safari; a programmatic click is not).
 const dropzoneRef = ref<{ openPicker: () => void } | null>(null)
 function openPicker() { dropzoneRef.value?.openPicker() }
 
@@ -397,7 +395,9 @@ function toggleTheme() {
 const fileHint = ref<string | null>(null)
 let hintTimer: ReturnType<typeof setTimeout> | null = null
 
-function addFiles(files: File[]) {
+function addFiles(files: File[], dirs?: string[]) {
+  const dirOf = new Map<File, string>()
+  if (dirs) files.forEach((f, i) => dirOf.set(f, dirs[i] ?? ''))
   // Single funnel for drop, paste and picker. Chrome/Windows often
   // reports an empty type for HEIC files, so the extension is the
   // fallback signal (same rule as isHeic in wasm-encoders). Anything
@@ -421,7 +421,7 @@ function addFiles(files: File[]) {
     hintTimer = setTimeout(() => { fileHint.value = null }, 5000)
   }
   if (!withinLimit.length) return
-  for (const file of withinLimit) items.value.push(newItem(file))
+  for (const file of withinLimit) items.value.push(newItem(file, dirOf.get(file) ?? ''))
   refresh()
   const g = ++runGen
   const snap = { ...settings }
@@ -441,7 +441,11 @@ function isUnaffected(item: CompressItem, next: Settings): boolean {
   if (!item.done || item.outSize < item.file.size) return false
   const prev = item.lastSettings
   if (!prev) return false
-  if (prev.format !== next.format || prev.mode !== next.mode || prev.quantize !== next.quantize || prev.smartKeepOriginal !== next.smartKeepOriginal) return false
+  if (prev.format !== next.format || prev.mode !== next.mode || prev.quantize !== next.quantize) return false
+  // Crop boxes change the framing, not just the scale: any change re-runs.
+  if (prev.resizeMode === 'exact' || next.resizeMode === 'exact') {
+    if (prev.resizeMode !== next.resizeMode || prev.maxSize !== next.maxSize || prev.maxHeight !== next.maxHeight) return false
+  }
   if (next.mode === 'quality' && next.quality < prev.quality) return false
   if (next.mode === 'target' && next.targetSize < prev.targetSize) return false
   const origMax = Math.max(item.origW, item.origH)
@@ -551,6 +555,14 @@ function removeItem(item: CompressItem) {
 // live item object (it survives recompresses that replace the item).
 const lightboxId = ref<string | null>(null)
 const lbItem = computed(() => items.value.find((i) => i.id === lightboxId.value) ?? null)
+const lbIndex = computed(() => items.value.findIndex((i) => i.id === lightboxId.value))
+// Lightbox ← / →: step through the list, keeping the side preview in sync.
+function lbStep(d: number) {
+  const next = items.value[lbIndex.value + d]
+  if (!next) return
+  lightboxId.value = next.id
+  selectPreview(next)
+}
 // Bottom-right compare preview (mock layout): the selected image,
 // defaulting to the first one. The thumbnail strip selects; the row
 // thumbnail also selects (and still opens the lightbox). The × hides
@@ -670,7 +682,18 @@ function onPvDividerKey(e: KeyboardEvent) {
 }
 
 
+// One finished image downloads as itself; a zip is only for two or more.
 function downloadAll() {
+  const done = items.value.filter((i) => i.done && i.outUrl)
+  if (done.length === 1) {
+    const a = document.createElement('a')
+    a.href = done[0].outUrl!
+    a.download = done[0].outName ?? done[0].file.name
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    return
+  }
   void downloadAllZip()
 }
 
@@ -686,7 +709,8 @@ async function downloadAllZip() {
     const used = new Set<string>()
     const files: Record<string, Uint8Array> = {}
     for (const item of done) {
-      let name = item.outName ?? item.file.name
+      // Dropped folders keep their structure inside the zip.
+      let name = (item.relDir ? item.relDir + '/' : '') + (item.outName ?? item.file.name)
       if (used.has(name)) {
         const dot = name.lastIndexOf('.')
         const stem = dot > 0 ? name.slice(0, dot) : name
@@ -777,11 +801,12 @@ function onDocDrop(e: DragEvent) {
   pageDragging.value = false
   const target = e.target as HTMLElement | null
   if (target?.closest?.('#dropzone')) return
-  const files = [...(e.dataTransfer?.files ?? [])]
-  if (!files.length) return
-  // Without this the browser would navigate away to the dropped file.
+  if (!e.dataTransfer?.types.includes('Files')) return
   e.preventDefault()
-  addFiles(files)
+  // filesFromDrop grabs the entries synchronously, before its first await.
+  void filesFromDrop(e.dataTransfer).then((dropped) => {
+    if (dropped.length) addFiles(dropped.map((d) => d.file), dropped.map((d) => d.dir))
+  })
 }
 
 onMounted(() => {

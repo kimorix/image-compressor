@@ -2,9 +2,12 @@
 const { chromium } = require('playwright-core');
 const fs = require('fs');
 const { execSync } = require('child_process');
-const EXE = '/home/hatch/.cache/ms-playwright/chromium_headless_shell-1223/chrome-headless-shell-linux64/chrome-headless-shell';
-const BASE = 'http://127.0.0.1:8901/';
-const T = '/home/hatch/workspace/image-compressor/tests/';
+// Paths are overridable so the suite runs outside the original machine:
+// IC_CHROME (browser binary), IC_BASE (served docs/), IC_FIXTURES (dir with
+// test.jpg etc., trailing slash). Defaults keep the original setup working.
+const EXE = process.env.IC_CHROME || '/home/hatch/.cache/ms-playwright/chromium_headless_shell-1223/chrome-headless-shell-linux64/chrome-headless-shell';
+const BASE = process.env.IC_BASE || 'http://127.0.0.1:8901/';
+const T = process.env.IC_FIXTURES || '/home/hatch/workspace/image-compressor/tests/';
 let errors = [];
 let passed = 0, failed = 0;
 function check(name, ok, info = '') {
@@ -72,12 +75,41 @@ async function setQuality(page, q) {
 async function upload(page, files) {
   await page.setInputFiles('#fileInput', files);
 }
+// 2.1 settings: scene / format / size are selects, the custom size inputs
+// and the advanced checkboxes live behind a dropdown choice / fold.
+// pickPreset keeps the old chip semantics: picking the active scene again
+// cancels it (back to "Custom").
+async function pickPreset(page, id) {
+  const cur = await page.$eval('#presetSelect', (el) => el.value);
+  await page.selectOption('#presetSelect', cur === id ? '' : id);
+}
+async function customSize(page) {
+  if ((await page.$eval('#sizeSelect', (el) => el.value)) !== 'custom') await page.selectOption('#sizeSelect', 'custom');
+}
+async function fillMax(page, v) {
+  await customSize(page);
+  await page.fill('#maxSize', v);
+}
+async function clickResize(page, mode) {
+  await customSize(page);
+  await page.click(`#resizeSeg [data-resize="${mode}"]`);
+}
+async function openAdv(page) {
+  if ((await page.getAttribute('.adv-head', 'aria-expanded')) !== 'true') await page.click('.adv-head');
+}
+async function checkAdv(page, sel, on) {
+  await openAdv(page);
+  if (on) await page.check(sel); else await page.uncheck(sel);
+}
 // Switch a page with items to quality mode, waiting out the recompress.
+// Fixed WebP too: the old quality mode ran on the WebP default, while the
+// 2.1 default format is smart.
 async function toQuality(page) {
-  await change(page, () => page.click('#modeSeg [data-mode=\"quality\"]'));
+  await change(page, async () => { await page.selectOption('#formatSelect', 'image/webp'); await page.click('#modeSeg [data-mode=\"quality\"]'); });
 }
 // Switch before any upload: nothing to recompress, no wait needed.
 async function toQualityEmpty(page) {
+  await page.selectOption('#formatSelect', 'image/webp');
   await page.click('#modeSeg [data-mode=\"quality\"]');
 }
 (async () => {
@@ -132,7 +164,7 @@ async function toQualityEmpty(page) {
   await upload(page, T + 'test.jpg');
   await waitDone(page, 1);
   await toQuality(page);
-  await change(page, () => page.click('#formatSeg [data-format=\"image/jpeg\"]'));
+  await change(page, () => page.selectOption('#formatSelect', 'image/jpeg'));
   const [dlJ] = await Promise.all([
     page.waitForEvent('download', { timeout: 10000 }),
     page.click('.item .item-actions a'),
@@ -145,8 +177,8 @@ async function toQualityEmpty(page) {
   await upload(page, T + 'test.png');
   await waitDone(page, 1);
   await toQuality(page);
-  await change(page, () => page.fill('#maxSize', '800'));
-  await change(page, () => page.click('#formatSeg [data-format=\"image/png\"]'));
+  await change(page, () => fillMax(page, '800'));
+  await change(page, () => page.selectOption('#formatSelect', 'image/png'));
   const [dlP] = await Promise.all([
     page.waitForEvent('download', { timeout: 10000 }),
     page.click('.item .item-actions a'),
@@ -158,7 +190,7 @@ async function toQualityEmpty(page) {
   page = await newPage(browser);
   await upload(page, T + 'test.jpg');
   await waitDone(page, 1);
-  await change(page, () => page.fill('#maxSize', '800'));
+  await change(page, () => fillMax(page, '800'));
   await page.click('.item .thumb');
   await page.waitForSelector('.lb-overlay', { timeout: 10000 });
   const dims = await page.$eval('.lb-info', (el) => el.textContent);
@@ -217,7 +249,7 @@ async function toQualityEmpty(page) {
   await upload(page, T + 'test.png');
   await waitDone(page, 1);
   await toQuality(page);
-  await change(page, () => page.click('#formatSeg [data-format=\"image/png\"]'));
+  await change(page, () => page.selectOption('#formatSelect', 'image/png'));
   await change(page, () => page.click('#modeSeg [data-mode=\"target\"]'), 120000);
   await change(page, () => page.fill('#targetSize', '50'), 120000);
   const pngT = await outSize(page);
@@ -440,13 +472,12 @@ async function toQualityEmpty(page) {
   const qHidden = await page.evaluate(() => getComputedStyle(document.querySelector('#qualityField')).display === 'none');
   check('目标模式隐藏质量行', qHidden, '');
   await page.click('#modeSeg [data-mode=\"quality\"]');
-  await page.click('#formatSeg [data-format=\"image/png\"]');
+  await page.selectOption('#formatSelect', 'image/png');
   const qEnabled = await page.$eval('#quality', (el) => !el.disabled);
-  const quantHintVis = await page.evaluate(() => getComputedStyle(document.querySelector('#quantHint')).display !== 'none');
-  check('PNG 量化开时滑杆可用且有量化提示', qEnabled && quantHintVis, `enabled=${qEnabled} quantHint=${quantHintVis}`);
+  check('PNG 量化开时滑杆可用', qEnabled, `enabled=${qEnabled}`);
   await page.$eval('#quantize', (el) => el.click());
   const qDisabled = await page.$eval('#quality', (el) => el.disabled);
-  const hintVis = await page.evaluate(() => getComputedStyle(document.querySelector('#qualityHint')).display !== 'none');
+  const hintVis = await page.evaluate(() => (document.querySelector('#settingsNote')?.textContent || '').includes('无损'));
   check('PNG 量化关时滑杆锁定且有无损提示', qDisabled && hintVis, `disabled=${qDisabled} hint=${hintVis}`);
   await page.close();
 
@@ -470,7 +501,7 @@ async function toQualityEmpty(page) {
   page = await newPage(browser);
   await upload(page, T + 'small.jpg');
   await waitDone(page, 1);
-  await change(page, () => page.fill('#maxSize', '800'));
+  await change(page, () => fillMax(page, '800'));
   await page.click('.item .thumb');
   await page.waitForSelector('.lb-overlay', { timeout: 10000 });
   const dimsChecked = await page.$eval('.lb-info', (el) => el.textContent);
@@ -511,7 +542,7 @@ async function toQualityEmpty(page) {
   await upload(page, T + 'test.jpg');
   await waitDone(page, 1);
   await toQuality(page);
-  await change(page, () => page.click('#formatSeg [data-format=\"image/avif\"]'));
+  await change(page, () => page.selectOption('#formatSelect', 'image/avif'));
   const [dlAvif] = await Promise.all([
     page.waitForEvent('download', { timeout: 10000 }),
     page.click('.item .item-actions a'),
@@ -525,7 +556,7 @@ async function toQualityEmpty(page) {
   await upload(page, T + 'screenshot.png');
   await waitDone(page, 1);
   await toQuality(page);
-  await change(page, () => page.click('#formatSeg [data-format=\"image/png\"]'));
+  await change(page, () => page.selectOption('#formatSelect', 'image/png'));
   const [dlQ] = await Promise.all([
     page.waitForEvent('download', { timeout: 10000 }),
     page.click('.item .item-actions a'),
@@ -694,35 +725,40 @@ async function toQualityEmpty(page) {
   await upload(page, T + 'screenshot.png');
   await waitDone(page, 1);
   await toQuality(page);
-  await change(page, () => page.click('#formatSeg [data-format=\"image/png\"]'));
+  await change(page, () => page.selectOption('#formatSelect', 'image/png'));
   const maxTop0 = await page.$eval('#maxSize', (el) => el.getBoundingClientRect().top);
   await page.$eval('#quantize', (el) => el.click());
   await page.waitForTimeout(800);
   const maxTop1 = await page.$eval('#maxSize', (el) => el.getBoundingClientRect().top);
   check('开关量化不顶动最长边输入框', maxTop0 === maxTop1, `${maxTop0}/${maxTop1}`);
   await page.close();
-  // 44c. 质量标签：名称在左、数值在右（统一样式）
+  // 44c. 画质滑杆与数值同一行、数值在右（2.1：参数紧跟在压缩按钮下）
   page = await newPage(browser);
-  const qLabelStyle = await page.$eval('.field label.qlabel', (el) => { const cs = getComputedStyle(el); return cs.display + '/' + cs.justifyContent; });
+  await toQualityEmpty(page);
+  const qLayout = await page.evaluate(() => {
+    const r = document.querySelector('#quality').getBoundingClientRect();
+    const v = document.querySelector('#qualityValue').getBoundingClientRect();
+    return { sameLine: Math.abs((r.top + r.bottom) / 2 - (v.top + v.bottom) / 2) < 8, right: v.left >= r.right };
+  });
   const qVal = await page.$eval('#qualityValue', (el) => el.textContent);
-  check('质量标签左右分栏、数值在右', qLabelStyle === 'flex/space-between' && qVal === '80%', `${qLabelStyle}/${qVal}`);
+  check('画质滑杆与数值同一行、数值在右', qLayout.sameLine && qLayout.right && qVal === '80%', `${JSON.stringify(qLayout)}/${qVal}`);
   await page.close();
 
   // 44d. 预设一键场景：证件照 / 微信发图 / 公众号配图
   page = await newPage(browser);
   await upload(page, T + 'test.jpg');
   await waitDone(page, 1);
-  await change(page, () => page.click('[data-preset="idphoto"]'));
+  await change(page, () => pickPreset(page, 'idphoto'));
   const idMode = await page.$eval('#modeSeg .seg-btn.active', (el) => el.dataset.mode);
   const idTarget = await page.$eval('#targetSize', (el) => el.value);
-  const idFmt = await page.$eval('#formatSeg .seg-btn.active', (el) => el.dataset.format);
-  const idActive = await page.$eval('[data-preset="idphoto"]', (el) => el.className);
+  const idFmt = await page.$eval('#formatSelect', (el) => el.value);
+  const idActive = await page.$eval('#presetSelect', (el) => (el.value === 'idphoto' ? 'active' : ''));
   check('证件照预设：目标模式 200KB JPEG 且高亮', idMode === 'target' && idTarget === '200' && idFmt === 'image/jpeg' && idActive.includes('active'), `${idMode}/${idTarget}/${idFmt}/${idActive}`);
-  await change(page, () => page.click('[data-preset="wechat"]'));
+  await change(page, () => pickPreset(page, 'wechat'));
   const wcQ = await page.$eval('#quality', (el) => el.value);
   const wcMax = await page.$eval('#maxSize', (el) => el.value);
   check('微信发图预设：质量 85 最长边 1920', wcQ === '85' && wcMax === '1920', `${wcQ}/${wcMax}`);
-  await change(page, () => page.click('[data-preset="article"]'));
+  await change(page, () => pickPreset(page, 'article'));
   const arMax = await page.$eval('#maxSize', (el) => el.value);
   check('公众号配图预设：最长边 900', arMax === '900', arMax);
   await page.close();
@@ -730,18 +766,18 @@ async function toQualityEmpty(page) {
   page = await newPage(browser);
   await upload(page, T + 'test.jpg');
   await waitDone(page, 1);
-  await change(page, () => page.click('[data-preset="wechat"]'));
-  const wcActive = await page.$eval('[data-preset="wechat"]', (el) => el.className);
+  await change(page, () => pickPreset(page, 'wechat'));
+  const wcActive = await page.$eval('#presetSelect', (el) => (el.value === 'wechat' ? 'active' : ''));
   const wcHref = await itemHrefs(page);
-  await change(page, () => page.click('[data-preset="wechat"]'));
-  const cancelActive = await page.$eval('[data-preset="wechat"]', (el) => el.className);
-  const cancelFmt = await page.$eval('#formatSeg .seg-btn.active', (el) => el.dataset.format);
+  await change(page, () => pickPreset(page, 'wechat'));
+  const cancelActive = await page.$eval('#presetSelect', (el) => (el.value === 'wechat' ? 'active' : ''));
+  const cancelFmt = await page.$eval('#formatSelect', (el) => el.value);
   const cancelQ = await page.$eval('#quality', (el) => el.value);
   const cancelHref = await itemHrefs(page);
-  check('再点已选预设取消：高亮消失、回到默认 WebP 质量 80 并重压', wcActive.includes('active') && !cancelActive.includes('active') && cancelFmt === 'image/webp' && cancelQ === '80' && JSON.stringify(cancelHref) !== JSON.stringify(wcHref), `${wcActive}/${cancelActive}/${cancelFmt}/${cancelQ}`);
-  await change(page, () => page.click('[data-preset="wechat"]'));
+  check('再点已选预设取消：高亮消失、回到默认智能格式并重压', wcActive.includes('active') && !cancelActive.includes('active') && cancelFmt === 'auto' && cancelQ === '80' && JSON.stringify(cancelHref) !== JSON.stringify(wcHref), `${wcActive}/${cancelActive}/${cancelFmt}/${cancelQ}`);
+  await change(page, () => pickPreset(page, 'wechat'));
   await change(page, () => setQuality(page, 90));
-  const clearedActive = await page.$eval('[data-preset="wechat"]', (el) => el.className);
+  const clearedActive = await page.$eval('#presetSelect', (el) => (el.value === 'wechat' ? 'active' : ''));
   check('手动改参数后预设高亮自动消失', !clearedActive.includes('active'), clearedActive);
   await page.close();
   // 48a. 桌面端 GitHub 图标 18px；小屏桌面端（720/1180）无横向溢出、设置栏不被顶出右边缘
@@ -787,13 +823,13 @@ async function toQualityEmpty(page) {
   await upload(page, T + 'test.jpg');
   await waitDone(page, 1);
   await page.click('.settings-summary');
-  const presetsY0 = await page.$eval('.presets', (el) => el.getBoundingClientRect().top + window.scrollY);
+  const presetsY0 = await page.$eval('#presetSelect', (el) => el.getBoundingClientRect().top + window.scrollY);
   const noSumSpin0 = (await page.$('#summary .sum-spin')) === null;
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
-  await page.click('[data-preset="wechat"]');
+  await pickPreset(page, 'wechat');
   await page.waitForFunction(() => document.querySelector('.global-loading')?.classList.contains('show'), null, { timeout: 10000 });
-  const presetsY1 = await page.$eval('.presets', (el) => el.getBoundingClientRect().top + window.scrollY);
+  const presetsY1 = await page.$eval('#presetSelect', (el) => el.getBoundingClientRect().top + window.scrollY);
   const pillCenter = await page.$eval('.global-loading', (el) => { const r = el.getBoundingClientRect(); return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 }; });
   const vp = await page.evaluate(() => ({ w: window.innerWidth, h: window.innerHeight }));
   const centered = Math.abs(pillCenter.cx - vp.w / 2) <= 2 && Math.abs(pillCenter.cy - vp.h / 2) <= 2;
@@ -811,7 +847,7 @@ async function toQualityEmpty(page) {
   const pillPe = await page.$eval('.global-loading', (el) => getComputedStyle(el).pointerEvents);
   const cdp2 = await page.context().newCDPSession(page);
   await cdp2.send('Emulation.setCPUThrottlingRate', { rate: 4 });
-  await page.click('[data-preset="wechat"]');
+  await pickPreset(page, 'wechat');
   // Wait for the pill itself: it shares the recompressing flag, so
   // waiting on it directly is both the assertion and the wait; a missed
   // window here fails loud (timeout) instead of silently reading a
@@ -833,7 +869,7 @@ async function toQualityEmpty(page) {
   page = await newPage(browser);
   await upload(page, T + 'test.jpg');
   await waitDone(page, 1);
-  await page.click('[data-preset="email"]');
+  await pickPreset(page, 'email');
   const emailTarget = await page.$eval('#targetSize', (el) => el.value);
   await page.focus('#targetSize');
   await page.fill('#targetSize', '');
@@ -861,7 +897,7 @@ async function toQualityEmpty(page) {
   await upload(page, [T + 'test.jpg', T + 'test.png']);
   await waitDone(page, 2);
   let prevM = await itemHrefs(page);
-  await page.click('[data-preset="email"]');
+  await pickPreset(page, 'email');
   await waitUpdated(page, prevM);
   prevM = await itemHrefs(page);
   await page.fill('#targetSize', '200');
@@ -924,8 +960,8 @@ async function toQualityEmpty(page) {
       const [d] = await Promise.all([p.waitForEvent('download', { timeout: 30000 }), p.click('.item .item-actions a')]);
       return d.path();
     };
-    const pathOn = await dl(async () => { await p.click('#formatSeg [data-format=\"image/jpeg\"]'); await p.check('#keepExif'); });
-    const pathOff = await dl(() => p.uncheck('#keepExif'));
+    const pathOn = await dl(async () => { await p.selectOption('#formatSelect', 'image/jpeg'); await checkAdv(p, '#keepExif', true); });
+    const pathOff = await dl(() => checkAdv(p, '#keepExif', false));
     check('keepExif 开去 GPS、留拍摄信息，关全去掉', !hasGps(pathOn) && !hasGps(pathOff) && hasMake(pathOn) && !hasMake(pathOff), `gpsOn=${hasGps(pathOn)} gpsOff=${hasGps(pathOff)} makeOn=${hasMake(pathOn)} makeOff=${hasMake(pathOff)}`);
     await p.close();
   }
@@ -947,8 +983,8 @@ async function toQualityEmpty(page) {
       } catch { return null; }
     };
     const prev = await hrefs();
-    await p.click('#formatSeg [data-format=\"image/jpeg\"]');
-    await p.check('#keepExif');
+    await p.selectOption('#formatSelect', 'image/jpeg');
+    await checkAdv(p, '#keepExif', true);
     await waitUpdated(p, prev);
     const [d] = await Promise.all([p.waitForEvent('download', { timeout: 30000 }), p.click('.item .item-actions a')]);
     const info = orientInfo(await d.path());
@@ -1019,18 +1055,18 @@ async function toQualityEmpty(page) {
     await upload(p, [T + 'screenshot.png']);
     await waitDone(p, 1);
     await toQuality(p);
-    await change(p, () => p.click('#formatSeg [data-format=\"image/png\"]'));
+    await change(p, () => p.selectOption('#formatSelect', 'image/png'));
     await change(p, () => p.$eval('#quantize', (el) => el.click()));
     const badge = await p.$('.item .best-tag');
     check('47e 前置：无损 PNG 已是最优', !!badge, `badge=${!!badge}`);
     const hrefBefore = await itemHrefs(p);
-    await p.fill('#maxSize', '20000');
+    await fillMax(p, '20000');
     await p.waitForFunction(() => !document.querySelector('.global-loading.show'), null, { timeout: 30000 });
     await new Promise((r) => setTimeout(r, 1000));
     await p.waitForFunction(() => !document.querySelector('.global-loading.show'), null, { timeout: 30000 });
     const hrefAfterRelax = await itemHrefs(p);
     const badgeAfterRelax = await p.$('.item .best-tag');
-    await change(p, () => p.click('#formatSeg [data-format=\"image/jpeg\"]'));
+    await change(p, () => p.selectOption('#formatSelect', 'image/jpeg'));
     const hrefAfterFormat = await itemHrefs(p);
     check('设置放宽时已最优项跳过重压、格式变更必重压', !!badge && hrefAfterRelax[0] === hrefBefore[0] && !!badgeAfterRelax && hrefAfterFormat[0] !== hrefAfterRelax[0], `badge=${!!badge}/${!!badgeAfterRelax} relaxSame=${hrefAfterRelax[0] === hrefBefore[0]} formatChanged=${hrefAfterFormat[0] !== hrefAfterRelax[0]}`);
     await p.close();
@@ -1111,7 +1147,7 @@ async function toQualityEmpty(page) {
     await waitDone(p, 1);
     const dims0 = await p.$eval('.item .dims', (el) => el.textContent);
     check('未缩放时行里尺寸行显示原尺寸', dims0 === '1600×1200↓1600×1200', dims0);
-    await change(p, () => p.fill('#maxSize', '800'));
+    await change(p, () => fillMax(p, '800'));
     const dims = await p.$eval('.item .dims', (el) => el.textContent);
     check('缩放后行里显示尺寸变化', dims === '1600×1200↓800×600', dims);
     await p.close();
@@ -1288,7 +1324,7 @@ async function toQualityEmpty(page) {
     const wName = dlW.suggestedFilename();
     check('P3 源 WebP 输出带原 ICC', wName.endsWith('.webp') && webpBuf.includes(Buffer.from('ICCP')) && webpBuf.includes(p3mark), `${wName}/${webpBuf.length}`);
     await toQuality(p);
-    await change(p, () => p.click('#formatSeg [data-format=\"image/jpeg\"]'));
+    await change(p, () => p.selectOption('#formatSelect', 'image/jpeg'));
     const [dlJ] = await Promise.all([
       p.waitForEvent('download', { timeout: 20000 }),
       p.click('.item .item-actions a'),
@@ -1327,17 +1363,17 @@ async function toQualityEmpty(page) {
       return { bg: cs.backgroundColor, hasSvg: !!b.querySelector('svg'), text: b.textContent };
     });
     check('100% 本地处理徽章绿底带锁', (badge.bg === 'rgb(39, 166, 68)' || badge.bg === 'rgb(21, 128, 61)') && badge.hasSvg && badge.text.includes('100%'), JSON.stringify(badge));
-    // UI4: 说明行随格式/模式出现，页脚只剩 GIF + 隐私两行
-    // （本页是 UI6 的空页、没有图片，切换模式不会触发重压，不用等）
-    await toQualityEmpty(p);
-    await p.click('#formatSeg [data-format=\"image/jpeg\"]');
-    const jpegNote = await p.evaluate(() => getComputedStyle(document.querySelector('#jpegNote')).display !== 'none' && document.querySelector('#jpegNote').textContent.includes('透明'));
-    await p.click('#formatSeg [data-format=\"image/webp\"]');
-    const webpNote = await p.evaluate(() => getComputedStyle(document.querySelector('#webpNote')).display !== 'none' && document.querySelector('#webpNote').textContent.includes('JPEG'));
+    // UI4 (2.1): one contextual note line under the rows; page footer is
+    // privacy only. AVIF warns about the encoder download, target mode
+    // explains the search.
+    await p.selectOption('#formatSelect', 'image/avif');
+    const avifNote = await p.evaluate(() => (document.querySelector('#settingsNote')?.textContent || '').includes('3.5MB'));
+    await p.selectOption('#formatSelect', 'image/webp');
     await p.click('#modeSeg [data-mode=\"target\"]');
-    const targetNote = await p.evaluate(() => getComputedStyle(document.querySelector('#targetModeNote')).display !== 'none' && document.querySelector('#targetModeNote').textContent.includes('先按质量'));
+    const targetNote = await p.evaluate(() => (document.querySelector('#settingsNote')?.textContent || '').includes('先按质量'));
+    const noteCount = await p.$$eval('.settings-note', (els) => els.length);
     const footerText = await p.evaluate(() => document.querySelector('footer').textContent);
-    check('说明移到控件旁、页脚只剩隐私一行', jpegNote && webpNote && targetNote && footerText.includes('隐私') && !footerText.includes('GIF') && !footerText.includes('先按质量') && !footerText.includes('不支持 WebP 编码时会自动改用'), footerText.slice(0, 40));
+    check('设置只有一行说明、页脚只剩隐私一行', avifNote && targetNote && noteCount === 1 && footerText.includes('隐私') && !footerText.includes('GIF') && !footerText.includes('先按质量'), `${avifNote}/${targetNote}/${noteCount}/${footerText}`);
     await p.close();
     // UI5: 手机顶栏同一行、GitHub 只剩图标
     const m = await newPage(browser, { viewport: { width: 390, height: 844 } });
@@ -1355,7 +1391,7 @@ async function toQualityEmpty(page) {
     const ctx = await browser.newContext({ hasTouch: true, viewport: { width: 390, height: 844 } });
     await ctx.addInitScript(() => { try { localStorage.setItem('ic-lang', 'zh'); } catch (e) {} });
     const tp = await ctx.newPage();
-    await tp.goto('http://127.0.0.1:8901/', { waitUntil: 'networkidle' });
+    await tp.goto(BASE, { waitUntil: 'networkidle' });
     const dropTitle = await tp.evaluate(() => document.querySelector('#dropzone strong').textContent);
     check('触屏上传标题为点击选择', dropTitle === '点击选择图片' && !dropTitle.includes('拖拽'), dropTitle);
     await ctx.close();
@@ -1405,7 +1441,7 @@ async function toQualityEmpty(page) {
     // 功能2: PNG 不开量化 + 目标模式 → 量化提示
     p = await newPage(browser);
     await toQualityEmpty(p);
-    await p.click('#formatSeg [data-format=\"image/png\"]');
+    await p.selectOption('#formatSelect', 'image/png');
     await p.evaluate(() => { const q = document.querySelector('#quantize'); if (q && q.checked) q.click(); });
     await p.click('#modeSeg [data-mode=\"target\"]');
     await p.$eval('#targetSize', (el) => { el.value = '750'; el.dispatchEvent(new Event('input', { bubbles: true })); });
@@ -1418,21 +1454,21 @@ async function toQualityEmpty(page) {
     // 功能3: 透明图 + JPEG 提示 + 改用 WebP
     p = await newPage(browser);
     await toQualityEmpty(p);
-    await p.click('#formatSeg [data-format=\"image/jpeg\"]');
+    await p.selectOption('#formatSelect', 'image/jpeg');
     await upload(p, T + 'alpha.png');
     await waitDone(p, 1);
     const alphaRow = await p.$eval('.item', (el) => el.textContent);
     const hasWebpBtn = await p.$eval('.item', (el) => !!el.querySelector('.link-btn'));
     check('透明图转 JPEG 提示填白并给改用 WebP', alphaRow.includes('透明部分会填充白色') && hasWebpBtn, alphaRow.replace(/\s+/g, ' '));
     await change(p, () => p.click('.item .link-btn'));
-    const fmtAfter = await p.$eval('#formatSeg .seg-btn.active', (el) => el.dataset.format);
+    const fmtAfter = await p.$eval('#formatSelect', (el) => el.value);
     const alphaRow2 = await p.$eval('.item', (el) => el.textContent);
     check('点改用 WebP 后格式切 WebP 且提示消失', fmtAfter === 'image/webp' && !alphaRow2.includes('透明部分会填充白色'), fmtAfter);
     await p.close();
     // 功能3: JPEG 填充色生效（透明区变红）
     p = await newPage(browser);
     await toQualityEmpty(p);
-    await p.click('#formatSeg [data-format=\"image/jpeg\"]');
+    await p.selectOption('#formatSelect', 'image/jpeg');
     await p.$eval('#jpegFill', (el) => { el.value = '#ff0000'; el.dispatchEvent(new Event('change', { bubbles: true })); });
     await upload(p, T + 'alpha.png');
     await waitDone(p, 1);
@@ -1479,7 +1515,7 @@ async function toQualityEmpty(page) {
     await p.close();
     // 功能6: 缩放方式（宽/高/百分比）+ 切百分比重置数值
     p = await newPage(browser);
-    await p.click('#resizeSeg [data-resize=\"width\"]');
+    await clickResize(p, 'width');
     await p.$eval('#maxSize', (el) => { el.value = '800'; el.dispatchEvent(new Event('input', { bubbles: true })); });
     await p.waitForTimeout(600);
     await upload(p, T + 'test.jpg');
@@ -1487,7 +1523,7 @@ async function toQualityEmpty(page) {
     const dimsW = await p.$eval('.item .dims', (el) => el.textContent);
     await p.click('.item .remove-btn');
     await p.waitForTimeout(300);
-    await p.click('#resizeSeg [data-resize=\"height\"]');
+    await clickResize(p, 'height');
     await p.$eval('#maxSize', (el) => { el.value = '600'; el.dispatchEvent(new Event('input', { bubbles: true })); });
     await p.waitForTimeout(600);
     await upload(p, T + 'test.jpg');
@@ -1495,7 +1531,7 @@ async function toQualityEmpty(page) {
     const dimsH = await p.$eval('.item .dims', (el) => el.textContent);
     await p.click('.item .remove-btn');
     await p.waitForTimeout(300);
-    await p.click('#resizeSeg [data-resize=\"percent\"]');
+    await clickResize(p, 'percent');
     const pctVal = await p.$eval('#maxSize', (el) => el.value);
     await p.$eval('#maxSize', (el) => { el.value = '50'; el.dispatchEvent(new Event('input', { bubbles: true })); });
     await p.waitForTimeout(600);
@@ -1635,18 +1671,18 @@ async function toQualityEmpty(page) {
   // 47j. 新预设 + 记住设置：网站/博客、邮件附件可点，改动刷新后仍在（清单第 12 条）
   {
     const p = await newPage(browser);
-    await p.click('[data-preset="website"]');
+    await pickPreset(p, 'website');
     await p.waitForTimeout(300);
     const maxWeb = await p.$eval('#maxSize', (el) => el.value);
-    const fmtWeb = await p.$eval('#formatSeg .seg-btn.active', (el) => el.dataset.format);
-    const webActive = await p.$eval('[data-preset="website"]', (el) => el.className);
-    await p.click('[data-preset="email"]');
+    const fmtWeb = await p.$eval('#formatSelect', (el) => el.value);
+    const webActive = await p.$eval('#presetSelect', (el) => (el.value === 'website' ? 'active' : ''));
+    await pickPreset(p, 'email');
     await p.waitForTimeout(300);
     const modeEmail = await p.$eval('#modeSeg .seg-btn.active', (el) => el.dataset.mode);
     const tgtEmail = await p.$eval('#targetSize', (el) => el.value);
-    const fmtEmail = await p.$eval('#formatSeg .seg-btn.active', (el) => el.dataset.format);
-    const emailActive = await p.$eval('[data-preset="email"]', (el) => el.className);
-    await p.fill('#maxSize', '1234');
+    const fmtEmail = await p.$eval('#formatSelect', (el) => el.value);
+    const emailActive = await p.$eval('#presetSelect', (el) => (el.value === 'email' ? 'active' : ''));
+    await fillMax(p, '1234');
     await p.waitForTimeout(900);
     await p.reload();
     await p.waitForSelector('#dropzone', { timeout: 15000 });
@@ -1701,24 +1737,30 @@ async function toQualityEmpty(page) {
     await p.close();
   }
 
-  // 49. 智能模式（默认）：照片 WebP、透明图保透明出 WebP、图形出 PNG；预设点一下切出智能
+  // 49. 智能（默认）：格式和画质都是智能。照片出 WebP 并显示所选画质；
+  // 透明图标/logo 与色彩少的图形出 PNG 调色板；点场景切出智能
   page = await newPage(browser);
   const smartMode = await page.$eval('#modeSeg .seg-btn.active', (el) => el.dataset.mode);
-  const smartFmtVis = await page.$eval('#formatSeg', (el) => getComputedStyle(el.closest('.field')).display);
+  const smartFmt = await page.$eval('#formatSelect', (el) => el.value);
   const smartQVis = await page.$eval('#qualityField', (el) => getComputedStyle(el).display);
-  const smartNoteVis = await page.$eval('#smartNote', (el) => getComputedStyle(el).display);
-  check('智能是默认模式：格式/质量控件隐藏、智能说明可见', smartMode === 'smart' && smartFmtVis === 'none' && smartQVis === 'none' && smartNoteVis !== 'none', `${smartMode}/${smartFmtVis}/${smartQVis}/${smartNoteVis}`);
+  const smartNote = await page.$eval('#settingsNote', (el) => el.textContent);
+  check('智能是默认：格式智能、画质智能、质量滑杆隐藏、有说明', smartMode === 'auto' && smartFmt === 'auto' && smartQVis === 'none' && smartNote.includes('智能'), `${smartMode}/${smartFmt}/${smartQVis}/${smartNote}`);
   await upload(page, T + 'test.jpg');
   await waitDone(page, 1);
   const smartPhoto = await page.$eval('.item .item-actions a', (a) => a.getAttribute('download'));
   check('智能：照片出 WebP', smartPhoto.endsWith('.webp'), smartPhoto);
+  await page.click('.item .thumb');
+  await page.waitForSelector('.lb-overlay', { timeout: 10000 });
+  const smartQInfo = await page.$eval('.lb-info', (el) => el.textContent);
+  const smartQ = parseInt((smartQInfo.match(/智能画质 (\d+)/) || [])[1], 10);
+  check('智能画质：预览显示所选画质且在 50–90', smartQ >= 50 && smartQ <= 90, smartQInfo);
   await page.close();
   page = await newPage(browser);
   await upload(page, T + 'alpha.png');
   await waitDone(page, 1);
   const smartAlpha = await page.$eval('.item .item-actions a', (a) => a.getAttribute('download'));
   const smartAlphaRow = await page.$eval('.item', (el) => el.textContent);
-  check('智能：透明图出 WebP 且不提示填白', smartAlpha.endsWith('.webp') && !smartAlphaRow.includes('填充白色'), `${smartAlpha}/${smartAlphaRow.replace(/\s+/g, ' ')}`);
+  check('智能：透明图标出 PNG 且不提示填白', smartAlpha.endsWith('.png') && !smartAlphaRow.includes('填充白色'), `${smartAlpha}/${smartAlphaRow.replace(/\s+/g, ' ')}`);
   await page.close();
   page = await newPage(browser);
   await upload(page, T + 'flat.png');
@@ -1731,41 +1773,49 @@ async function toQualityEmpty(page) {
   page = await newPage(browser);
   await upload(page, T + 'test.jpg');
   await waitDone(page, 1);
-  await change(page, () => page.click('[data-preset="wechat"]'));
+  await change(page, () => pickPreset(page, 'wechat'));
   const smartExit = await page.$eval('#modeSeg .seg-btn.active', (el) => el.dataset.mode);
-  check('智能：点预设切出智能进手动模式', smartExit === 'quality', smartExit);
+  check('智能：点场景切出智能进手动画质', smartExit === 'quality', smartExit);
   await page.close();
-  // 智能 + 按原格式输出：照片留 JPG、透明图留 PNG；选项只在智能模式出现
+  // 保持原格式：照片留 JPG、透明图留 PNG（替代旧的“智能 + 按原格式”勾选）
   page = await newPage(browser);
   await upload(page, T + 'test.jpg');
   await waitDone(page, 1);
   const keepBefore = await page.$eval('.item .item-actions a', (a) => a.getAttribute('download'));
-  await change(page, () => page.$eval('#smartKeepOriginal', (el) => el.click()));
+  await change(page, () => page.selectOption('#formatSelect', 'original'));
   const keepJpg = await page.$eval('.item .item-actions a', (a) => a.getAttribute('download'));
-  check('智能按原格式：照片不转 WebP、留 JPG', keepBefore.endsWith('.webp') && keepJpg.endsWith('.jpg'), `${keepBefore}/${keepJpg}`);
+  check('保持原格式：照片不转 WebP、留 JPG', keepBefore.endsWith('.webp') && keepJpg.endsWith('.jpg'), `${keepBefore}/${keepJpg}`);
   await page.close();
   page = await newPage(browser);
   await upload(page, T + 'alpha.png');
   await waitDone(page, 1);
-  await change(page, () => page.$eval('#smartKeepOriginal', (el) => el.click()));
+  await change(page, () => page.selectOption('#formatSelect', 'original'));
   const keepPng = await page.$eval('.item .item-actions a', (a) => a.getAttribute('download'));
-  const keepVisSmart = await page.$eval('#smartKeepOriginal', (el) => getComputedStyle(el.closest('.field')).display);
-  check('智能按原格式：透明图留 PNG', keepPng.endsWith('.png'), keepPng);
-  await change(page, () => page.click('#modeSeg [data-mode=\"quality\"]'));
-  const keepVisQuality = await page.$eval('#smartKeepOriginal', (el) => getComputedStyle(el.closest('.field')).display);
-  check('按原格式选项只在智能模式出现', keepVisSmart !== 'none' && keepVisQuality === 'none', `${keepVisSmart}/${keepVisQuality}`);
+  check('保持原格式：透明图留 PNG', keepPng.endsWith('.png'), keepPng);
   await page.close();
+  // 旧版保存的设置迁移：smartKeepOriginal → 保持原格式
+  {
+    const ctx = await browser.newContext({ locale: 'zh-CN' });
+    await ctx.addInitScript(() => { if (!sessionStorage.getItem('m')) { sessionStorage.setItem('m', '1'); localStorage.setItem('ic-lang', 'zh'); localStorage.setItem('ic-settings', JSON.stringify({ format: 'image/jpeg', smartKeepOriginal: true })); } });
+    const p = await ctx.newPage();
+    p.on('pageerror', (e) => errors.push(e.message));
+    await p.goto(BASE);
+    await p.waitForSelector('#dropzone');
+    const migrated = await p.$eval('#formatSelect', (el) => el.value);
+    check('旧设置迁移：按原格式输出 → 保持原格式', migrated === 'original', migrated);
+    await ctx.close();
+  }
 
   // 50. 进站默认智能：模式不保存、其他设置仍记住
   page = await newPage(browser);
   await toQualityEmpty(page);
-  await page.fill('#maxSize', '1234');
+  await fillMax(page, '1234');
   await page.waitForTimeout(900);
   await page.reload();
   await page.waitForSelector('#dropzone', { timeout: 15000 });
   const modeAfterReload = await page.$eval('#modeSeg .seg-btn.active', (el) => el.dataset.mode);
   const maxAfterReload2 = await page.$eval('#maxSize', (el) => el.value);
-  check('进站默认智能：模式不保存、其他设置仍记住', modeAfterReload === 'smart' && maxAfterReload2 === '1234', `${modeAfterReload}/${maxAfterReload2}`);
+  check('进站默认智能：模式不保存、其他设置仍记住', modeAfterReload === 'auto' && maxAfterReload2 === '1234', `${modeAfterReload}/${maxAfterReload2}`);
   await page.close();
 
   // 51. 分段按钮：格式/模式/尺寸切换与 active 状态、高级组按格式显隐
@@ -1773,13 +1823,13 @@ async function toQualityEmpty(page) {
   await upload(page, T + 'test.jpg');
   await waitDone(page, 1);
   await toQuality(page);
-  await change(page, () => page.click('#formatSeg [data-format="image/png"]'));
-  const fmtActive = await page.$eval('#formatSeg .seg-btn.active', (el) => el.dataset.format);
+  await change(page, () => page.selectOption('#formatSelect', 'image/png'));
+  const fmtActive = await page.$eval('#formatSelect', (el) => el.value);
   const quantVis = await page.$eval('#quantize', (el) => getComputedStyle(el.closest('.check')).display);
-  await change(page, () => page.click('#resizeSeg [data-resize="percent"]'));
+  await change(page, () => clickResize(page, 'percent'));
   const resizeActive = await page.$eval('#resizeSeg .seg-btn.active', (el) => el.dataset.resize);
   const maxMax = await page.$eval('#maxSize', (el) => el.max);
-  check('分段按钮切换格式/尺寸、active 状态与量化显隐', fmtActive === 'image/png' && quantVis !== 'none' && resizeActive === 'percent' && maxMax === '100', `${fmtActive}/${quantVis}/${resizeActive}/${maxMax}`);
+  check('格式下拉/尺寸分段切换、active 状态与量化显隐', fmtActive === 'image/png' && quantVis !== 'none' && resizeActive === 'percent' && maxMax === '100', `${fmtActive}/${quantVis}/${resizeActive}/${maxMax}`);
   await page.close();
 
   // 52. 失败重试：损坏图片出错后点重试（错误先消失再重现＝重新执行过）
@@ -1864,17 +1914,13 @@ async function toQualityEmpty(page) {
     await p.close();
   }
 
-  // 105i4. 一键场景标题单独成行（后续 4 #6）
+  // 105i4. 设置四行（2.1）
   {
     const p = await newPage(browser, { viewport: { width: 1180, height: 820 } });
     await upload(p, [T + 'test.jpg']);
     await waitDone(p, 1);
-    const presets = await p.evaluate(() => {
-      const lb = document.querySelector('.presets-label');
-      const fb = document.querySelector('.preset-btn');
-      return lb && fb ? lb.getBoundingClientRect().bottom <= fb.getBoundingClientRect().top + 1 : false;
-    });
-    check('一键场景标题在按钮行上方单独成行', presets === true, String(presets));
+    const rows = await p.evaluate(() => [...document.querySelectorAll('.settings .srow-label')].map((el) => el.textContent.trim()));
+    check('设置四行：场景 / 格式 / 压缩 / 尺寸', rows.join('|') === '一键场景|输出格式|压缩|尺寸', rows.join('|'));
     await p.close();
   }
 
