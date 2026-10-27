@@ -1181,7 +1181,7 @@ async function toQualityEmpty(page) {
     await waitDone(p, 2);
     const pvDefault = await p.$eval('#previewCard .pv-img', (el) => el.alt);
     const pvDivider = await p.$('#previewCard .pv-divider');
-    const pvZooms = await p.$$eval('#previewCard .pv-zoom-btn', (els) => els.map((e) => e.textContent));
+    const pvZooms = await p.$$('#previewCard .pv-zoom-btn');
     const pvDl = await p.$('#previewCard .pv-toolbar button.primary');
     const navCount = await p.$$eval('#sideNav .side-links button', (els) => els.length);
     const boxes = await p.$eval('#previewCard', (el) => {
@@ -1190,16 +1190,13 @@ async function toQualityEmpty(page) {
       const st = document.querySelector('#settingsCard').getBoundingClientRect();
       return { pvLeft: r.left, pvTop: r.top, rcLeft: rc.left, rcTop: rc.top, stTop: st.top };
     });
-    check('预览卡默认第一张、带分界与缩放下载', pvDefault === 'test.jpg' && !!pvDivider && pvZooms.join('/') === '适合/100%/200%' && !!pvDl, `${pvDefault}/${!!pvDivider}/${pvZooms.join('/')}/${!!pvDl}`);
+    check('预览卡默认第一张、带分界与下载、无缩放按钮', pvDefault === 'test.jpg' && !!pvDivider && pvZooms.length === 0 && !!pvDl, `${pvDefault}/${!!pvDivider}/${pvZooms.length}/${!!pvDl}`);
     check('预览卡在第三块右侧栏内、设置下方，侧栏无设置入口', boxes.pvLeft > boxes.rcLeft && boxes.pvTop > boxes.stTop && navCount === 2, `${boxes.pvLeft}/${boxes.rcLeft}/${boxes.pvTop}/${boxes.stTop}/${navCount}`);
     await p.click('.thumb-strip .strip-tile:nth-child(2)');
     await p.waitForFunction(() => document.querySelector('#previewCard .pv-img').alt === 'test.png');
     const pvSecond = await p.$eval('#previewCard .pv-img', (el) => el.alt);
     const selSecond = await p.$eval('.thumb-strip .strip-tile:nth-child(2)', (el) => el.classList.contains('selected'));
     check('点缩略图条切换预览图并高亮', pvSecond === 'test.png' && selSecond, `${pvSecond}/${selSecond}`);
-    await p.click('#previewCard .pv-zoom-btn:nth-child(2)');
-    const zoomed = await p.$eval('#previewCard .pv-compare', (el) => el.classList.contains('zoomed') && !!el.style.width && el.style.width.endsWith('px'));
-    check('预览卡 100% 放大生效', zoomed, '');
     await p.close();
   }
 

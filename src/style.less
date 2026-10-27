@@ -4,7 +4,7 @@
   --bg: #010102; --card: #0f1011; --surface-2: #141516;
   --text: #f7f8f8; --muted: #d0d6e0; --subtle: #8a8f98;
   --border: #23252a; --border-strong: #34343a;
-  --accent: #5b8cff; --accent-hover: #7aa6ff; --green: #27a644; --green-soft: rgba(39,166,68,.16); --warn: #f59e0b; --red: #f87171;
+  --accent: #5b8cff; --accent-hover: #7aa6ff; --green: #27a644; --green-soft: rgba(39,166,68,.16); --green-text: #5fb97a; --warn: #f59e0b; --red: #f87171;
   --radius: 12px; --radius-sm: 8px; --ease: cubic-bezier(.4,0,.2,1); --fade: .35s;
   --card-shadow: inset 0 1px 0 rgba(255,255,255,.04); --accent-soft: rgba(91,140,255,.16);
   color-scheme: dark;
@@ -13,7 +13,7 @@
   --bg: #f5f6f6; --card: #ffffff; --surface-2: #f5f6f6;
   --text: #17181c; --muted: #52525b; --subtle: #6b7280;
   --border: #e5e7eb; --border-strong: #d4d4d8;
-  --green: #15803d; --green-soft: rgba(21,128,61,.10); --warn: #b45309; --red: #dc2626;
+  --green: #15803d; --green-soft: rgba(21,128,61,.10); --green-text: #3f9a5e; --warn: #b45309; --red: #dc2626;
   --card-shadow: 0 1px 3px rgba(0,0,0,.06); --accent-soft: rgba(37,99,235,.08);
   color-scheme: light;
 }
@@ -152,7 +152,7 @@ button {
 }
 #summary {
   margin-bottom: 4px;
-  .sum-big { color: var(--green); }
+  .sum-big { color: var(--green-text); }
   .sum-detail { font-size: 14px; color: var(--muted); }
   .list-hint { font-size: 12px; color: var(--subtle); margin-top: 8px; text-align: center; }
 // Local-processing reassurance under the dropzone format line.
@@ -212,7 +212,7 @@ html { touch-action: manipulation; }
   #rightPanel #settingsCard { flex: none; }
   #rightPanel #previewCard { flex: none; }
   #rightPanel .pv-stage { display: flex; align-items: flex-start; }
-  #rightPanel .pv-compare:not(.zoomed) { margin: auto; }
+  #rightPanel .pv-compare { margin: auto; }
   // Specificity beats the global .settings-head{display:none} below:
   // same-specificity order would let the later hide rule win everywhere.
   #settingsCard .settings-head {
@@ -300,12 +300,12 @@ html { touch-action: manipulation; }
 .item {
   display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 12px; align-items: start; padding: 18px 0; border-top: 1px solid var(--border);
   &:first-child { border-top: none; }
-  .name { display: flex; max-width: 100%; font-weight: 600; font-size: 14px; white-space: nowrap; }
+  .name { display: flex; max-width: 100%; font-weight: 600; font-size: 13px; white-space: nowrap; }
   .name-stem { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .name-ext { flex: none; }
-  .orig-size { color: var(--subtle); font-size: 14px; }
-  .comp-size { font-size: 14px; }
-  .dims { color: var(--subtle); font-size: 13px; display: flex; flex-direction: column; align-items: flex-start; line-height: 1.35; white-space: nowrap; }
+  .orig-size { color: var(--subtle); font-size: 13px; }
+  .comp-size { font-size: 13px; }
+  .dims { color: var(--subtle); font-size: 12px; display: flex; flex-direction: column; align-items: flex-start; line-height: 1.35; white-space: nowrap; }
   .dims-arrow { color: var(--subtle); font-size: 10px; line-height: 1.2; }
   .retry-btn {
     background: transparent; border: none; padding: 0; margin-left: 8px;
@@ -325,7 +325,7 @@ html { touch-action: manipulation; }
     color: var(--accent); font-size: inherit; font-weight: 600; text-decoration: underline; cursor: pointer;
   }
   // Row main line is one line only: sizes + inline saving percent.
-  .save-pct { color: var(--green); font-weight: 700; }
+  .save-pct { color: var(--green-text); font-size: 13px; font-weight: 500; }
   // 0% is not a success: the already-best badge is grey, not green. It sits
   // under the name beside the format tag (same size), so it never widens
   // the narrow compressed-size column.
@@ -523,7 +523,7 @@ main { max-width: none; margin: 0; padding: 0; min-width: 0; }
 .hist-list li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); font-size: 13px; }
 .hist-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hist-sizes { color: var(--muted); white-space: nowrap; }
-.hist-pct { color: var(--green); font-weight: 600; white-space: nowrap; }
+.hist-pct { color: var(--green-text); font-weight: 500; white-space: nowrap; }
 .hist-date { color: var(--subtle); white-space: nowrap; }
 /* 移动端底部 Tab 栏 + 更多菜单（桌面隐藏） */
 .tab-bar, .more-menu { display: none; }
@@ -569,15 +569,15 @@ main { max-width: none; margin: 0; padding: 0; min-width: 0; }
   & + .stat { border-left: 1px solid var(--border); }
 }
 .stat-label { font-size: 12px; color: var(--subtle); white-space: nowrap; }
-.stat-value { font-size: 15px; font-weight: 600; line-height: 1.3; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.stat-value { font-size: 14px; font-weight: 600; line-height: 1.3; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .stat-sub { font-size: 11px; color: var(--subtle); white-space: nowrap; }
 @media (max-width: 480px) {
-  .stat-value { font-size: 14px; }
+  .stat-value { font-size: 13px; }
   .stat-label { font-size: 11px; }
 }
 .fmt-tag { font-size: 11px; color: var(--subtle); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; line-height: 1.6; }
-.status-pill { font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
-.status-pill.done { background: var(--green-soft); color: var(--green); }
+.status-pill { font-size: 11px; font-weight: 500; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.status-pill.done { background: transparent; color: var(--green-text); }
 .status-pill.processing { background: var(--accent-soft); color: var(--accent); }
 .status-pill.fail { border: 1px solid var(--red); color: var(--red); }
 .drop-actions { display: flex; gap: 10px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
@@ -587,7 +587,7 @@ main { max-width: none; margin: 0; padding: 0; min-width: 0; }
 
 /* ===== 1.0.5 中间块：结果标题头 + 缩略图条 ===== */
 .result-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
-.result-head h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.result-head h3 { margin: 0; font-size: 15px; font-weight: 600; }
 #resultCard .result-head .actions { margin-top: 0; padding-top: 0; border-top: none; gap: 8px; }
 #resultCard .result-head .actions button { min-height: 34px; padding: 6px 14px; font-size: 13px; border-radius: 8px; }
 .thumb-strip { display: none; }
@@ -617,7 +617,6 @@ main { max-width: none; margin: 0; padding: 0; min-width: 0; }
 .pv-stage { max-height: 60vh; overflow: auto; border-radius: 8px; background: var(--surface-2); cursor: zoom-in; }
 .pv-compare { position: relative; display: block; line-height: 0; margin: 0 auto; }
 .pv-img { display: block; width: 100%; height: auto; }
-.pv-compare.zoomed { margin: 0; }
 .pv-orig-clip { position: absolute; inset: 0; }
 .pv-orig-clip .pv-img { width: 100%; height: 100%; }
 .pv-divider {
@@ -638,16 +637,9 @@ main { max-width: none; margin: 0; padding: 0; min-width: 0; }
   &.right { right: 6px; }
 }
 .pv-info { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin-top: 10px; font-size: 12px; color: var(--subtle); }
-.pv-pct { font-weight: 600; color: var(--green); }
+.pv-pct { font-weight: 500; color: var(--green-text); }
 .pv-dims { flex-basis: 100%; }
-.pv-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
-.pv-zoom { display: flex; gap: 4px; }
-.pv-zoom-btn {
-  padding: 3px 8px; font-size: 12px; line-height: 18px; border: 1px solid var(--border); border-radius: 6px;
-  background: var(--surface-2); color: var(--text); cursor: pointer;
-  &.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-}
-#previewCard .pv-zoom-btn { min-height: 0; min-width: 0; }
+.pv-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 #previewCard button.pv-dl { min-height: 0; padding: 4px 12px; font-size: 12px; line-height: 18px; border-radius: 6px; }
 .pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 16px; }
 .pager-label { font-size: 13px; color: var(--subtle); }

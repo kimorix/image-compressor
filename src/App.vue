@@ -92,7 +92,7 @@
           <button type="button" class="pv-close" :title="t('lbClose')" :aria-label="t('lbClose')" @click="previewClosed = true">×</button>
         </div>
         <div class="pv-stage" @click="onPvStageClick">
-          <div class="pv-compare" ref="pvCompareRef" :class="{ zoomed: pvZoom !== 'fit' }" :style="pvCompareStyle">
+          <div class="pv-compare" ref="pvCompareRef" :style="pvCompareStyle">
             <img class="pv-img" :src="pvCompSrc" :alt="previewItem.file.name" />
             <div v-if="previewItem.done && previewItem.outUrl" class="pv-orig-clip" :style="{ clipPath: `inset(0 ${100 - pvPos}% 0 0)` }">
               <img class="pv-img" :src="previewItem.url" :alt="previewItem.file.name" />
@@ -114,11 +114,6 @@
           <span v-else>{{ t('statusProcessing') }}</span>
         </div>
         <div class="pv-toolbar">
-          <div class="pv-zoom">
-            <button type="button" class="pv-zoom-btn" :class="{ active: pvZoom === 'fit' }" :aria-pressed="pvZoom === 'fit'" @click="pvZoom = 'fit'">{{ t('lbFit') }}</button>
-            <button type="button" class="pv-zoom-btn" :class="{ active: pvZoom === '100' }" :aria-pressed="pvZoom === '100'" @click="pvZoom = '100'">100%</button>
-            <button type="button" class="pv-zoom-btn" :class="{ active: pvZoom === '200' }" :aria-pressed="pvZoom === '200'" @click="pvZoom = '200'">200%</button>
-          </div>
           <button v-if="previewItem.done && previewItem.outUrl" type="button" class="primary pv-dl" @click="downloadPreview">{{ t('pvDownload') }}</button>
           <button v-else-if="previewItem.error" type="button" class="pv-dl" @click="retryItem(previewItem)">{{ t('retryBtn') }}</button>
         </div>
@@ -590,10 +585,9 @@ function downloadPreview() {
   a.click()
   a.remove()
 }
-// Same slider/zoom mechanism as the lightbox, in card form: the base
-// (compressed) layer fills the wrapper, the original layer clips to the
-// divider, and zoom scales the wrapper's explicit width.
-const pvZoom = ref<'fit' | '100' | '200'>('fit')
+// Same slider mechanism as the lightbox, in card form: the base
+// (compressed) layer fills the wrapper and the original layer clips to the
+// divider. The card always fits; zooming lives in the lightbox.
 // Manual thumbnail carousel: arrows page the strip viewport; no autoplay,
 // no dots. Nav buttons only show when tiles overflow the viewport.
 const stripViewportRef = ref<HTMLElement | null>(null)
@@ -643,25 +637,14 @@ const pvCompSrc = computed(() => {
   if (!it) return ''
   return it.done && it.outUrl ? it.outUrl : it.url
 })
-const pvBaseW = computed(() => {
-  const it = previewItem.value
-  if (!it) return 0
-  const w = it.done && it.outUrl && it.outW ? it.outW : it.origW
-  return w > 0 ? w : 0
-})
 const pvCompareStyle = computed(() => {
-  if (pvZoom.value === 'fit') {
-    // Fit: fill the card width, but cap tall (portrait) images at 55vh by
-    // narrowing the wrapper to the matching width, so both layers stay
-    // aligned and the slider still spans the whole picture.
-    const it = previewItem.value
-    const w = it && it.done && it.outUrl && it.outW ? it.outW : it?.origW
-    const h = it && it.done && it.outUrl && it.outH ? it.outH : it?.origH
-    return w && h ? { width: `min(100%, calc(55vh * ${w} / ${h}))` } : { width: '100%' }
-  }
-  if (!pvBaseW.value) return {}
-  const factor = pvZoom.value === '200' ? 2 : 1
-  return { width: `${pvBaseW.value * factor}px` }
+  // Fill the card width, but cap tall (portrait) images at 55vh by
+  // narrowing the wrapper to the matching width, so both layers stay
+  // aligned and the slider still spans the whole picture.
+  const it = previewItem.value
+  const w = it && it.done && it.outUrl && it.outW ? it.outW : it?.origW
+  const h = it && it.done && it.outUrl && it.outH ? it.outH : it?.origH
+  return w && h ? { width: `min(100%, calc(55vh * ${w} / ${h}))` } : { width: '100%' }
 })
 function pvSetPosFromClientX(clientX: number) {
   const el = pvCompareRef.value
