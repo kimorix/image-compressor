@@ -6,7 +6,7 @@ name: CI
 # the other way round).
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
 
 jobs:
