@@ -1552,15 +1552,15 @@ footer {
     gap: 8px;
   }
 }
-// Very narrow phones: GitHub also lives in the More menu, so drop the
-// duplicate icon rather than overflow the header at 320–380px.
+// Very narrow phones: the header is the only place GitHub lives now (the
+// More menu no longer carries it), so keep all three controls and shrink
+// them instead of hiding any.
 @media (max-width: 380px) {
   header h1 {
     font-size: 24px;
   }
-  // Only the GitHub link; the theme control is also a .gh-btn and must stay.
   .header-actions a.gh-btn {
-    display: none;
+    padding: 9px 8px;
   }
   // 320px phones: compact the badge and the remaining two controls, and let
   // the header wrap if the translated title is long (French/German are much
