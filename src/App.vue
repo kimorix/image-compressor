@@ -1,7 +1,7 @@
 <template>
   <header>
     <div>
-      <h1><span>{{ t('appTitle') }}</span><span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 018 0v3" /></svg>{{ t('badgeLocal') }}</span></h1>
+      <h1><span>{{ t('appTitle') }}</span><span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3z" /><path d="M9 12l2 2 4-4" /></svg><span class="badge-text"><span class="badge-main">{{ t('badgeLocal') }}</span><span class="badge-sub">{{ t('badgeSub') }}</span></span></span></h1>
       <p>{{ t('headerSub') }}</p>
     </div>
     <div class="header-actions">
@@ -12,49 +12,156 @@
       <a class="gh-btn" href="https://github.com/kimorix/image-compressor" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z" /></svg><span class="gh-text">{{ t('githubBtn') }}</span></a>
     </div>
   </header>
-  <main :class="{ 'no-result': items.length === 0 }">
+  <div class="layout">
+    <aside id="sideNav">
+      <nav class="side-links">
+        <button type="button" :class="{ active: view === 'tool' }" @click="goTool"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="M21 15l-5-5L5 21" /></svg>{{ t('navTool') }}</button>
+        <button type="button" :class="{ active: view === 'history' }" @click="goHistory"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>{{ t('navHistory') }}</button>
+      </nav>
+      <div class="side-card">
+        <strong>{{ t('sideLocalTitle') }}</strong>
+        <p>{{ t('sideLocalDesc') }}</p>
+      </div>
+      <div class="side-card">
+        <strong>{{ t('sideFormats') }}</strong>
+        <p class="side-formats">JPG · PNG · WebP · AVIF · HEIC · HEIF</p>
+      </div>
+    </aside>
+    <main :class="{ 'no-result': items.length === 0 }" v-show="view === 'tool'">
     <div class="card" id="uploadCard">
       <DropZone ref="dropzoneRef" :t="t" :compact="items.length > 0" @files="addFiles" />
       <p v-if="fileHint" class="file-hint">{{ fileHint }}</p>
-    </div>
-
-    <div class="card" id="settingsCard">
-      <button class="settings-summary" type="button" :aria-expanded="!settingsCollapsed" @click="settingsCollapsed = !settingsCollapsed">
-        <span>{{ settingsSummary }}</span><span class="settings-caret">{{ settingsCollapsed ? '▾' : '▴' }}</span>
-      </button>
-      <div :class="{ 'settings-body-collapsed': settingsCollapsed }">
-        <SettingsPanel :settings="settings" :t="t" @update="onSettingsUpdate" @preset="onPreset" />
+      <div v-if="items.length > 0" class="thumb-strip">
+        <button v-show="stripHasOverflow" type="button" class="strip-nav" :disabled="!stripCanPrev" :aria-label="t('stripPrev')" @click="stripScroll(-1)">‹</button>
+        <div class="strip-viewport" ref="stripViewportRef" @scroll="updateStripNav">
+          <div class="strip-track">
+            <div v-for="item in items" :key="item.id" :class="['strip-tile', { selected: previewItem && previewItem.id === item.id }]" :title="item.file.name" @click="selectPreview(item)">
+              <img class="strip-thumb" :src="item.done && item.outUrl ? item.outUrl : item.url" :alt="item.file.name" onerror="this.style.visibility='hidden'" />
+              <span class="strip-name">{{ shortName(item.file.name) }}</span>
+              <span class="strip-size">{{ fmtSize(item.file.size) }}</span>
+              <button type="button" class="strip-remove" :title="t('btnRemove')" :aria-label="t('btnRemove')" @click.stop="removeItem(item)">×</button>
+            </div>
+          </div>
+        </div>
+        <button v-show="stripHasOverflow" type="button" class="strip-nav" :disabled="!stripCanNext" :aria-label="t('stripNext')" @click="stripScroll(1)">›</button>
       </div>
     </div>
 
     <div class="card" id="resultCard" v-show="items.length > 0">
       <ProgressBar :finished="finishedCount" :total="items.length" :t="t" />
+      <div class="result-head">
+        <h3>{{ t('resultTitle') }}</h3>
+        <div class="actions">
+          <button id="clearAll" :class="{ danger: clearConfirm }" :disabled="items.length === 0" @click="onClearClick">{{ clearConfirm ? t('clearConfirm') : t('clearAll') }}</button>
+          <button class="primary" id="downloadAll" :disabled="doneCount === 0 || zipping" @click="downloadAll">{{ t('downloadAll') }}</button>
+        </div>
+      </div>
       <div id="summary" v-html="summaryHtml"></div>
       <div id="list">
         <ImageItem
-          v-for="item in items"
+          v-for="item in pagedItems"
           :key="item.id"
           :item="item"
           :t="t"
           @remove="removeItem"
-          @preview="lightboxId = $event.id"
+          @preview="selectPreview($event); lightboxId = $event.id"
           @use-webp="onUseWebp"
           @retry="retryItem"
         />
       </div>
-      <div v-if="allAlreadyBest" class="dl-note">{{ t('allBestNote', items.length) }}</div>
-      <div class="actions">
-        <button class="primary" id="downloadAll" :disabled="doneCount === 0 || zipping" @click="downloadAll">{{ t('downloadAll') }}</button>
-        <button id="clearAll" :class="{ danger: clearConfirm }" :disabled="items.length === 0" @click="onClearClick">{{ clearConfirm ? t('clearConfirm') : t('clearAll') }}</button>
+      <div v-if="items.length > PAGE_SIZE" class="pager">
+        <button type="button" :disabled="page <= 1" @click="page--">{{ t('pagePrev') }}</button>
+        <span class="pager-label">{{ t('pageLabel', page, pageCount) }}</span>
+        <button type="button" :disabled="page >= pageCount" @click="page++">{{ t('pageNext') }}</button>
       </div>
+      <div v-if="allAlreadyBest" class="dl-note">{{ t('allBestNote', items.length) }}</div>
     </div>
   </main>
+  <div id="rightPanel" v-show="view === 'tool'">
+      <div class="card" id="settingsCard">
+        <div class="settings-head">
+          <h3>{{ t('settingsTitle') }}</h3>
+          <button type="button" class="settings-collapse-btn" :aria-expanded="!settingsCollapsed" @click="settingsCollapsed = !settingsCollapsed">{{ settingsCollapsed ? t('expandBtn') : t('collapseBtn') }}</button>
+        </div>
+        <button class="settings-summary" type="button" :aria-expanded="!settingsCollapsed" @click="settingsCollapsed = !settingsCollapsed">
+          <span>{{ settingsSummary }}</span><span class="settings-caret">{{ settingsCollapsed ? '▾' : '▴' }}</span>
+        </button>
+        <div class="settings-body" :class="{ 'settings-body-collapsed': settingsCollapsed }">
+          <SettingsPanel :settings="settings" :t="t" @update="onSettingsUpdate" @preset="onPreset" @start="recompressAll" />
+        </div>
+      </div>
+      <div class="card" id="previewCard" v-if="previewItem && !previewClosed">
+        <div class="pv-head">
+          <h3>{{ t('previewTitle') }}</h3>
+          <button type="button" class="pv-close" :title="t('lbClose')" :aria-label="t('lbClose')" @click="previewClosed = true">×</button>
+        </div>
+        <div class="pv-stage" @click="onPvStageClick">
+          <div class="pv-compare" ref="pvCompareRef" :class="{ zoomed: pvZoom !== 'fit' }" :style="pvCompareStyle">
+            <img class="pv-img" :src="pvCompSrc" :alt="previewItem.file.name" />
+            <div v-if="previewItem.done && previewItem.outUrl" class="pv-orig-clip" :style="{ clipPath: `inset(0 ${100 - pvPos}% 0 0)` }">
+              <img class="pv-img" :src="previewItem.url" :alt="previewItem.file.name" />
+            </div>
+            <div v-if="previewItem.done && previewItem.outUrl" class="pv-divider" :style="{ left: pvPos + '%' }" tabindex="0" role="slider" :aria-label="t('lbCompare')" :aria-valuemin="0" :aria-valuemax="100" :aria-valuenow="Math.round(pvPos)" @pointerdown="onPvDividerDown" @keydown="onPvDividerKey">
+              <span class="pv-handle">↔</span>
+            </div>
+            <span v-if="previewItem.done && previewItem.outUrl" class="pv-side-tag left">{{ t('tagOrig') }}</span>
+            <span v-if="previewItem.done && previewItem.outUrl" class="pv-side-tag right">{{ t('tagComp') }}</span>
+          </div>
+        </div>
+        <div class="pv-zoom">
+          <button type="button" class="pv-zoom-btn" :class="{ active: pvZoom === 'fit' }" :aria-pressed="pvZoom === 'fit'" @click="pvZoom = 'fit'">{{ t('lbFit') }}</button>
+          <button type="button" class="pv-zoom-btn" :class="{ active: pvZoom === '100' }" :aria-pressed="pvZoom === '100'" @click="pvZoom = '100'">100%</button>
+          <button type="button" class="pv-zoom-btn" :class="{ active: pvZoom === '200' }" :aria-pressed="pvZoom === '200'" @click="pvZoom = '200'">200%</button>
+        </div>
+        <div class="pv-info">
+          <span class="pv-name">{{ previewItem.file.name }}</span>
+          <span v-if="previewItem.done && previewItem.outUrl" class="pv-save">−{{ previewPct }}% · {{ t('pvSaved') }} {{ fmtSize(previewItem.file.size - previewItem.outSize) }}</span>
+          <span v-if="previewItem.done && previewItem.outUrl">{{ fmtSize(previewItem.file.size) }} → {{ fmtSize(previewItem.outSize) }} (−{{ previewPct }}%)</span>
+          <span v-if="previewItem.done && previewItem.origW">{{ previewItem.origW }}×{{ previewItem.origH }} → {{ previewItem.outW }}×{{ previewItem.outH }}</span>
+          <span v-if="previewItem.error">{{ t('statusFailed') }}</span>
+          <span v-if="!previewItem.done && !previewItem.error">{{ t('statusProcessing') }}</span>
+        </div>
+        <div class="pv-actions" v-if="(previewItem.done && previewItem.outUrl) || previewItem.error">
+          <button v-if="previewItem.done && previewItem.outUrl" type="button" class="primary" @click="downloadPreview">{{ t('pvDownload') }}</button>
+          <button v-if="previewItem.error" type="button" @click="retryItem(previewItem)">{{ t('retryBtn') }}</button>
+        </div>
+      </div>
+  </div>
+    <section id="historyView" v-show="view === 'history'">
+      <div class="card">
+        <div class="hist-head">
+          <h2>{{ t('histTitle') }}</h2>
+          <button v-if="historyRecords.length" type="button" class="link-btn" @click="clearHistory">{{ t('histClear') }}</button>
+        </div>
+        <p v-if="historyRecords.length" class="hist-summary">{{ t('histSummary', historyRecords.length, fmtSize(histSaved)) }}</p>
+        <p v-else class="hist-empty">{{ t('histEmpty') }}</p>
+        <ul v-if="historyRecords.length" class="hist-list">
+          <li v-for="r in historyRecords" :key="r.t + r.n">
+            <span class="hist-name">{{ r.n }}</span>
+            <span class="hist-sizes">{{ fmtSize(r.o) }} → {{ fmtSize(r.c) }}</span>
+            <span class="hist-pct">-{{ r.p }}%</span>
+            <span class="hist-date">{{ new Date(r.t).toLocaleDateString() }}</span>
+          </li>
+        </ul>
+      </div>
+    </section>
+  </div>
   <div class="sticky-bar" v-show="items.length > 0">
     <button class="sticky-add" type="button" @click="openPicker">{{ t('addBtn') }}</button>
     <button class="sticky-clear" type="button" :disabled="items.length === 0" @click="onClearClick">{{ clearConfirm ? t('clearConfirm') : t('clearAll') }}</button>
     <button class="sticky-download primary" type="button" :disabled="doneCount === 0 || zipping" @click="downloadAll">{{ t('downloadAll') }}</button>
   </div>
   <div class="sticky-spacer" v-show="items.length > 0" aria-hidden="true"></div>
+  <nav class="tab-bar">
+    <button type="button" :class="{ active: view === 'tool' }" @click="goTool(); window.scrollTo({ top: 0, behavior: 'smooth' })"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8" /><path d="M5 9v11h14V9" /></svg>{{ t('tabHome') }}</button>
+    <button type="button" @click="goSettings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></svg>{{ t('tabSettings') }}</button>
+    <button type="button" :class="{ active: moreOpen }" @click="moreOpen = !moreOpen"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>{{ t('tabMore') }}</button>
+  </nav>
+  <div class="more-menu" v-show="moreOpen">
+    <button type="button" @click="toggleTheme(); moreOpen = false">{{ t('moreTheme') }}</button>
+    <a href="https://github.com/kimorix/image-compressor" target="_blank" rel="noopener">{{ t('githubBtn') }}</a>
+    <button type="button" :disabled="items.length === 0" @click="onClearClick(); moreOpen = false">{{ t('clearAll') }}</button>
+  </div>
   <!-- Global recompress indicator: the centered "processing" pill is the
   single loading indicator. pointer-events none: it must never block taps
   while a run is in flight. -->
@@ -65,7 +172,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue'
 import { zipSync } from 'fflate'
 import DropZone from './components/DropZone.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
@@ -75,7 +182,7 @@ import ProgressBar from './components/ProgressBar.vue'
 import { LANGS, initialLang, t as tx, type Lang } from './i18n'
 import { applyTheme, initialTheme, MOON_ICON, SUN_ICON, type Theme } from './lib/theme'
 import { CompressPool } from './lib/compress-pool'
-import { baseName, fmtSize } from './lib/format'
+import { baseName, fmtSize, shortName } from './lib/format'
 import { DEFAULT_SETTINGS, matchPreset, PRESETS } from './lib/presets'
 import { loadSavedSettings, saveSettings } from './lib/settings-store'
 import { newItem, type CompressItem, type Settings } from './types'
@@ -91,9 +198,63 @@ watch(settings, () => saveSettings(settings), { deep: true })
 const items = shallowRef<CompressItem[]>([])
 
 // Mobile settings collapse: with images, the settings card folds to a
-// one-line summary (tapping it expands). Default collapsed so the results
-// are visible right under the upload area.
-const settingsCollapsed = ref(true)
+// one-line summary (tapping it expands). Collapsed by default on narrow
+// screens so the results are visible right under the upload area;
+// desktop starts expanded (the panel is a fixed sidebar there, and
+// folding is opt-in via the header button).
+const settingsCollapsed = ref(typeof window !== 'undefined' ? window.innerWidth < 720 : true)
+// Shell views: tool (default) vs history. The sidebar and the mobile tab
+// bar switch between them; settings is an action (expand + scroll), not a
+// view, because the panel already lives on the tool page.
+const view = ref<'tool' | 'history'>('tool')
+const moreOpen = ref(false)
+type HistRec = { n: string; o: number; c: number; p: number; f: string; t: number }
+const historyRecords = ref<HistRec[]>([])
+function loadHistory() {
+  try {
+    const raw = localStorage.getItem('ic-history')
+    const arr = raw ? JSON.parse(raw) : []
+    historyRecords.value = Array.isArray(arr) ? arr.filter((r) => r && typeof r.n === 'string') : []
+  } catch {
+    historyRecords.value = []
+  }
+}
+// Loaded at setup so the first saveHistory never clobbers stored records.
+loadHistory()
+function saveHistory(rec: HistRec) {
+  const arr = [rec, ...historyRecords.value].slice(0, 200)
+  historyRecords.value = arr
+  try {
+    localStorage.setItem('ic-history', JSON.stringify(arr))
+  } catch {
+    /* ignore */
+  }
+}
+const histSaved = computed(() => historyRecords.value.reduce((s, r) => s + Math.max(0, r.o - r.c), 0))
+function clearHistory() {
+  historyRecords.value = []
+  try {
+    localStorage.removeItem('ic-history')
+  } catch {
+    /* ignore */
+  }
+}
+function goTool() {
+  view.value = 'tool'
+  moreOpen.value = false
+}
+function goHistory() {
+  loadHistory()
+  view.value = 'history'
+  moreOpen.value = false
+}
+async function goSettings() {
+  view.value = 'tool'
+  moreOpen.value = false
+  settingsCollapsed.value = false
+  await nextTick()
+  document.getElementById('settingsCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
 const settingsSummary = computed(() => {
   // Smart mode has no format/quality to show: it picks per image.
   if (settings.mode === 'smart') {
@@ -138,15 +299,20 @@ const summaryHtml = computed(() => {
   // finished yet, "0 B -> 100% saved" would be a lie, so it reads 0%.
   const doneOrig = doneItems.reduce((s, i) => s + i.file.size, 0)
   const saved = doneOrig > 0 ? Math.max(0, Math.round((1 - comp / doneOrig) * 100)) : 0
-  const detail = t('summaryDetail', items.value.length, doneCount.value, fmtSize(orig), fmtSize(comp))
-  // No big figure when nothing was saved yet (or everything was already
-  // optimal): the per-item already-best badge carries that case.
-  const body = (doneCount.value === 0 || saved === 0)
-    ? `<div class="sum-detail">${detail}</div>`
-    : `<div class="sum-big">${t('sumBig', saved)}</div><div class="sum-detail">${detail}</div>`
+  const savedBytes = Math.max(0, doneOrig - comp)
+  // Stat strip (mock layout): done count, original total, compressed
+  // (done only), saved percent + bytes. The numbers match the old detail
+  // line; only the layout changed. sum-big keeps its class and pure
+  // percent text so the saved-percent assertion still reads it.
+  const strip = `<div class="stat-strip">`
+    + `<div class="stat"><span class="stat-label">${t('statDone')}</span><span class="stat-value">${doneCount.value}/${items.value.length}</span></div>`
+    + `<div class="stat"><span class="stat-label">${t('statOrig')}</span><span class="stat-value">${fmtSize(orig)}</span></div>`
+    + `<div class="stat"><span class="stat-label">${t('statComp')}</span><span class="stat-value">${fmtSize(comp)}</span></div>`
+    + `<div class="stat"><span class="stat-label">${t('statSaved')}</span><span class="stat-value sum-big">${t('sumBig', saved)}</span><span class="stat-sub">${fmtSize(savedBytes)}</span></div>`
+    + `</div>`
   // The thumbnail-toggle hint used to repeat on every row; once, under the
   // summary, is enough.
-  return `${body}<div class="list-hint">${t('thumbHint')}</div>`
+  return `${strip}<div class="list-hint">${t('thumbHint')}</div>`
 })
 
 function refresh() {
@@ -195,6 +361,13 @@ async function runCompress(list: CompressItem[], g: number, snap: Settings) {
       // failed item keeps its displayed (older) result, so its snapshot
       // must stay at the older settings, not advance to snap.
       replaceItem({ ...item, ...res, ...(res.done ? { lastSettings: snap } : {}) })
+      // First completion only: recompresses of an already-done item are
+      // not new history entries.
+      if (!item.done && res.done) {
+        const fmtMap: Record<string, string> = { 'image/jpeg': 'JPEG', 'image/png': 'PNG', 'image/webp': 'WebP', 'image/avif': 'AVIF' }
+        const ext = item.file.name.split('.').pop()?.toUpperCase() ?? ''
+        saveHistory({ n: item.file.name, o: item.file.size, c: res.outSize, p: Math.max(0, Math.round((1 - res.outSize / item.file.size) * 100)), f: fmtMap[res.outType] ?? ext, t: Date.now() })
+      }
     }))
   } finally {
     activeRuns.value--
@@ -234,13 +407,21 @@ function addFiles(files: File[]) {
     (f) => f.type.startsWith('image/') || /\.hei[cf]$/i.test(f.name),
   )
   const filtered = files.length - accepted.length
-  if (filtered > 0) {
-    fileHint.value = t('filteredNote', filtered)
+  // Mock cap: a single image over 50 MB is skipped with a hint, not
+  // silently dropped and not fed to the encoders.
+  const MAX_FILE = 50 * 1024 * 1024
+  const withinLimit = accepted.filter((f) => f.size <= MAX_FILE)
+  const oversize = accepted.length - withinLimit.length
+  const hints: string[] = []
+  if (filtered > 0) hints.push(t('filteredNote', filtered))
+  if (oversize > 0) hints.push(t('oversizeNote', oversize))
+  if (hints.length) {
+    fileHint.value = hints.join(' ')
     if (hintTimer) clearTimeout(hintTimer)
     hintTimer = setTimeout(() => { fileHint.value = null }, 5000)
   }
-  if (!accepted.length) return
-  for (const file of accepted) items.value.push(newItem(file))
+  if (!withinLimit.length) return
+  for (const file of withinLimit) items.value.push(newItem(file))
   refresh()
   const g = ++runGen
   const snap = { ...settings }
@@ -370,6 +551,124 @@ function removeItem(item: CompressItem) {
 // live item object (it survives recompresses that replace the item).
 const lightboxId = ref<string | null>(null)
 const lbItem = computed(() => items.value.find((i) => i.id === lightboxId.value) ?? null)
+// Bottom-right compare preview (mock layout): the selected image,
+// defaulting to the first one. The thumbnail strip selects; the row
+// thumbnail also selects (and still opens the lightbox). The × hides
+// the card until the next selection.
+const previewId = ref<string | null>(null)
+const previewClosed = ref(false)
+const previewItem = computed(() => items.value.find((i) => i.id === previewId.value) ?? items.value[0] ?? null)
+const previewPct = computed(() => {
+  const it = previewItem.value
+  if (!it || !it.done || it.file.size <= 0) return 0
+  return Math.max(0, Math.round((1 - it.outSize / it.file.size) * 100))
+})
+function selectPreview(item: CompressItem) {
+  previewId.value = item.id
+  previewClosed.value = false
+}
+function downloadPreview() {
+  const it = previewItem.value
+  if (!it || !it.done || !it.outUrl) return
+  const a = document.createElement('a')
+  a.href = it.outUrl
+  a.download = it.outName ?? it.file.name
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+}
+// Same slider/zoom mechanism as the lightbox, in card form: the base
+// (compressed) layer fills the wrapper, the original layer clips to the
+// divider, and zoom scales the wrapper's explicit width.
+const pvZoom = ref<'fit' | '100' | '200'>('fit')
+// Manual thumbnail carousel: arrows page the strip viewport; no autoplay,
+// no dots. Nav buttons only show when tiles overflow the viewport.
+const stripViewportRef = ref<HTMLElement | null>(null)
+const stripHasOverflow = ref(false)
+const stripCanPrev = ref(false)
+const stripCanNext = ref(false)
+function updateStripNav() {
+  const el = stripViewportRef.value
+  if (!el) { stripHasOverflow.value = false; stripCanPrev.value = false; stripCanNext.value = false; return }
+  const max = el.scrollWidth - el.clientWidth
+  stripHasOverflow.value = max > 4
+  stripCanPrev.value = el.scrollLeft > 4
+  stripCanNext.value = el.scrollLeft < max - 4
+}
+function stripScroll(dir: number) {
+  const el = stripViewportRef.value
+  if (!el) return
+  // Page by whole tiles (96px tile + 12px gap), clamped to the ends, so a
+  // page never lands mid-tile and both ends sit flush (no trailing blank).
+  const step = Math.max(1, Math.floor(el.clientWidth / 108)) * 108
+  const max = el.scrollWidth - el.clientWidth
+  const target = dir > 0 ? Math.min(el.scrollLeft + step, max) : Math.max(el.scrollLeft - step, 0)
+  el.scrollTo({ left: target, behavior: 'smooth' })
+}
+watch(() => items.value.length, async () => { await nextTick(); updateStripNav() })
+// #8 results pagination: 20 rows per page; stats, strip and downloads stay global.
+const PAGE_SIZE = 20
+const page = ref(1)
+const pageCount = computed(() => Math.max(1, Math.ceil(items.value.length / PAGE_SIZE)))
+const pagedItems = computed(() => items.value.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE))
+watch(pageCount, () => { if (page.value > pageCount.value) page.value = pageCount.value })
+if (typeof window !== 'undefined') window.addEventListener('resize', updateStripNav)
+
+// Preview click opens the lightbox (same enlarged compare the row thumbs
+// open). A divider drag ends in a click too, so clicks right after a drag
+// (or on the divider itself) must not open it.
+let pvLastDragEnd = 0
+function onPvStageClick(e: MouseEvent) {
+  if ((e.target as HTMLElement).closest('.pv-divider')) return
+  if (Date.now() - pvLastDragEnd < 300) return
+  if (previewItem.value) lightboxId.value = previewItem.value.id
+}
+const pvPos = ref(50)
+const pvCompareRef = ref<HTMLElement | null>(null)
+const pvCompSrc = computed(() => {
+  const it = previewItem.value
+  if (!it) return ''
+  return it.done && it.outUrl ? it.outUrl : it.url
+})
+const pvBaseW = computed(() => {
+  const it = previewItem.value
+  if (!it) return 0
+  const w = it.done && it.outUrl && it.outW ? it.outW : it.origW
+  return w > 0 ? w : 0
+})
+const pvCompareStyle = computed(() => {
+  if (pvZoom.value === 'fit' || !pvBaseW.value) return {}
+  const factor = pvZoom.value === '200' ? 2 : 1
+  return { width: `${pvBaseW.value * factor}px` }
+})
+function pvSetPosFromClientX(clientX: number) {
+  const el = pvCompareRef.value
+  if (!el) return
+  const r = el.getBoundingClientRect()
+  if (r.width <= 0) return
+  pvPos.value = Math.min(100, Math.max(0, ((clientX - r.left) / r.width) * 100))
+}
+function onPvDividerDown(e: PointerEvent) {
+  e.preventDefault()
+  ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
+  const move = (ev: PointerEvent) => pvSetPosFromClientX(ev.clientX)
+  let moved = false
+  const move2 = (ev: PointerEvent) => { moved = true; move(ev) }
+  const up = () => {
+    if (moved) pvLastDragEnd = Date.now()
+    window.removeEventListener('pointermove', move2)
+    window.removeEventListener('pointerup', up)
+  }
+  window.addEventListener('pointermove', move2)
+  window.addEventListener('pointerup', up)
+}
+function onPvDividerKey(e: KeyboardEvent) {
+  if (e.key === 'ArrowLeft') { pvPos.value = Math.max(0, pvPos.value - 5); e.preventDefault() }
+  else if (e.key === 'ArrowRight') { pvPos.value = Math.min(100, pvPos.value + 5); e.preventDefault() }
+  else if (e.key === 'Home') { pvPos.value = 0; e.preventDefault() }
+  else if (e.key === 'End') { pvPos.value = 100; e.preventDefault() }
+}
+
 
 function downloadAll() {
   void downloadAllZip()
@@ -439,6 +738,7 @@ function onClearClick() {
   }
   if (clearTimer) clearTimeout(clearTimer)
   clearConfirm.value = false
+  page.value = 1
   clearAll()
 }
 

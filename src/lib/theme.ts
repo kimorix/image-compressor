@@ -19,5 +19,5 @@ export function applyTheme(t: Theme): void {
   document.documentElement.dataset.theme = t
   try { localStorage.setItem('ic-theme', t) } catch { /* ignore */ }
   const meta = document.querySelector('meta[name="theme-color"]')
-  if (meta) meta.setAttribute('content', t === 'dark' ? '#010102' : '#f5f6f6')
+  if (meta) meta.setAttribute('content', t === 'dark' ? '#010102' : '#eef4ff')
 }
