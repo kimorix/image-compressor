@@ -147,8 +147,19 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
     let outType = s.format === 'original' ? file.type : s.format
     if (isHeic(file) && s.format === 'original') outType = 'image/jpeg'
     if (!['image/jpeg', 'image/png', 'image/webp', 'image/avif'].includes(outType)) outType = 'image/png'
+    // Smart + keep-original: the format is the input's own, known before
+    // decode (HEIC -> JPEG, GIF/unknown -> PNG, same as 'original').
+    if (s.mode === 'smart' && s.smartKeepOriginal) {
+      outType = file.type
+      if (isHeic(file)) outType = 'image/jpeg'
+      if (!['image/jpeg', 'image/png', 'image/webp', 'image/avif'].includes(outType)) outType = 'image/png'
+    }
+    // Smart mode ignores the settings format, so its P3 decision cannot
+    // use the stale outType: smart only ever emits taggable types (WebP,
+    // or PNG when it can carry the profile), so assume taggable here and
+    // re-decide after the pixel scan picks the real type.
     let useP3 = srcIcc !== null && isDisplayP3(srcIcc)
-      && (outType === 'image/jpeg' || outType === 'image/webp'
+      && ((s.mode === 'smart' && !s.smartKeepOriginal) || outType === 'image/jpeg' || outType === 'image/webp'
         || (outType === 'image/png' && canEmbedPng()))
     const decoded = await decodeSource(source, t, useP3)
     const origW = decoded.w
@@ -187,6 +198,39 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
         }
       }
     }
+    // Smart mode: pick the output format from the pixels, not the
+    // settings. One bare-canvas pass (the same pass the JPEG alpha note
+    // used to need): any transparency forces WebP (JPEG would flatten
+    // it); few distinct colors mean a graphic (palette PNG wins);
+    // anything else is a photo (WebP q80). Alpha is exact (every
+    // pixel); the color count samples every 4th pixel, which is plenty
+    // for a flat-vs-photo heuristic. PNG is only picked when it can
+    // carry a P3 profile, so a P3 source never ends up untagged.
+    let alphaScan: boolean | null = null
+    let quantize = s.quantize
+    if (s.mode === 'smart') {
+      const sc = makeCanvas()
+      sc.width = width
+      sc.height = height
+      const sctx = sc.getContext('2d', { willReadFrequently: true })!
+      sctx.drawImage(decoded.src, 0, 0, width, height)
+      const d = sctx.getImageData(0, 0, width, height).data
+      let has = false
+      const colors = new Set<number>()
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i + 3] < 255) { has = true; break }
+        if ((i >> 2) % 4 === 0) colors.add(((d[i] >> 4) << 8) | ((d[i + 1] >> 4) << 4) | (d[i + 2] >> 4))
+      }
+      alphaScan = has
+      if (!s.smartKeepOriginal) {
+        if (has) outType = 'image/webp'
+        else if (colors.size <= 256 && canEmbedPng()) outType = 'image/png'
+        else outType = 'image/webp'
+        useP3 = srcIcc !== null && isDisplayP3(srcIcc)
+          && (outType === 'image/webp' || (outType === 'image/png' && canEmbedPng()))
+      }
+      quantize = outType === 'image/png'
+    }
     let canvas = makeCanvas()
     let ctx = canvas.getContext('2d', { willReadFrequently: true, ...(useP3 ? { colorSpace: 'display-p3' } : {}) })!
     if (useP3) {
@@ -208,11 +252,8 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
 
     // Draw at (w, h), read pixels, encode. Mutates outType/typeNote only on
     // the canvas fallback path (Safari WebP -> JPEG).
-    // Transparency is scanned once per run, on a bare canvas before any
-    // JPEG fill: the fill would destroy the alpha channel. It survives
-    // resizing except for pathological single-pixel cases, and the flag
-    // only feeds the JPEG note, so one pass is enough.
-    let alphaScan: boolean | null = null
+    // Transparency scan: declared before canvas creation so the smart
+    // pre-scan can feed it; the first encode then skips its own pass.
     const encodeAt = async (w: number, h: number, q?: number): Promise<Blob> => {
       canvas.width = w
       canvas.height = h
@@ -241,7 +282,7 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
         if (outType === 'image/jpeg') buf = await encodeMozjpeg(pixels, Math.round((q ?? 0.8) * 100))
         else if (outType === 'image/webp') buf = await encodeWebp(pixels, Math.round((q ?? 0.8) * 100))
         else if (outType === 'image/avif') buf = await encodeAvif(pixels, Math.round((q ?? 0.8) * 100))
-        else if (s.quantize) buf = await encodePngQuantized(pixels, Math.round((q ?? 0.8) * 100))
+        else if (quantize) buf = await encodePngQuantized(pixels, Math.round((q ?? 0.8) * 100))
         else buf = await encodePng(pixels)
         out = new Blob([buf], { type: outType })
       } catch (err) {
@@ -335,8 +376,8 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
         }
       }
     } else {
-      const quality = s.quality / 100
-      blob = await encodeAt(width, height, outType === 'image/png' && !s.quantize ? undefined : quality)
+      const quality = s.mode === 'smart' ? 0.8 : s.quality / 100
+      blob = await encodeAt(width, height, outType === 'image/png' && !quantize ? undefined : quality)
     }
     // Optional EXIF preservation (JPEG only): re-encoding strips metadata,
     // so copy the original EXIF block back into the compressed JPEG.

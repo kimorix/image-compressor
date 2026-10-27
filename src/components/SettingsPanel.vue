@@ -13,31 +13,35 @@
       >{{ t('preset_' + p.id) }}</button>
     </div>
     <div class="field">
-      <label for="format">{{ t('fmtLabel') }}</label>
-      <select id="format" :value="settings.format" @change="onFormat(($event.target as HTMLSelectElement).value)">
+      <label for="format" v-show="settings.mode !== 'smart'">{{ t('fmtLabel') }}</label>
+      <select id="format" v-show="settings.mode !== 'smart'" :value="settings.format" @change="onFormat(($event.target as HTMLSelectElement).value)">
         <option value="original">{{ t('fmtOriginal') }}</option>
         <option value="image/jpeg">{{ t('fmtJpeg') }}</option>
         <option value="image/png">{{ t('fmtPng') }}</option>
         <option value="image/webp">{{ t('fmtWebp') }}</option>
         <option value="image/avif">{{ t('fmtAvif') }}</option>
       </select>
-      <label class="check" v-show="settings.format === 'image/png'"><input type="checkbox" id="quantize" :checked="settings.quantize" @change="onQuantize(($event.target as HTMLInputElement).checked)" /> <span>{{ t('quantizeLabel') }}</span></label>
-      <label class="check" v-show="settings.format === 'image/jpeg'"><input type="checkbox" id="keepExif" :checked="settings.keepExif" @change="onKeepExif(($event.target as HTMLInputElement).checked)" /> <span>{{ t('keepExifLabel') }}</span></label>
-      <label class="check" v-show="settings.format === 'image/jpeg'"><input type="color" id="jpegFill" :value="settings.jpegFill" @change="onJpegFill(($event.target as HTMLInputElement).value)" /> <span>{{ t('jpegFillLabel') }}</span></label>
+      <label class="check" v-show="settings.mode !== 'smart' && settings.format === 'image/png'"><input type="checkbox" id="quantize" :checked="settings.quantize" @change="onQuantize(($event.target as HTMLInputElement).checked)" /> <span>{{ t('quantizeLabel') }}</span></label>
+      <label class="check" v-show="settings.mode !== 'smart' && settings.format === 'image/jpeg'"><input type="checkbox" id="keepExif" :checked="settings.keepExif" @change="onKeepExif(($event.target as HTMLInputElement).checked)" /> <span>{{ t('keepExifLabel') }}</span></label>
+      <label class="check" v-show="settings.mode !== 'smart' && settings.format === 'image/jpeg'"><input type="color" id="jpegFill" :value="settings.jpegFill" @change="onJpegFill(($event.target as HTMLInputElement).value)" /> <span>{{ t('jpegFillLabel') }}</span></label>
       <label class="check"><input type="checkbox" id="keepOriginalName" :checked="settings.keepOriginalName" @change="onKeepOriginalName(($event.target as HTMLInputElement).checked)" /> <span>{{ t('keepOriginalNameLabel') }}</span></label>
     </div>
     <div class="field">
       <label for="mode">{{ t('modeLabel') }}</label>
       <select id="mode" :value="settings.mode" @change="onMode(($event.target as HTMLSelectElement).value)">
+        <option value="smart">{{ t('modeSmart') }}</option>
         <option value="quality">{{ t('modeQuality') }}</option>
         <option value="target">{{ t('modeTarget') }}</option>
       </select>
+    </div>
+    <div class="field" v-show="settings.mode === 'smart'">
+      <label class="check"><input type="checkbox" id="smartKeepOriginal" :checked="settings.smartKeepOriginal" @change="onSmartKeepOriginal(($event.target as HTMLInputElement).checked)" /> <span>{{ t('smartKeepOriginalLabel') }}</span></label>
     </div>
     <div class="field" id="targetField" v-show="settings.mode === 'target'">
       <label for="targetSize">{{ t('targetLabel') }}</label>
       <input type="number" id="targetSize" min="10" max="51200" :value="settings.targetSize" @input="onTargetDebounced(($event.target as HTMLInputElement).value)" @blur="onTargetBlur(($event.target as HTMLInputElement))" />
     </div>
-    <div class="field" id="qualityField" v-show="settings.mode !== 'target'">
+    <div class="field" id="qualityField" v-show="settings.mode === 'quality'">
       <label for="quality" class="qlabel"><span>{{ t('qualityLabel') }}</span> <span class="value" id="qualityValue">{{ qualityShown }}%</span></label>
       <input type="range" id="quality" min="10" max="100" :value="qualityShown" :disabled="qualityLocked" @input="onQuality(($event.target as HTMLInputElement).value)" />
     </div>
@@ -64,8 +68,9 @@
     transparency and the WebP fallback belong to the format, the target
     mechanism to the mode. The GIF line stays in the footer until the
     per-file GIF tag lands (it describes inputs, not a setting). -->
-    <div class="settings-note" id="jpegNote" v-show="settings.format === 'image/jpeg'">{{ t('fmtJpegNote') }}</div>
-    <div class="settings-note" id="webpNote" v-show="settings.format === 'image/webp'">{{ t('fmtWebpNote') }}</div>
+    <div class="settings-note" id="smartNote" v-show="settings.mode === 'smart'">{{ t('smartNote') }}</div>
+    <div class="settings-note" id="jpegNote" v-show="settings.mode !== 'smart' && settings.format === 'image/jpeg'">{{ t('fmtJpegNote') }}</div>
+    <div class="settings-note" id="webpNote" v-show="settings.mode !== 'smart' && settings.format === 'image/webp'">{{ t('fmtWebpNote') }}</div>
     <div class="settings-note" id="targetModeNote" v-show="settings.mode === 'target'">{{ t('modeTargetNote') }}</div>
   </div>
 </template>
@@ -125,8 +130,8 @@ function onQuality(v: string) {
 // so it is locked (not a bug). With quantization on, the slider controls the
 // palette quality and is live.
 const qualityLocked = computed(() => (props.settings.format === 'image/png' && !props.settings.quantize) || props.settings.mode === 'target')
-const showPngHint = computed(() => props.settings.format === 'image/png' && !props.settings.quantize && props.settings.mode !== 'target')
-const showQuantHint = computed(() => props.settings.format === 'image/png' && props.settings.quantize && props.settings.mode !== 'target')
+const showPngHint = computed(() => props.settings.mode !== 'smart' && props.settings.format === 'image/png' && !props.settings.quantize && props.settings.mode !== 'target')
+const showQuantHint = computed(() => props.settings.mode !== 'smart' && props.settings.format === 'image/png' && props.settings.quantize && props.settings.mode !== 'target')
 
 let timer: ReturnType<typeof setTimeout> | null = null
 // Whether the shared debounce slot currently holds a target patch (vs a
@@ -140,6 +145,7 @@ function debounce(patch: Partial<Settings>) {
 
 function onFormat(v: string) { emit('update', { format: v }, true) }
 function onMode(v: string) { emit('update', { mode: v as Settings['mode'] }, true) }
+function onSmartKeepOriginal(v: boolean) { emit('update', { smartKeepOriginal: v }, true) }
 // Number inputs commit through the debounced input handler only. A @change
 // handler on top of it would fire again on blur and start a duplicate
 // recompress — which can even remove the download button mid-click.
