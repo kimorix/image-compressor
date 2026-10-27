@@ -5,8 +5,8 @@ import { gifFrameCount } from './gif'
 import { canEmbedPng, embedIcc, extractIcc, isDisplayP3 } from './icc'
 import { searchQuality, ssim, toLuma, type Luma } from './ssim'
 import type { CompressItem, Settings } from '../types'
+import { decodeHeicToPngBlob } from './heic'
 import {
-  decodeHeicToPngBlob,
   encodeAvif,
   encodeMozjpeg,
   encodePng,

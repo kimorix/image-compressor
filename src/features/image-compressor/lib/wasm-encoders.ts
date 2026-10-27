@@ -161,72 +161,8 @@ export async function encodePngQuantized(img: RgbaImage, quality: number): Promi
   }
 }
 
-// ---- HEIC/HEIF decode (iPhone photos; Chrome cannot decode them) ----
-// heic2any is self-contained (worker + libheif wasm bundled in its dist),
-// but it was written for the main thread: at import time it stores its
-// nested worker on `window`, and it converts ImageData to a blob with
-// `document.createElement("canvas")` + `canvas.toBlob`; gifshot (bundled
-// for its GIF path) also probes video codecs with createElement("video")
-// at import time. None of window/document exist in a worker, so without
-// shims every HEIC task throws here and the pool falls back to the main
-// thread (the ~0.7s hitch).
-//
-// The shims are strictly scoped to each heic2any call and removed right
-// after: this file's own decode/canvas code branches on
-// `typeof document === 'undefined'` to pick the worker path
-// (createImageBitmap / OffscreenCanvas), and a lingering fake document
-// would flip it to the main-thread path (new Image), which does not
-// exist in a worker. The nested worker handle is captured on first import
-// and re-attached to a minimal window object on later calls, so the
-// worker global is never left polluted between tasks. On the main thread
-// window/document already exist and this is all a no-op.
-let heicWorkerHandle: Worker | null = null
-
-function heicShimDocument(): { createElement: (tag: string) => unknown } {
-  return {
-    createElement: (tag: string) => {
-      if (tag === 'canvas') {
-        const canvas = new OffscreenCanvas(1, 1)
-        ;(canvas as any).toBlob = (
-          cb: (blob: Blob | null) => void,
-          type?: string,
-          quality?: number,
-        ) => {
-          canvas
-            .convertToBlob({ type, quality })
-            .then((b) => cb(b), () => cb(null))
-        }
-        return canvas
-      }
-      // gifshot's import-time video-codec probe; we never use its GIF path.
-      if (tag === 'video') return { canPlayType: () => '' }
-      throw new Error(`heic2any shim: unsupported element ${tag}`)
-    },
-  }
-}
-
-export async function decodeHeicToPngBlob(file: File | Blob): Promise<Blob> {
-  const g = globalThis as any
-  const prevWindow = g.window
-  const prevDocument = g.document
-  if (typeof g.window === 'undefined') {
-    g.window = heicWorkerHandle ? { __heic2any__worker: heicWorkerHandle } : g
-  }
-  if (typeof g.document === 'undefined') g.document = heicShimDocument()
-  try {
-    const { default: heic2any } = await import('heic2any')
-    if (!heicWorkerHandle && g.window?.__heic2any__worker) {
-      heicWorkerHandle = g.window.__heic2any__worker as Worker
-    }
-    const out = await heic2any({ blob: file, toType: 'image/png' })
-    return (Array.isArray(out) ? out[0] : out) as Blob
-  } finally {
-    if (prevWindow === undefined) delete g.window
-    else g.window = prevWindow
-    if (prevDocument === undefined) delete g.document
-    else g.document = prevDocument
-  }
-}
+// HEIC/HEIF decode lives in heic.ts (one heic2any copy for both the worker
+// and the main-thread fallback).
 
 export function isHeic(file: File): boolean {
   return (

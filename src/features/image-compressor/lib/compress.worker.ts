@@ -1,7 +1,8 @@
 // Encode worker: runs compressToBlob off the main thread, so batch encodes
 // no longer freeze scrolling and taps. Built by Vite as a module worker;
 // its wasm `?url` imports resolve against this chunk's own URL, and its
-// dynamic imports (encoders, heic2any, piexifjs) load as sibling chunks.
+// dynamic imports (encoders, piexifjs) load as sibling chunks; heic2any is
+// a shared hashed asset (see heic.ts).
 import { compressToBlob } from './compress'
 import { t as translate, type Lang } from '../../../shared/i18n'
 import type { Settings } from '../types'
