@@ -2,7 +2,7 @@
 // every feature's "download all". Entries are fetched one by one from their
 // object URLs (or taken as Blobs) and passed through fflate without
 // deflating, so memory stays at roughly one copy of the archive.
-import { Zip, ZipPassThrough } from 'fflate'
+// fflate is loaded on the first "download all", not with the page.
 
 export interface ZipEntry { name: string; url?: string; blob?: Blob }
 
@@ -24,7 +24,8 @@ export function uniqueNames(names: string[]): string[] {
   })
 }
 
-export function zipEntries(entries: ZipEntry[]): Promise<Blob> {
+export async function zipEntries(entries: ZipEntry[]): Promise<Blob> {
+  const { Zip, ZipPassThrough } = await import('fflate')
   return new Promise<Blob>((resolve, reject) => {
     const parts: BlobPart[] = []
     let settled = false

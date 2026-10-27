@@ -3,10 +3,22 @@
 // worker a bundler did not emit, no Worker support at all). The pool owns
 // object URLs: workers hand blobs back, the main thread turns them into
 // URLs, so revocation semantics match the old direct path exactly.
-import { compressItem, type CompressResult } from './compress'
+import type { CompressResult } from './compress'
 import { t as translate, type Lang } from '../../../shared/i18n'
 import type { CompressItem, Settings } from '../types'
 import type { WorkerResult, WorkerTask } from './compress.worker'
+
+type Tx = (key: string, ...args: (string | number)[]) => string
+
+// The main-thread fallback is loaded on demand: the compression core
+// (compress.ts with its ICC, SSIM, GIF and EXIF helpers and the encoder
+// loaders) is only ever needed here when a worker cannot do the job, so it
+// stays out of the first-load chunk. Every normal encode runs in the worker
+// build, which bundles its own copy.
+async function compressItem(item: CompressItem, s: Settings, t: Tx, canvasWebp: boolean): Promise<CompressResult> {
+  const { compressItem: run } = await import('./compress')
+  return run(item, s, t, canvasWebp)
+}
 
 function poolSize(): number {
   // 2–4 workers by hardwareConcurrency: enough parallelism for a batch
