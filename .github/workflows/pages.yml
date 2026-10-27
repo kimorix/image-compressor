@@ -1,0 +1,62 @@
+name: Deploy Pages
+
+# Publishes two sites from one Pages deployment:
+#   main -> https://kimorix.github.io/image-compressor/          (production)
+#   dev  -> https://kimorix.github.io/image-compressor/staging/  (test)
+# Nothing is rebuilt here: CI already guarantees each branch's committed
+# docs/ matches its source, so what is committed is exactly what goes live.
+# A push to either branch redeploys both, since Pages serves one artifact.
+on:
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: prod
+      - name: Check out dev (if it exists)
+        id: dev
+        run: |
+          if git ls-remote --exit-code --heads "https://github.com/${{ github.repository }}" dev >/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.dev.outputs.exists == 'true'
+        with:
+          ref: dev
+          path: dev
+      - name: Assemble site
+        run: |
+          mkdir site
+          cp -r prod/docs/. site/
+          if [ -d dev/docs ]; then
+            mkdir site/staging
+            cp -r dev/docs/. site/staging/
+            # Keep the test site out of search results.
+            find site/staging -name '*.html' -exec sed -i 's#<head>#<head><meta name="robots" content="noindex,nofollow">#' {} +
+            # Visible marker so staging is never mistaken for production.
+            find site/staging -name '*.html' -exec sed -i 's#<title>#<title>[STAGING] #' {} +
+          fi
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4

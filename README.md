@@ -78,6 +78,19 @@ IC_CHROME=/path/to/chrome-headless-shell IC_FIXTURES=/path/to/fixtures/ IC_BASE=
 
 ## 部署
 
-GitHub Pages 的源设为 `main` 分支的 `/docs` 文件夹，构建产物提交后即自动发布。
+GitHub Pages 的源设为 GitHub Actions，由 `.github/workflows/pages.yml` 发布两个站点：
+
+| 分支 | 地址 | 用途 |
+| --- | --- | --- |
+| `main` | https://kimorix.github.io/image-compressor/ | 正式站 |
+| `dev` | https://kimorix.github.io/image-compressor/staging/ | 测试站（noindex，标题带 `[STAGING]`） |
+
+push 到 `main` 或 `dev` 都会重新部署两个站点。工作流不重新构建，直接发布各分支提交的 `docs/`（CI 保证它和源码一致）。
+
+开发流程：
+
+1. 从 `dev` 拉 `feature-*` 分支开发，`pnpm build` 后连同 `docs/` 一起提交。
+2. 提 PR 合进 `dev`，CI 通过后合并，测试站自动更新。
+3. 在测试站验收没问题，再提 `dev → main` 的 PR，合并后正式站更新。
 
 每次 push 和 PR 会由 GitHub Actions（`.github/workflows/ci.yml`）跑类型检查、单元测试和构建，并检查提交的 `docs/` 和源码构建结果一致，防止只提交构建产物、忘了提交源码。

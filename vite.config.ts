@@ -2,8 +2,9 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 
-// GitHub Pages serves the /docs folder of main, so the build output goes there.
-// base './' keeps asset paths relative, so the site works under /image-compressor/.
+// The Pages workflow publishes main's docs/ at the root and dev's docs/ under
+// /staging/, so the build output goes to docs/ and is committed.
+// base './' keeps asset paths relative, so it works under either path.
 export default defineConfig({
   plugins: [
     vue(),
