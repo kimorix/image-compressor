@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MESSAGES } from '../../src/i18n'
+import { MESSAGES } from '../../src/shared/i18n'
 
 // Importing the dictionary runs its module-level guard, which throws when any
 // language is missing a key. This test additionally pins the result-table
@@ -18,7 +18,7 @@ describe('i18n dictionaries', () => {
   it('defines the mobile masonry, detail sheet and More menu copy in every language', () => {
     const mobile = [
       'statusQueued', 'detailTitle', 'detailNotes', 'openDetails',
-      'moreImageConvert', 'moreImageConvertDesc', 'morePdfToWord', 'morePdfToWordDesc',
+      'moreImageConvert', 'moreImageConvertDesc', 'navPdf', 'tabCompress', 'tabPdf',
       'comingSoon', 'saveToAlbum', 'deleteBtn',
     ]
     for (const messages of Object.values(MESSAGES)) {

@@ -10,8 +10,8 @@ import {
   fallbackColumnWidth,
   isTinyImage,
   type MasonryColumns,
-} from '../../src/lib/masonry'
-import type { CompressItem } from '../../src/types'
+} from '../../src/features/image-compressor/lib/masonry'
+import type { CompressItem } from '../../src/features/image-compressor/types'
 
 function item(id: string, origW: number, origH: number): CompressItem {
   return { id, origW, origH } as CompressItem

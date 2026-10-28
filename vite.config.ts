@@ -1,19 +1,53 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
+import { createReadStream, existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { dirname, join, normalize } from 'node:path'
+
+// pdf.js data files the PDF to Word feature loads at run time: CMaps (CJK
+// fonts that are not embedded), the 14 standard fonts, and the JPX/JBIG2
+// image decoders. Copied to docs/pdfjs/ (served from node_modules in dev).
+// They are fetched only when a PDF needs them and never precached.
+const PDFJS_DIR = dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'))
+const PDFJS_DATA = ['cmaps', 'standard_fonts', 'wasm']
+function pdfjsData(): Plugin {
+  const keep = (dir: string, f: string) => dir !== 'wasm' || /^(openjpeg|jbig2|qcms_bg)\.wasm$|_nowasm_fallback\.js$/.test(f)
+  return {
+    name: 'pdfjs-data',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const m = req.url?.match(/\/pdfjs\/([a-z_]+)\/([^?#]+)/)
+        if (!m || !PDFJS_DATA.includes(m[1])) return next()
+        const file = normalize(join(PDFJS_DIR, m[1], decodeURIComponent(m[2])))
+        if (!file.startsWith(join(PDFJS_DIR, m[1])) || !existsSync(file) || !statSync(file).isFile()) return next()
+        createReadStream(file).pipe(res)
+      })
+    },
+    generateBundle() {
+      for (const dir of PDFJS_DATA) {
+        for (const f of readdirSync(join(PDFJS_DIR, dir)).sort()) {
+          if (!keep(dir, f) || /^LICENSE/.test(f)) continue
+          this.emitFile({ type: 'asset', fileName: `pdfjs/${dir}/${f}`, source: readFileSync(join(PDFJS_DIR, dir, f)) })
+        }
+      }
+    },
+  }
+}
 
 // GitHub Pages serves the /docs folder of main, so the build output goes there.
 // base './' keeps asset paths relative, so the site works under /image-compressor/.
 export default defineConfig({
   plugins: [
     vue(),
+    pdfjsData(),
     VitePWA({
       registerType: 'autoUpdate',
       // injectRegister defaults to 'auto': no virtual:pwa-register import in
       // main.ts, so the plugin injects the registration script itself.
       workbox: {
-        // avif_enc.wasm used to force this cap up; it no longer precaches
-        // (see below), but mozjpeg stays precached, so keep headroom.
+        // avif_enc.wasm used to force this cap up; no encoder binary is
+        // precached any more (see below), keep the headroom anyway.
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         // Default patterns omit wasm; encoder binaries must work offline too.
         globPatterns: ['**/*.{js,css,html,png,svg,wasm}'],
@@ -21,12 +55,20 @@ export default defineConfig({
         // binaries plus their emscripten JS glue) and the heic2any chunk
         // (~1.3MB) are only needed when the user actually picks those
         // paths, so they stay OUT of the precache and are cached on first
-        // use instead (CacheFirst below). The worker chunk itself stays
+        // use instead (CacheFirst below). The same goes for the MozJPEG,
+        // lossless PNG and palette-PNG (imagequant + its wasm-bindgen glue)
+        // binaries (~780KB): every install used to download all three up
+        // front although one compression only ever needs one of them. The worker chunk itself stays
         // precached: every compression needs it, and only its lazy
         // payloads move out. The JS glue must be excluded too: it matches
         // the precache's js pattern, and leaving it in silently defeats
         // the exclusion (suite19 caught exactly that: 3 glue files).
-        globIgnores: ['**/avif_enc*.wasm', '**/avif_enc*.js', '**/heic2any*.js', '**/webp_enc*.wasm', '**/webp_enc*.js'],
+        // PDF to Word: pdf.js (~0.5MB) and its worker (~1.3MB), the docx
+        // worker (~0.4MB), the tesseract.js OCR loader and pdf.js's data
+        // files (CMaps, fonts, decoder wasm) are fetched only when a PDF is
+        // opened, so they are cached on first use too. The PDF view chunk
+        // itself stays precached (small) so the page opens offline.
+        globIgnores: ['**/mozjpeg_enc*.wasm', '**/squoosh_png*.wasm', '**/imagequant_bg*', '**/avif_enc*.wasm', '**/avif_enc*.js', '**/heic2any*.js', '**/webp_enc*.wasm', '**/webp_enc*.js', '**/pdf.worker*', '**/assets/pdf-*.js', '**/docx.worker*', '**/tesseract*', 'pdfjs/**'],
         // The plugin defaults every navigation to the precached index.html
         // (SPA fallback). This app has no client routing, and the language
         // shells are real files: restrict the fallback to the root page only,
@@ -42,11 +84,11 @@ export default defineConfig({
         // on first use so they still work offline afterwards. Hashed
         // filenames make old entries harmless orphans, bounded by maxEntries.
         runtimeCaching: [{
-          urlPattern: /\/(avif_enc|webp_enc)[^/]*\.(wasm|js)$|\/heic2any[^/]*\.js$/,
+          urlPattern: /\/(avif_enc|webp_enc|mozjpeg_enc|squoosh_png_bg|imagequant_bg)[^/]*\.(wasm|js)$|\/heic2any[^/]*\.js$|\/pdf\.worker[^/]*\.m?js$|\/assets\/pdf-[^/]*\.js$|\/docx\.worker[^/]*\.js$|\/tesseract[^/]*\.js$|\/pdfjs\/(cmaps|standard_fonts|wasm)\//,
           handler: 'CacheFirst',
           options: {
             cacheName: 'lazy-assets',
-            expiration: { maxEntries: 20, maxAgeSeconds: 30 * 24 * 60 * 60 },
+            expiration: { maxEntries: 300, maxAgeSeconds: 30 * 24 * 60 * 60 },
           },
         }, {
           urlPattern: ({ request }) => request.mode === 'navigate',

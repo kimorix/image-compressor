@@ -8,3 +8,7 @@ declare module '*.vue' {
 
 // wasm-pack bundler glue ships without typings.
 declare module 'imagequant/imagequant_bg.js'
+
+// tesseract.js ships its ESM browser build without a typings entry; the
+// loader casts it to the package's own types.
+declare module 'tesseract.js/dist/tesseract.esm.min.js'

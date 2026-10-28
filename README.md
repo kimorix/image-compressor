@@ -30,8 +30,18 @@
 - 白天 / 黑夜主题（跟随系统，可手动切换并记住）
 - 界面语言下拉选择：中文、English、日本語、한국어、Français、Deutsch；默认跟随浏览器语言，手动选过后记住选择
 - 移动端：有结果后隐藏顶部上传卡（底部「+ 添加」接管），结果区直接贴在最上面；统计条压成两行；结果改为双列瀑布流，390×844 首屏至少 4 张完整卡片；底部固定「添加 / 清空 / 全部下载」栏 + 首页/设置/更多 Tab（三个按钮在 320px 德语下自动收缩换行，不横向溢出）；更多菜单只保留「图片格式转换」「PDF 转 Word」两个即将上线的本地工具（32px 图标、290px 宽、14px 圆角，点击只弹“即将推出”，支持点遮罩/再点更多/Esc 关闭），不再放主题、GitHub、清空和历史；预览卡不渲染，点卡片打开底部详情面板；分页/关闭/缩放/删除/详情按钮按 44px 触摸目标处理；移动端表单控件统一 16px 防止 iOS 聚焦自动放大，≤360px 设置项改为标签在上、控件在下，避免德语/法语选项文字被截断
-- PWA：可安装、断网可用（应用和常用编码器预缓存；AVIF、WebP 编码器和 HEIC 解码器首次用到时下载并缓存）
+- PWA：可安装、断网可用（应用与压缩 Worker 预缓存；各编码器 WASM 和 HEIC 解码器首次用到时下载并缓存）
 - 隐私：压缩会去掉照片的位置等拍摄信息，图片不会上传；JPEG 可选「保留拍摄信息」
+
+## PDF 转 Word（`#/pdf-to-word`）
+
+- 和图片压缩一样完全在浏览器本地转换，文件不上传；桌面侧栏和手机底栏（压缩 / PDF / 设置 / 更多）都有入口
+- 两种模式：**可编辑**（重排成 Word 段落：标题样式、Word 编号列表、粗体/斜体、简单表格、图片按阅读顺序插入，双栏按先左后右排列，页码去掉，跨页断开的段落接回）；**保留版式**（每页一节、页面尺寸同 PDF，每行文字放在定位文本框里、图片浮动在原位置，看起来和 PDF 一样，文字仍可编辑）
+- 页码范围（如 `1-3,5`、`8-`）、保留图片开关、多文件排队转换（桌面同时 2 个、手机 1 个）、逐页进度、随时取消、失败可重试、全部下载打成 zip；手机上「全部存储 / 下载」和详情面板走系统分享
+- 加密 PDF：列表里直接输入密码解锁，密码错误会提示
+- 扫描件：自动识别（没有文字、整页是图片），默认按图片放入 Word；开启「扫描件 OCR」后用 tesseract.js 识别文字（首次使用从 jsDelivr 下载识别引擎和语言数据，约 7–9 MB，设置里按所选语言显示；之后离线可用；支持简/繁中文、英、日、韩、德、法，默认界面语言 + 英文）
+- 性能：每页读完就交给 docx Worker 逐页分析（图片缓冲转移，不在主线程堆积）；支持 OffscreenCanvas 时裁图在 Worker 里编码；只有有图要裁或扫描页才渲染，渲染上限手机约 4MP、桌面约 10MP
+- 体积：首屏不加载任何 PDF 代码；pdf.js（legacy 构建，兼容老 iOS）、docx、tesseract 都在进入 PDF 页或真正用到时才下载，并且不进 PWA 预缓存，用过一次后缓存
 
 ## 已知限制
 
@@ -41,33 +51,22 @@
 - AVIF 编码器约 3.5MB，首次使用需要下载，编码也较慢；选 AVIF 时设置栏会提示
 - 智能画质每张图要多编码、解码几次（通常 2–3 次），比固定质量慢一些
 - 单张超过 50MB 或超过 8000 万像素的图片会被跳过/报错并提示（避免一次性把解码后的像素撑爆内存）
+- PDF 转 Word：复杂表格（合并单元格、单元格内多行、无对齐的表格）、公式、文本框、竖排文字和旋转文字不能还原结构（文字仍会保留）；图片是从渲染后的页面裁出来的，压在图片上的文字会一起进图片；OCR 首次使用需要联网
 
 ## 技术栈
 
 Vue 3 + Vite + TypeScript：
 
-- `src/App.vue`：页面结构与状态编排（上传 → 结果 → 设置，外加侧边导航、历史记录、对比预览、分页、移动端底栏）
-- `src/components/`：DropZone、SettingsPanel、ImageItem、MobileCard、MobileDetailSheet、Lightbox、ProgressBar
+- `src/App.vue`：薄壳，按 hash 路由（`#/`、`#/history`、`#/pdf-to-word`）切换功能视图，KeepAlive 保留各自状态；PDF 视图懒加载
+- `src/shared/`：两个功能共用的部分：AppHeader、SideNav、TabBar、MoreMenu、BottomSheet、usePrefs（语言/主题）、useHashRoute、i18n、`share.ts`（系统分享 + 兜底）、`zip.ts`（流式 zip / 下载）、`drop.ts`（拖入文件夹）、`format.ts`、`theme.ts`
+- `src/features/image-compressor/`：图片压缩（`CompressorView.vue`、`components/`、`lib/`：compress、ssim、recompress、limits、masonry、compress-pool、wasm-encoders、exif、icc、gif、presets、settings-store 等）
+- `src/features/pdf-to-word/`：PDF 转 Word（`PdfToWordView.vue`、`components/`、`lib/`：page-range、layout、extract、docx-builder、ocr、pdf-loader、convert、settings；`worker/docx.worker.ts`；`styles/pdf.less`；`i18n.ts` 功能内六语言文案）
 - `DESIGN.md`：设计规范。以 VoltAgent/awesome-design-md 的 `design-md/linear.app` 为基准，补充了本项目的浅色模式、扁平统计条、结果表格、移动端外壳和压缩语义色
 - `src/style.less`：样式（Less 嵌套写法；主题 token 仍用 CSS 变量，因为主题在运行时切换）
-- `src/lib/compress.ts`：压缩核心（智能格式、智能画质、WASM 优先、canvas 兜底、质量二分、尺寸兜底、居中裁剪、WebP 回退探测、无需压缩回退）
-- `src/lib/ssim.ts`：智能画质用的 SSIM（亮度通道、缩到 1024px 计算）与质量二分搜索
-- `src/lib/recompress.ts`：已最优项的跳过判断（纯函数 + 单测）
-- `src/lib/limits.ts`：8000 万像素上限（纯函数 + 单测）
-- `src/lib/masonry.ts`：移动端双列瀑布流的高度估算、宽高比限制和稳定分列（纯函数 + 单测）
-- `src/lib/drop.ts`：拖入文件夹的递归读取
-- `src/lib/compress-pool.ts`：Web Worker 池（主线程兜底）
-- `src/lib/wasm-encoders.ts`：WASM 编码器懒加载（libwebp / MozJPEG / libaom / imagequant）与 HEIC 解码（heic2any）
-- `src/lib/exif.ts`：JPEG 可选保留拍摄信息（piexifjs 懒加载，把原图 EXIF 注回压缩后的 JPEG；失败时保留去 EXIF 的结果）
-- `src/lib/icc.ts`：Display P3 / ICC 档案提取与回注（JPEG APP2、WebP ICCP、PNG iCCP）
-- `src/lib/gif.ts`：GIF 帧数探测（只读字节结构，不整图解码）
-- `src/lib/presets.ts`：默认设置、证件照尺寸、五个一键场景与 `matchPreset`
-- `src/lib/settings-store.ts`：设置持久化与逐 key 校验、旧版本迁移
 - `scripts/seo-pages.mjs`：构建后按语言生成 `docs/<lang>/` 静态壳（标题 / 描述已翻译、资源路径上移一级、启动语言钉死该语言）
-- PWA：vite-plugin-pwa，Service Worker 预缓存应用、worker 与 MozJPEG / PNG / imagequant 的 WASM；WebP、AVIF 的 WASM 和 HEIC 解码器首次用到时下载并缓存（`globIgnores` 排除了它们，避免首访就背上 ~5.3MB）；导航兜底只限根路径（语言壳是真实文件，不能被根壳劫持）；语言壳各带一份注册脚本（指回根 sw.js、同根 scope，共用一个注册）
+- PWA：vite-plugin-pwa，Service Worker 预缓存应用与 worker；MozJPEG / PNG / imagequant / WebP / AVIF 的 WASM 和 HEIC 解码器首次用到时下载并缓存（`globIgnores` 排除了它们，首访预缓存约 0.54MB）；heic2any 以哈希资源发出一份，Worker 与主线程回退共用；导航兜底只限根路径（语言壳是真实文件，不能被根壳劫持）；语言壳各带一份注册脚本（指回根 sw.js、同根 scope，共用一个注册）
 - fflate：全部下载时打包 zip
-- `src/lib/format.ts`：体积格式化、文件名处理
-- `src/lib/theme.ts`：白天 / 黑夜主题
+- `tests/fixtures/`：PDF 转 Word 的样例 PDF（`make-pdfs.py` 生成：中英混排报告、双栏论文、加密、扫描件）
 - `src/i18n/`：六语词典与浏览器语言检测
 - `src/types.ts`：共享类型
 

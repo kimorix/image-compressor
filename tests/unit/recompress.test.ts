@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { isUnaffected } from '../../src/lib/recompress'
-import { DEFAULT_SETTINGS } from '../../src/lib/presets'
-import type { CompressItem, Settings } from '../../src/types'
+import { isUnaffected } from '../../src/features/image-compressor/lib/recompress'
+import { DEFAULT_SETTINGS } from '../../src/features/image-compressor/lib/presets'
+import type { CompressItem, Settings } from '../../src/features/image-compressor/types'
 
 // Only the fields read by isUnaffected are populated; a real CompressItem has
 // object URLs and UI flags that are irrelevant to this decision.
