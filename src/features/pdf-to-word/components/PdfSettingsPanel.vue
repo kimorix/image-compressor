@@ -34,11 +34,11 @@
     </label>
     <label class="pdf-row" :class="{ 'pdf-dim': !settings.ocr }">
       <span class="pdf-label">{{ p('ocrLang') }}</span>
-      <select class="pdf-input" :value="settings.ocrLang" :disabled="!settings.ocr" @change="set({ ocrLang: ($event.target as HTMLSelectElement).value as OcrLang })">
+      <select class="pdf-input" :value="settings.ocrLang" :disabled="!settings.ocr" @change="set({ ocrLang: ($event.target as HTMLSelectElement).value as OcrLang, ocrLangPicked: true })">
         <option v-for="l in OCR_LANGS" :key="l" :value="l">{{ p(`lang_${l}`) }}</option>
       </select>
     </label>
-    <p class="pdf-note">{{ p('ocrNote') }}</p>
+    <p class="pdf-note">{{ p('ocrSize', ocrDownloadMB(settings.ocrLang)) }}</p>
     <button type="button" class="primary pdf-start" :disabled="!canStart || rangeBad" @click="emit('start')">{{ p('start') }}</button>
   </div>
 </template>
@@ -47,6 +47,7 @@
 import { computed } from 'vue'
 import type { OcrLang, PdfSettings } from '../types'
 import { isValidRangeSyntax } from '../lib/page-range'
+import { OCR_LANGS, ocrDownloadMB } from '../lib/settings'
 
 const props = defineProps<{
   settings: PdfSettings
@@ -55,7 +56,6 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ (e: 'update', s: PdfSettings): void; (e: 'start'): void }>()
 
-const OCR_LANGS: OcrLang[] = ['chi_sim+eng', 'chi_tra+eng', 'eng', 'jpn+eng', 'kor+eng', 'deu+eng', 'fra+eng']
 const rangeBad = computed(() => !isValidRangeSyntax(props.settings.pageRange))
 function set(patch: Partial<PdfSettings>) {
   emit('update', { ...props.settings, ...patch })
