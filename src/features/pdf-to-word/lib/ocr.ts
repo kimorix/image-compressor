@@ -36,7 +36,7 @@ async function getWorker(lang: OcrLang, onProgress?: (p: OcrProgress) => void): 
  * returned items are in points like the text layer of a digital PDF.
  */
 export async function ocrCanvas(
-  canvas: HTMLCanvasElement,
+  canvas: HTMLCanvasElement | OffscreenCanvas,
   scale: number,
   lang: OcrLang,
   onProgress?: (p: OcrProgress) => void,

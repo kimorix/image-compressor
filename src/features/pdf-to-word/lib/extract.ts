@@ -3,7 +3,8 @@
 // operator list's transform stack, and crops of those pictures from a
 // rendered copy of the page. Scanned pages (no text, one big picture) are
 // rendered once and either OCR'd or kept whole.
-import type { OcrLang, PageImage, PageModel, TextItem } from '../types'
+import type { OcrLang, TextItem } from '../types'
+import type { WireImage, WirePage } from '../worker/docx.worker'
 import type { Pdfjs, PdfDoc } from './pdf-loader'
 import { loadPdfjs } from './pdf-loader'
 
@@ -143,47 +144,132 @@ export interface ExtractOptions {
   ocrLang: OcrLang
   signal?: AbortSignal
   onOcr?: (progress: number) => void
+  /** Pixel budget of one rendered page (see renderPixelCap). */
+  maxPixels?: number
+  /**
+   * Hand pictures over as ImageBitmaps for the docx worker to encode
+   * (OffscreenCanvas path), instead of encoding them here.
+   */
+  bitmaps?: boolean
 }
 
-/** Pixels per point for rendering: 2× (sharp crops), capped at ~10 MP. */
-export function renderScale(w: number, h: number, want = 2): number {
-  return Math.max(0.5, Math.min(want, Math.sqrt(10_000_000 / Math.max(1, w * h))))
+/** Rendered-page pixel budgets: a phone keeps fewer big canvases alive. */
+export const MAX_RENDER_PIXELS = 10_000_000
+export const MAX_RENDER_PIXELS_MOBILE = 4_000_000
+
+/**
+ * ~4 MP on phones (narrow screens) and low-memory devices
+ * (navigator.deviceMemory <= 4, Chromium only), ~10 MP elsewhere.
+ */
+export function renderPixelCap(env: { innerWidth?: number; deviceMemory?: number } = {}): number {
+  const narrow = typeof env.innerWidth === 'number' && env.innerWidth < 720
+  const lowMem = typeof env.deviceMemory === 'number' && env.deviceMemory <= 4
+  return narrow || lowMem ? MAX_RENDER_PIXELS_MOBILE : MAX_RENDER_PIXELS
 }
 
-async function renderPage(page: PdfPage, scale: number): Promise<HTMLCanvasElement> {
+/** renderPixelCap for this browser. */
+export function deviceRenderPixelCap(): number {
+  if (typeof window === 'undefined') return MAX_RENDER_PIXELS
+  return renderPixelCap({ innerWidth: window.innerWidth, deviceMemory: (navigator as { deviceMemory?: number }).deviceMemory })
+}
+
+/** Pixels per point for rendering: `want` (2× = sharp crops), capped at `maxPixels`. */
+export function renderScale(w: number, h: number, want = 2, maxPixels = MAX_RENDER_PIXELS): number {
+  return Math.max(0.5, Math.min(want, Math.sqrt(maxPixels / Math.max(1, w * h))))
+}
+
+/**
+ * OffscreenCanvas (with convertToBlob) plus createImageBitmap: render into
+ * an OffscreenCanvas and send crops to the docx worker as bitmaps. Older
+ * Safari (< 16.4) has neither and keeps the <canvas> + toBlob path.
+ */
+export function canUseOffscreen(): boolean {
+  return typeof OffscreenCanvas !== 'undefined'
+    && typeof OffscreenCanvas.prototype.convertToBlob === 'function'
+    && typeof createImageBitmap === 'function'
+}
+
+type AnyCanvas = HTMLCanvasElement | OffscreenCanvas
+
+function newCanvas(w: number, h: number, offscreen: boolean): AnyCanvas {
+  if (offscreen) return new OffscreenCanvas(w, h)
+  const c = document.createElement('canvas')
+  c.width = w
+  c.height = h
+  return c
+}
+
+interface OpListLike { fnArray: number[]; argsArray: unknown[]; separateAnnots?: unknown }
+
+/**
+ * pdf.js builds a page's operator list for getOperatorList() under its own
+ * cache key, so a later render() asks the pdf.js worker to parse the page
+ * (and decode its pictures) a second time. When the page is rendered right
+ * after its analysis, hand the finished list to the render instead: render()
+ * finds a ready display intent and draws it without another round trip.
+ * This touches pdf.js internals (`_intentStates`, `_transport`), so every
+ * step is checked and any surprise leaves pdf.js on its normal path.
+ * `transparency: true` is the safe choice (blend modes composite through an
+ * extra canvas, which is pixel-equivalent on opaque content).
+ */
+export function reuseOperatorList(page: unknown, pdfjs: Pick<Pdfjs, 'AnnotationMode'>, opList: OpListLike): boolean {
+  try {
+    const p = page as {
+      _intentStates?: unknown
+      _transport?: { getRenderingIntent?: (intent: string, mode: number, storage: null, editing: boolean) => { cacheKey?: string } }
+    }
+    const states = p._intentStates
+    const getIntent = p._transport?.getRenderingIntent
+    if (!(states instanceof Map) || typeof getIntent !== 'function') return false
+    const key = getIntent.call(p._transport, 'display', pdfjs.AnnotationMode.ENABLE, null, false)?.cacheKey
+    if (typeof key !== 'string' || states.has(key)) return false
+    const state = Object.create(null) as Record<string, unknown>
+    state.displayReadyCapability = { promise: Promise.resolve(true), resolve() {}, reject() {} }
+    state.operatorList = { fnArray: opList.fnArray, argsArray: opList.argsArray, lastChunk: true, separateAnnots: opList.separateAnnots ?? null }
+    state.renderTasks = new Set()
+    state.streamReader = null
+    states.set(key, state)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function renderPage(page: PdfPage, scale: number, offscreen: boolean): Promise<AnyCanvas> {
   const vp = page.getViewport({ scale })
-  const canvas = document.createElement('canvas')
-  canvas.width = Math.ceil(vp.width)
-  canvas.height = Math.ceil(vp.height)
-  const ctx = canvas.getContext('2d')!
+  const canvas = newCanvas(Math.ceil(vp.width), Math.ceil(vp.height), offscreen)
+  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D
   ctx.fillStyle = '#fff'
   ctx.fillRect(0, 0, canvas.width, canvas.height)
-  await page.render({ canvas, canvasContext: ctx, viewport: vp }).promise
+  await page.render({ canvas: canvas as HTMLCanvasElement, canvasContext: ctx, viewport: vp }).promise
   return canvas
 }
 
-function toBytes(canvas: HTMLCanvasElement, type: 'png' | 'jpg'): Promise<Uint8Array> {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((b) => {
-      if (!b) { reject(new Error('canvas encode failed')); return }
-      void b.arrayBuffer().then((buf) => resolve(new Uint8Array(buf)), reject)
-    }, type === 'png' ? 'image/png' : 'image/jpeg', 0.9)
-  })
+async function toBytes(canvas: AnyCanvas, type: 'png' | 'jpg'): Promise<Uint8Array> {
+  const mime = type === 'png' ? 'image/png' : 'image/jpeg'
+  const blob = 'convertToBlob' in canvas
+    ? await canvas.convertToBlob(type === 'png' ? { type: mime } : { type: mime, quality: 0.9 })
+    : await new Promise<Blob | null>((r) => canvas.toBlob(r, mime, 0.9))
+  if (!blob) throw new Error('canvas encode failed')
+  return new Uint8Array(await blob.arrayBuffer())
 }
 
-async function crop(src: HTMLCanvasElement, box: Box, scale: number): Promise<PageImage> {
+function release(canvas: AnyCanvas) {
+  canvas.width = canvas.height = 0
+}
+
+async function crop(src: AnyCanvas, box: Box, scale: number, bitmaps: boolean): Promise<WireImage> {
   const sx = Math.floor(box.x * scale)
   const sy = Math.floor(box.y * scale)
   const sw = Math.max(1, Math.min(src.width - sx, Math.ceil(box.w * scale)))
   const sh = Math.max(1, Math.min(src.height - sy, Math.ceil(box.h * scale)))
-  const c = document.createElement('canvas')
-  c.width = sw
-  c.height = sh
-  c.getContext('2d')!.drawImage(src, sx, sy, sw, sh, 0, 0, sw, sh)
   // Photos are much smaller as JPEG; small graphics stay crisp as PNG.
   const type = sw * sh > 250_000 ? 'jpg' : 'png'
+  if (bitmaps) return { ...box, type, bitmap: await createImageBitmap(src, sx, sy, sw, sh) }
+  const c = newCanvas(sw, sh, false)
+  ;(c.getContext('2d') as CanvasRenderingContext2D).drawImage(src, sx, sy, sw, sh, 0, 0, sw, sh)
   const data = await toBytes(c, type)
-  c.width = c.height = 0
+  release(c)
   return { ...box, data, type }
 }
 
@@ -211,11 +297,16 @@ export function isScannedPage(chars: number, boxes: Box[], pageW: number, pageH:
   return boxes.some((b) => b.w * b.h > area * 0.5)
 }
 
-export async function extractPage(doc: PdfDoc, num: number, opts: ExtractOptions): Promise<PageModel> {
+export async function extractPage(doc: PdfDoc, num: number, opts: ExtractOptions): Promise<WirePage> {
   const pdfjs = await loadPdfjs()
   const page = await doc.getPage(num)
+  const maxPixels = opts.maxPixels ?? MAX_RENDER_PIXELS
+  const bitmaps = !!opts.bitmaps
   try {
     const vp = page.getViewport({ scale: 1 })
+    // The operator list is needed even for text-only pages: it is what loads
+    // the fonts into commonObjs (real names → bold/italic) and what finds
+    // pictures and scanned pages.
     const ops = await page.getOperatorList()
     aborted(opts.signal)
     const tc = await page.getTextContent()
@@ -227,10 +318,11 @@ export async function extractPage(doc: PdfDoc, num: number, opts: ExtractOptions
     const allBoxes = imageBoxes(pdfjs.OPS, ops.fnArray, ops.argsArray as unknown[][], vp.transform)
     const chars = textChars(items)
     const scanned = isScannedPage(chars, cleanBoxes(allBoxes, vp.width, vp.height, false), vp.width, vp.height)
-    const model: PageModel = { num, width: vp.width, height: vp.height, items, images: [] }
+    const model: WirePage = { num, width: vp.width, height: vp.height, items, images: [] }
     if (scanned) {
-      const scale = renderScale(vp.width, vp.height, opts.ocr ? 2.5 : 1.6)
-      const canvas = await renderPage(page, scale)
+      const scale = renderScale(vp.width, vp.height, opts.ocr ? 2.5 : 1.6, maxPixels)
+      reuseOperatorList(page, pdfjs, ops)
+      const canvas = await renderPage(page, scale, bitmaps)
       aborted(opts.signal)
       if (opts.ocr) {
         try {
@@ -243,19 +335,24 @@ export async function extractPage(doc: PdfDoc, num: number, opts: ExtractOptions
         model.ocr = true
       }
       if (!model.ocr || !model.items.length) {
-        const data = await toBytes(canvas, 'jpg')
-        model.background = { x: 0, y: 0, w: vp.width, h: vp.height, data, type: 'jpg' }
+        const box = { x: 0, y: 0, w: vp.width, h: vp.height, type: 'jpg' as const }
+        model.background = bitmaps && 'transferToImageBitmap' in canvas
+          ? { ...box, bitmap: canvas.transferToImageBitmap() }
+          : { ...box, data: await toBytes(canvas, 'jpg') }
       }
-      canvas.width = canvas.height = 0
+      release(canvas)
       return model
     }
+    // Text pages are rendered only when there is a picture to cut out:
+    // pictures off, or none on the page, means no render at all.
     const boxes = opts.keepImages ? cleanBoxes(allBoxes, vp.width, vp.height, true) : []
     if (boxes.length) {
-      const scale = renderScale(vp.width, vp.height)
-      const canvas = await renderPage(page, scale)
+      const scale = renderScale(vp.width, vp.height, 2, maxPixels)
+      reuseOperatorList(page, pdfjs, ops)
+      const canvas = await renderPage(page, scale, bitmaps)
       aborted(opts.signal)
-      for (const b of boxes) model.images.push(await crop(canvas, b, scale))
-      canvas.width = canvas.height = 0
+      for (const b of boxes) model.images.push(await crop(canvas, b, scale, bitmaps))
+      release(canvas)
     }
     return model
   } finally {
@@ -270,7 +367,7 @@ export interface ProbeResult {
 }
 
 /** First look at a file: page count, text or scanned, page-1 thumbnail. */
-export async function probeDoc(doc: PdfDoc, thumbWidth = 132): Promise<ProbeResult> {
+export async function probeDoc(doc: PdfDoc, thumbWidth = THUMB_WIDTH): Promise<ProbeResult> {
   const pdfjs = await loadPdfjs()
   const pages = doc.numPages
   let chars = 0
@@ -297,14 +394,24 @@ export async function probeDoc(doc: PdfDoc, thumbWidth = 132): Promise<ProbeResu
   return { pages, kind, thumb }
 }
 
+/**
+ * Preview width in CSS pixels, rendered at 2×. One size serves the list
+ * thumbnail and the phone detail sheet, so page 1 is rendered once per file
+ * (at probe time) and the sheet reuses it instead of rendering it again.
+ */
+export const THUMB_WIDTH = 150
+
 /** Render one page as a JPEG preview `width` CSS pixels wide (2× for sharpness). */
 export async function renderThumb(doc: PdfDoc, num: number, width: number): Promise<Blob | null> {
   const page = await doc.getPage(num)
   try {
     const base = page.getViewport({ scale: 1 })
-    const canvas = await renderPage(page, (width * 2) / base.width)
-    const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', 0.8))
-    canvas.width = canvas.height = 0
+    const offscreen = canUseOffscreen()
+    const canvas = await renderPage(page, (width * 2) / base.width, offscreen)
+    const blob = 'convertToBlob' in canvas
+      ? await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.8 })
+      : await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', 0.8))
+    release(canvas)
     return blob
   } finally {
     page.cleanup()

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cleanBoxes, fontStyle, imageBoxes, isScannedPage, renderScale, textChars, textItems } from '../../src/features/pdf-to-word/lib/extract'
+import { cleanBoxes, fontStyle, imageBoxes, isScannedPage, MAX_RENDER_PIXELS, MAX_RENDER_PIXELS_MOBILE, renderPixelCap, renderScale, reuseOperatorList, textChars, textItems } from '../../src/features/pdf-to-word/lib/extract'
 import { ocrItems } from '../../src/features/pdf-to-word/lib/ocr'
 
 const OPS = { save: 10, restore: 11, transform: 12, paintFormXObjectBegin: 74, paintFormXObjectEnd: 75, paintImageXObject: 85, paintInlineImageXObject: 86, paintImageMaskXObject: 83, paintImageXObjectRepeat: 88 } as never
@@ -64,6 +64,38 @@ describe('scanned pages and OCR', () => {
   it('caps the render scale', () => {
     expect(renderScale(595, 842)).toBe(2)
     expect(renderScale(5000, 5000)).toBeLessThan(1)
+  })
+  it('renders ~4 MP on phones and low-memory devices, ~10 MP elsewhere', () => {
+    expect(renderPixelCap({ innerWidth: 1280, deviceMemory: 8 })).toBe(MAX_RENDER_PIXELS)
+    expect(renderPixelCap({ innerWidth: 1280 })).toBe(MAX_RENDER_PIXELS)
+    expect(renderPixelCap({ innerWidth: 390, deviceMemory: 8 })).toBe(MAX_RENDER_PIXELS_MOBILE)
+    expect(renderPixelCap({ innerWidth: 1280, deviceMemory: 4 })).toBe(MAX_RENDER_PIXELS_MOBILE)
+    expect(renderPixelCap({})).toBe(MAX_RENDER_PIXELS)
+    // A4 at the OCR scale (2.5×) is ~3.1 MP: under both caps.
+    expect(renderScale(595, 842, 2.5, MAX_RENDER_PIXELS_MOBILE)).toBe(2.5)
+    // A3 at 2.5× is ~6.3 MP: the phone cap scales it down to 4 MP, the desktop keeps 2.5×.
+    const s = renderScale(842, 1191, 2.5, MAX_RENDER_PIXELS_MOBILE)
+    expect(842 * s * 1191 * s).toBeCloseTo(MAX_RENDER_PIXELS_MOBILE, -3)
+    expect(renderScale(842, 1191, 2.5, MAX_RENDER_PIXELS)).toBe(2.5)
+  })
+  it('hands a finished operator list to the next render, only when pdf.js internals look as expected', () => {
+    const AnnotationMode = { ENABLE: 1 } as never
+    const make = () => ({
+      _intentStates: new Map<string, unknown>(),
+      _transport: { getRenderingIntent: (intent: string, mode: number) => ({ cacheKey: `${intent}-${mode}` }) },
+    })
+    const page = make()
+    const ops = { fnArray: [1, 2], argsArray: [[], []] }
+    expect(reuseOperatorList(page, { AnnotationMode }, ops)).toBe(true)
+    const st = page._intentStates.get('display-1') as { operatorList: { fnArray: number[]; lastChunk: boolean }; renderTasks: Set<unknown> }
+    expect(st.operatorList.fnArray).toBe(ops.fnArray)
+    expect(st.operatorList.lastChunk).toBe(true)
+    expect(st.renderTasks.size).toBe(0)
+    // Never overwrites a live intent, and stays out of the way when the internals changed.
+    expect(reuseOperatorList(page, { AnnotationMode }, ops)).toBe(false)
+    expect(reuseOperatorList({}, { AnnotationMode }, ops)).toBe(false)
+    expect(reuseOperatorList({ _intentStates: {}, _transport: make()._transport }, { AnnotationMode }, ops)).toBe(false)
+    expect(reuseOperatorList({ _intentStates: new Map(), _transport: { getRenderingIntent: () => { throw new Error('x') } } }, { AnnotationMode }, ops)).toBe(false)
   })
   it('turns tesseract words into point items', () => {
     const blocks = [{ paragraphs: [{ lines: [{ bbox: { x0: 100, y0: 200, x1: 600, y1: 240 }, words: [
