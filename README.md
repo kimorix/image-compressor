@@ -57,10 +57,14 @@
 
 Vue 3 + Vite + TypeScript：
 
-- `src/App.vue`：薄壳，按 hash 路由（`#/`、`#/history`、`#/pdf-to-word`）切换功能视图，KeepAlive 保留各自状态；PDF 视图懒加载
-- `src/shared/`：两个功能共用的部分：AppHeader、SideNav、TabBar、MoreMenu、BottomSheet、usePrefs（语言/主题）、useHashRoute、i18n、`share.ts`（系统分享 + 兜底）、`zip.ts`（流式 zip / 下载）、`drop.ts`（拖入文件夹）、`format.ts`、`theme.ts`
-- `src/features/image-compressor/`：图片压缩（`CompressorView.vue`、`components/`、`lib/`：compress、ssim、recompress、limits、masonry、compress-pool、wasm-encoders、exif、icc、gif、presets、settings-store 等）
-- `src/features/pdf-to-word/`：PDF 转 Word（`PdfToWordView.vue`、`components/`、`lib/`：page-range、layout、extract、docx-builder、ocr、pdf-loader、convert、settings；`worker/docx.worker.ts`；`styles/pdf.less`；`i18n.ts` 功能内六语言文案）
+- `src/App.vue`：薄壳，按 hash 路由切换功能视图，KeepAlive 保留各自状态；除压缩外都懒加载。路由：图片工具 `#/`（压缩）、`#/convert`（格式转换）、`#/resize`（尺寸与水印）；PDF 工具 `#/pdf-to-word`、`#/img-to-pdf`、`#/pdf-merge`；`#/history`。还没做好的工具先显示占位页（`ToolPlaceholder.vue`）
+- `src/shared/`：各功能共用的部分
+  - `components/`：AppHeader、SideNav（图片工具 / PDF 工具分组）、TabBar（压缩 / PDF / 设置 / 更多）、MoreMenu、PdfHubSwitch（手机 PDF 工具页的分段切换，记住上次用的 PDF 工具）、SegmentedControl、PageGrid（可拖动排序的缩略图网格，图片转 PDF 和合并拆分共用；纯逻辑在 `page-grid.ts`）、BottomSheet、`nav.ts`（工具清单，一处定义）
+  - `image/`：图片编解码：`wasm-encoders`、`heic`、`gif`、`icc`、`exif`、`limits`、`codec`（解码 / canvas / 编码辅助）、`sniff`（按文件头识别格式）、`image-pool`（全站唯一的图片 Worker 池，按任务类型分派，见 `jobs.ts`）
+  - `pdf/`：`pdf-loader`（pdf.js 懒加载）、`page-range`（页码范围，含按组解析 `parseRangeGroups`）
+  - `composables/`、`i18n/`、`lib/`：usePrefs（语言/主题）、useHashRoute、六语词典、`share.ts`（系统分享 + 兜底）、`zip.ts`（流式 zip / 下载）、`drop.ts`（拖入文件夹）、`format.ts`、`theme.ts`
+- `src/features/image-compressor/`：图片压缩（`CompressorView.vue`、`components/`、`lib/`：compress（压缩管线，`forceFormat` 选项供格式转换用）、compress-job（图片池任务）、compress-pool（压缩器对共享池的封装）、ssim、presets、recompress、masonry、settings-store 等）
+- `src/features/pdf-to-word/`：PDF 转 Word（`PdfToWordView.vue`、`components/`、`lib/`：layout、extract、docx-builder、ocr、convert、settings；`worker/docx.worker.ts`；`styles/pdf.less`；`i18n.ts` 功能内六语言文案）
 - `DESIGN.md`：设计规范。以 VoltAgent/awesome-design-md 的 `design-md/linear.app` 为基准，补充了本项目的浅色模式、扁平统计条、结果表格、移动端外壳和压缩语义色
 - `src/style.less`：样式（Less 嵌套写法；主题 token 仍用 CSS 变量，因为主题在运行时切换）
 - `scripts/seo-pages.mjs`：构建后按语言生成 `docs/<lang>/` 静态壳（标题 / 描述已翻译、资源路径上移一级、启动语言钉死该语言）
