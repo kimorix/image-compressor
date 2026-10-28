@@ -148,7 +148,7 @@
     :item="detailItem"
     :p="p"
     :busy="detailItem.status === 'converting' || detailItem.status === 'queued'"
-    :previews="previews[detailItem.id] ?? {}"
+    :previews="sheetPreviews"
     :rev="rev"
     @close="detailId = null"
     @remove="removeFromSheet"
@@ -176,7 +176,8 @@ import PdfSettingsPanel from './components/PdfSettingsPanel.vue'
 import PdfDetailSheet from './components/PdfDetailSheet.vue'
 import { pdfT } from './i18n'
 import { DEFAULT_PDF_SETTINGS, type PdfItem, type PdfSettings } from './types'
-import { loadSettings, saveSettings, isPdfFile, fileKey } from './lib/settings'
+import { defaultOcrLang, loadSettings, saveSettings, isPdfFile, fileKey, pdfConcurrency } from './lib/settings'
+import type { PdfDoc } from './lib/pdf-loader'
 import './styles/pdf.less'
 
 const { lang, t, setLang: setPrefLang } = usePrefs()
@@ -185,11 +186,15 @@ function p(key: string, ...args: (string | number)[]): string {
   return pdfT(lang.value, key, ...args)
 }
 
-const settings = ref<PdfSettings>({ ...DEFAULT_PDF_SETTINGS, ...loadSettings() })
+const settings = ref<PdfSettings>({ ...DEFAULT_PDF_SETTINGS, ocrLang: defaultOcrLang(lang.value), ...loadSettings() })
 function onSettings(s: PdfSettings) {
   settings.value = s
   saveSettings(s)
 }
+// Until the user picks an OCR language, it follows the UI language.
+watch(lang, (l) => {
+  if (!settings.value.ocrLangPicked) settings.value = { ...settings.value, ocrLang: defaultOcrLang(l) }
+})
 
 // shallowRef: File/Blob objects must never be wrapped in reactive proxies.
 // Items are mutated in place, then triggerRef() re-renders.
@@ -356,9 +361,9 @@ async function unlock(item: PdfItem) {
   }
 }
 
-// ---- converting (one file at a time, in list order) ----
+// ---- converting (in list order, 2 files at once on desktop, 1 on phones) ----
 const controllers = new Map<string, AbortController>()
-let running = false
+let active = 0
 
 function enqueue(list: PdfItem[]) {
   for (const it of list) {
@@ -377,17 +382,18 @@ function startOne(item: PdfItem) {
   enqueue([item])
 }
 
-async function runQueue() {
-  if (running) return
-  running = true
-  try {
-    for (;;) {
-      const next = items.value.find((i) => i.status === 'queued')
-      if (!next) break
-      await convertOne(next)
-    }
-  } finally {
-    running = false
+function runQueue() {
+  const limit = pdfConcurrency({ innerWidth: window.innerWidth, hardwareConcurrency: navigator.hardwareConcurrency })
+  while (active < limit) {
+    const next = items.value.find((i) => i.status === 'queued')
+    if (!next) break
+    active++
+    // convertOne marks the item 'converting' before its first await, so the
+    // next find() cannot pick the same item twice.
+    void convertOne(next).finally(() => {
+      active--
+      runQueue()
+    })
   }
 }
 
@@ -445,8 +451,11 @@ function cancel(item: PdfItem) {
   const ctrl = controllers.get(item.id)
   if (ctrl) {
     ctrl.abort()
-    // A page being OCR'd only stops when the recogniser is stopped.
-    if (item.phase === 'ocr') void import('./lib/ocr').then((m) => m.terminateOcr())
+    // A page being OCR'd only stops when the recogniser is stopped. The
+    // recogniser is shared: with another conversion running, let the abort
+    // take effect after this page instead of breaking the other file's OCR.
+    const others = items.value.some((i) => i !== item && i.status === 'converting')
+    if (item.phase === 'ocr' && !others) void import('./lib/ocr').then((m) => m.terminateOcr())
   }
 }
 
@@ -459,6 +468,7 @@ const clearConfirm = ref(false)
 let clearTimer: ReturnType<typeof setTimeout> | null = null
 function release(item: PdfItem) {
   controllers.get(item.id)?.abort()
+  dropPreviewDoc(item.id)
   if (item.thumb) URL.revokeObjectURL(item.thumb)
   if (item.outUrl) URL.revokeObjectURL(item.outUrl)
   const pv = previews[item.id]
@@ -547,25 +557,47 @@ function reconvertFromSheet(item: PdfItem) {
   startOne(item)
 }
 
-// Page previews for the detail sheet, rendered on demand and cached.
+// Page previews for the detail sheet, rendered on demand and cached. Page 1
+// is the list thumbnail itself (rendered once at probe time, same size), so
+// it is never rendered again. The other pages share one opened document
+// while the sheet shows the file, instead of parsing the PDF per page.
 const previews = reactive<Record<string, Record<number, string>>>({})
+const sheetPreviews = computed<Record<number, string>>(() => {
+  const it = detailItem.value
+  if (!it) return {}
+  void rev.value
+  return it.thumb ? { ...(previews[it.id] ?? {}), 1: it.thumb } : (previews[it.id] ?? {})
+})
 const previewBusy = new Set<string>()
+const previewDocs = new Map<string, Promise<PdfDoc>>()
+function previewDoc(item: PdfItem): Promise<PdfDoc> {
+  let d = previewDocs.get(item.id)
+  if (!d) {
+    d = import('./lib/pdf-loader').then(async ({ openPdf }) => openPdf(await item.file.arrayBuffer(), item.password))
+    previewDocs.set(item.id, d)
+    d.catch(() => { if (previewDocs.get(item.id) === d) previewDocs.delete(item.id) })
+  }
+  return d
+}
+function dropPreviewDoc(id: string) {
+  const d = previewDocs.get(id)
+  if (!d) return
+  previewDocs.delete(id)
+  void d.then((doc) => doc.loadingTask.destroy()).catch(() => {})
+}
+watch(detailId, (_id, old) => { if (old) dropPreviewDoc(old) })
 async function needPreview(item: PdfItem, n: number) {
   if (n < 1 || n > Math.min(item.pages, 12)) return
+  if (n === 1 && item.thumb) return
   const key = `${item.id}:${n}`
   if (previews[item.id]?.[n] || previewBusy.has(key)) return
   previewBusy.add(key)
   try {
-    const { openPdf } = await import('./lib/pdf-loader')
-    const { renderThumb } = await import('./lib/extract')
-    const doc = await openPdf(await item.file.arrayBuffer(), item.password)
-    try {
-      const blob = await renderThumb(doc, n, 150)
-      if (blob && items.value.includes(item)) {
-        previews[item.id] = { ...(previews[item.id] ?? {}), [n]: URL.createObjectURL(blob) }
-      }
-    } finally {
-      void doc.loadingTask.destroy()
+    const { renderThumb, THUMB_WIDTH } = await import('./lib/extract')
+    const doc = await previewDoc(item)
+    const blob = await renderThumb(doc, n, THUMB_WIDTH)
+    if (blob && items.value.includes(item)) {
+      previews[item.id] = { ...(previews[item.id] ?? {}), [n]: URL.createObjectURL(blob) }
     }
   } catch { /* preview is optional */ } finally {
     previewBusy.delete(key)

@@ -13,7 +13,10 @@ export interface PdfSettings {
   pageRange: string
   keepImages: boolean
   ocr: boolean
+  /** Defaults to the UI language + English (see defaultOcrLang). */
   ocrLang: OcrLang
+  /** The user chose ocrLang themselves: keep it, do not follow the UI language. */
+  ocrLangPicked?: boolean
 }
 
 export const DEFAULT_PDF_SETTINGS: PdfSettings = {
