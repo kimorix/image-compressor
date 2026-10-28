@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { exceedsPixelLimit, MAX_PIXELS } from '../../src/features/image-compressor/lib/limits'
+import { exceedsPixelLimit, MAX_PIXELS } from '../../src/shared/image/limits'
 
 describe('exceedsPixelLimit', () => {
   it('accepts exactly the limit', () => {

@@ -1,56 +1,42 @@
-// Pool of encode workers, with a main-thread fallback that keeps every
-// input working even where a worker cannot (SVG on older Safari, a nested
-// worker a bundler did not emit, no Worker support at all). The pool owns
-// object URLs: workers hand blobs back, the main thread turns them into
-// URLs, so revocation semantics match the old direct path exactly.
-import type { CompressResult } from './compress'
+// The compressor's view of the app-wide image pool (shared/image/image-pool):
+// same API the view has always used (run / cancelAll), translating the
+// pool's raw job results into CompressResults. The pool hands blobs back;
+// this wrapper turns them into object URLs on the main thread, so
+// revocation semantics match the old direct path exactly.
+import type { CompressBlobSuccess, CompressResult } from './compress'
+import type { CompressPayload } from './compress-job'
 import { t as translate, type Lang } from '../../../shared/i18n'
+import type { ImagePool } from '../../../shared/image/image-pool'
 import type { CompressItem, Settings } from '../types'
-import type { WorkerResult, WorkerTask } from './compress.worker'
 
-type Tx = (key: string, ...args: (string | number)[]) => string
+const GROUP = 'compress'
 
-// The main-thread fallback is loaded on demand: the compression core
-// (compress.ts with its ICC, SSIM, GIF and EXIF helpers and the encoder
-// loaders) is only ever needed here when a worker cannot do the job, so it
-// stays out of the first-load chunk. Every normal encode runs in the worker
-// build, which bundles its own copy.
-async function compressItem(item: CompressItem, s: Settings, t: Tx, canvasWebp: boolean): Promise<CompressResult> {
-  const { compressItem: run } = await import('./compress')
-  return run(item, s, t, canvasWebp)
-}
-
-function poolSize(): number {
-  // 2–4 workers by hardwareConcurrency: enough parallelism for a batch
-  // without paying a wasm instance per core.
-  const hw = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 4 : 4
-  return Math.min(4, Math.max(2, hw))
-}
-
-interface Pending {
-  resolve: (r: CompressResult) => void
-  worker: Worker
-  item: CompressItem
-  settings: Settings
-  lang: Lang
-  canvasWebp: boolean
-  // UI-only start notification. The compression path is unchanged; App uses
-  // this to distinguish a task waiting in the queue from one actually encoding.
-  onStart?: () => void
+// The pool module loads with the first compression, not with the page: it
+// is shared with the other image tools and stays out of the first-load
+// chunk (the compress job and encoders were already lazy).
+function loadPool(): Promise<ImagePool> {
+  return import('../../../shared/image/image-pool').then((m) => m.getImagePool())
 }
 
 export class CompressPool {
-  private size: number
-  private workers: Worker[] = []
-  private idle: Worker[] = []
-  private queue: Array<{ task: WorkerTask; ctx: Pending }> = []
-  private pending = new Map<number, Pending>()
-  private nextId = 1
   private canvasWebpPromise: Promise<boolean> | null = null
-  private noWorker = false
+  private poolPromise: Promise<ImagePool> | null
+  private pool: ImagePool | null = null
+  // Bumped by cancelAll: a run still waiting for the pool module when the
+  // user cancels resolves as cancelled instead of starting afterwards.
+  private generation = 0
 
-  constructor(size?: number) {
-    this.size = size ?? poolSize()
+  constructor(pool?: ImagePool) {
+    this.pool = pool ?? null
+    this.poolPromise = pool ? Promise.resolve(pool) : null
+  }
+
+  private getPool(): Promise<ImagePool> {
+    if (!this.poolPromise) {
+      this.poolPromise = loadPool().then((p) => (this.pool = p))
+      this.poolPromise.catch(() => { this.poolPromise = null })
+    }
+    return this.poolPromise
   }
 
   // One-time main-thread probe: does this browser's canvas really encode
@@ -75,178 +61,51 @@ export class CompressPool {
     return this.canvasWebpPromise
   }
 
-  private spawn(): Worker | null {
-    if (typeof Worker === 'undefined') {
-      this.noWorker = true
-      return null
-    }
-    try {
-      const w = new Worker(new URL('./compress.worker.ts', import.meta.url), { type: 'module' })
-      w.onmessage = (e: MessageEvent<WorkerResult>) => this.onMessage(e.data)
-      const dead = () => this.onWorkerError(w)
-      w.onerror = dead
-      w.onmessageerror = dead
-      this.workers.push(w)
-      return w
-    } catch (err) {
-      console.warn('[image-compressor] Worker unavailable, main-thread fallback:', err)
-      this.noWorker = true
-      return null
-    }
-  }
-
-  private getWorker(): Worker | null {
-    const idle = this.idle.pop()
-    if (idle) return idle
-    if (this.workers.length < this.size) return this.spawn()
-    return null
-  }
-
-  private drain() {
-    while (this.queue.length) {
-      const w = this.getWorker()
-      if (!w) {
-        // Spawn failed mid-session: flush the queue through the main thread
-        // instead of leaving those tasks parked forever.
-        if (this.noWorker) {
-          const queued = this.queue.splice(0)
-          for (const { ctx } of queued) {
-            void this.finish(ctx, { id: -1, ok: false, error: 'worker unavailable' })
-          }
-        }
-        return
-      }
-      const { task, ctx } = this.queue.shift()!
-      ctx.worker = w
-      this.pending.set(task.id, ctx)
-      ctx.onStart?.()
-      w.postMessage(task)
-    }
-  }
-
-  private async finish(ctx: Pending, res: WorkerResult) {
-    // Deterministic failures must not be re-run on the main thread: a pixel
-    // cap error would decode the same huge image again and double peak memory.
-    if (!res.ok && res.retryable === false) {
-      ctx.resolve({
-        done: false,
-        error: res.error ?? translate(ctx.lang, 'compressFail'),
-        retryable: false,
-      })
-      return
-    }
-    if (res.ok && (res.alreadyBest || res.blob)) {
-      ctx.resolve({
-        done: true,
-        error: null,
-        origW: res.origW!,
-        origH: res.origH!,
-        outUrl: URL.createObjectURL(res.alreadyBest ? ctx.item.file : res.blob!),
-        outSize: res.outSize!,
-        outW: res.outW!,
-        outH: res.outH!,
-        outName: res.outName!,
-        view: 'comp',
-        targetNote: res.targetNote ?? null,
-        targetNoteNotable: res.targetNoteNotable ?? false,
-        typeNote: res.typeNote ?? null,
-        outType: res.outType ?? ctx.item.file.type,
-        hasAlpha: res.hasAlpha ?? false,
-        isAnimatedGif: res.isAnimatedGif ?? false,
-      })
-      return
-    }
-    // Worker failure retries once on the main thread, where <img> decoding
-    // and the real canvas cover inputs a worker cannot. A genuine failure
-    // fails identically there, so the user still sees the same error.
-    const tx = (key: string, ...args: (string | number)[]) => translate(ctx.lang, key, ...args)
-    ctx.resolve(await compressItem(ctx.item, ctx.settings, tx, ctx.canvasWebp))
-  }
-
-  private onMessage(res: WorkerResult) {
-    const ctx = this.pending.get(res.id)
-    if (!ctx) return
-    this.pending.delete(res.id)
-    this.idle.push(ctx.worker)
-    this.drain()
-    void this.finish(ctx, res)
-  }
-
-  private onWorkerError(w: Worker) {
-    this.workers = this.workers.filter((x) => x !== w)
-    this.idle = this.idle.filter((x) => x !== w)
-    try { w.terminate() } catch { /* already dead */ }
-    const failed: Pending[] = []
-    for (const [id, ctx] of this.pending) {
-      if (ctx.worker === w) {
-        this.pending.delete(id)
-        failed.push(ctx)
-      }
-    }
-    this.drain()
-    for (const ctx of failed) {
-      void this.finish(ctx, { id: -1, ok: false, error: 'worker error' })
-    }
-  }
-
-  // User cancellation: resolve every queued/in-flight task with a cancelled
-  // result and terminate the workers, so a slow WASM encode actually stops
-  // instead of finishing invisibly. The pool respawns cleanly on the next run.
+  // User cancellation: every queued/in-flight compress task resolves with a
+  // cancelled result and its worker is terminated (see ImagePool.cancel).
   cancelAll(): void {
-    for (const { ctx } of this.queue) {
-      ctx.resolve({ done: false, error: translate(ctx.lang, 'cancelled'), cancelled: true })
-    }
-    this.queue = []
-    for (const ctx of this.pending.values()) {
-      ctx.resolve({ done: false, error: translate(ctx.lang, 'cancelled'), cancelled: true })
-    }
-    this.pending.clear()
-    for (const w of this.workers) {
-      try { w.terminate() } catch { /* already dead */ }
-    }
-    this.workers = []
-    this.idle = []
+    this.generation++
+    this.pool?.cancel(GROUP)
   }
 
-  async run(
-    item: CompressItem,
-    settings: Settings,
-    lang: Lang,
-    onStart?: () => void,
-  ): Promise<CompressResult> {
+  async run(item: CompressItem, settings: Settings, lang: Lang, onStart?: () => void): Promise<CompressResult> {
+    const gen = this.generation
     const canvasWebp = await this.probeCanvasWebp()
-    const tx = (key: string, ...args: (string | number)[]) => translate(lang, key, ...args)
-    if (this.noWorker) {
-      onStart?.()
-      return compressItem(item, settings, tx, canvasWebp)
+    let pool: ImagePool
+    try {
+      pool = await this.getPool()
+    } catch {
+      return { done: false, error: translate(lang, 'compressFail') }
     }
-    return new Promise<CompressResult>((resolve) => {
-      const task: WorkerTask = { id: this.nextId++, file: item.file, settings, lang, canvasWebp }
-      // Worker is assigned in drain; until then ctx.worker is a placeholder
-      // the queue path replaces before posting.
-      const ctx = {
-        resolve,
-        worker: null as unknown as Worker,
-        item,
-        settings,
-        lang,
-        canvasWebp,
-        onStart,
-      } as Pending
-      const w = this.getWorker()
-      if (w) {
-        ctx.worker = w
-        this.pending.set(task.id, ctx)
-        onStart?.()
-        w.postMessage(task)
-      } else if (this.noWorker) {
-        // Spawn failed (no Worker support, or construction threw): do not
-        // park the task in the queue, go straight to the main thread.
-        onStart?.()
-        resolve(compressItem(item, settings, tx, canvasWebp))
-      } else {
-        this.queue.push({ task, ctx })
+    if (gen !== this.generation) return { done: false, error: translate(lang, 'cancelled'), cancelled: true }
+    const payload: CompressPayload = { file: item.file, settings, lang, canvasWebp }
+    const res = await pool.run<CompressBlobSuccess>('compress', payload, { group: GROUP, onStart })
+    if (!res.ok) {
+      if (res.cancelled) return { done: false, error: translate(lang, 'cancelled'), cancelled: true }
+      return {
+        done: false,
+        error: res.error || translate(lang, 'compressFail'),
+        ...(res.retryable === false ? { retryable: false } : {}),
       }
-    })
+    }
+    const r = res.result
+    return {
+      done: true,
+      error: null,
+      origW: r.origW,
+      origH: r.origH,
+      outUrl: URL.createObjectURL(r.alreadyBest ? item.file : r.outBlob!),
+      outSize: r.outSize,
+      outW: r.outW,
+      outH: r.outH,
+      outName: r.outName,
+      view: 'comp',
+      targetNote: r.targetNote ?? null,
+      targetNoteNotable: r.targetNoteNotable ?? false,
+      typeNote: r.typeNote ?? null,
+      outType: r.outType ?? item.file.type,
+      hasAlpha: r.hasAlpha ?? false,
+      isAnimatedGif: r.isAnimatedGif ?? false,
+    }
   }
 }

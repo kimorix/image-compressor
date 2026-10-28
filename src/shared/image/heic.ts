@@ -1,7 +1,7 @@
 // ---- HEIC/HEIF decode (iPhone photos; Chrome cannot decode them) ----
 // heic2any (~1.3 MB, libheif inside) is loaded from ONE emitted file for
 // both callers: the encode worker (normal path) and the main-thread
-// fallback in compress-pool. Importing the package from both used to make
+// fallback in image-pool. Importing the package from both used to make
 // Vite bundle it twice (the worker is a separate build), shipping two
 // identical 1.3 MB chunks. Its prebuilt UMD file is emitted once as a
 // hashed `?url` asset instead (Vite dedupes assets by content, exactly like
@@ -18,7 +18,7 @@
 // thread (the ~0.7s hitch).
 //
 // The shims are strictly scoped to each heic2any call and removed right
-// after: compress.ts's own decode/canvas code branches on
+// after: the decode/canvas helpers (codec.ts) branch on
 // `typeof document === 'undefined'` to pick the worker path
 // (createImageBitmap / OffscreenCanvas), and a lingering fake document
 // would flip it to the main-thread path (new Image), which does not
