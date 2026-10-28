@@ -92,19 +92,36 @@ function median(values: number[]): number {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2
 }
 
+/**
+ * Running body-size tally: characters per 0.5pt size bucket. Fed page by
+ * page (the docx worker receives pages one at a time), read once at the end.
+ */
+export class BodySizeTally {
+  private weight = new Map<number, number>()
+
+  add(items: TextItem[]): void {
+    for (const it of items) {
+      const k = Math.round(it.size * 2) / 2
+      this.weight.set(k, (this.weight.get(k) ?? 0) + it.str.trim().length)
+    }
+  }
+
+  /** Body text size: the size carrying the most characters (ties: the smaller). */
+  get size(): number {
+    let best = 0
+    let bestW = -1
+    for (const [k, w] of this.weight) {
+      if (w > bestW || (w === bestW && k < best)) { best = k; bestW = w }
+    }
+    return best || 11
+  }
+}
+
 /** Body text size: the size carrying the most characters (0.5pt buckets). */
 export function bodySizeOf(items: TextItem[]): number {
-  const weight = new Map<number, number>()
-  for (const it of items) {
-    const k = Math.round(it.size * 2) / 2
-    weight.set(k, (weight.get(k) ?? 0) + it.str.trim().length)
-  }
-  let best = 0
-  let bestW = -1
-  for (const [k, w] of weight) {
-    if (w > bestW || (w === bestW && k < best)) { best = k; bestW = w }
-  }
-  return best || 11
+  const t = new BodySizeTally()
+  t.add(items)
+  return t.size
 }
 
 function pushSpan(spans: Span[], text: string, it: { bold: boolean; italic: boolean; size: number }) {
@@ -259,9 +276,9 @@ export function detectColumns(lines: Line[], pageWidth: number): ColumnSplit | n
   return { gutter: Math.round(best.g) }
 }
 
-type FlowEl = { t: 'line'; line: Line } | { t: 'image'; image: PageImage }
+export type FlowEl = { t: 'line'; line: Line } | { t: 'image'; image: PageImage }
 
-interface Flow {
+export interface Flow {
   els: FlowEl[]
   x0: number
   x1: number
@@ -580,24 +597,43 @@ function buildParagraphs(flow: Flow, body: number): (Block | null)[] {
   return out
 }
 
-/** Analyse one page into reading-ordered blocks. */
-export function layoutPage(page: PageModel, opts: LayoutOptions): PageLayout {
+/**
+ * The size-independent half of the page analysis: lines, page numbers,
+ * columns and reading-order flows. It needs only this page, so the docx
+ * worker runs it as each page arrives and can drop the raw text items.
+ */
+export interface PreparedPage {
+  num: number
+  flows: Flow[]
+  twoColumn: boolean
+}
+
+export function preparePage(page: PageModel, opts: { stripPageNumbers?: boolean } = {}): PreparedPage {
   let lines = buildLines(page.items)
   if (opts.stripPageNumbers) lines = stripPageNumbers(lines, page.height)
   const split = detectColumns(lines, page.width)
-  const flows = orderFlows(lines, page.images, page.width, split)
+  return { num: page.num, flows: orderFlows(lines, page.images, page.width, split), twoColumn: !!split }
+}
+
+/** The second half: paragraphs, headings, lists and tables, which need the document's body size. */
+export function finishPage(prep: PreparedPage, bodySize: number): PageLayout {
   const blocks: Block[] = []
-  for (const flow of flows) {
+  for (const flow of prep.flows) {
     const tables = findTables(flow.els)
     let i = 0
     for (const t of tables) {
-      if (t.start > i) blocks.push(...buildParagraphs({ ...flow, els: flow.els.slice(i, t.start) }, opts.bodySize).filter((b): b is Block => !!b))
+      if (t.start > i) blocks.push(...buildParagraphs({ ...flow, els: flow.els.slice(i, t.start) }, bodySize).filter((b): b is Block => !!b))
       blocks.push(tableBlock(t.rows))
       i = t.end + 1
     }
-    if (i < flow.els.length) blocks.push(...buildParagraphs({ ...flow, els: flow.els.slice(i) }, opts.bodySize).filter((b): b is Block => !!b))
+    if (i < flow.els.length) blocks.push(...buildParagraphs({ ...flow, els: flow.els.slice(i) }, bodySize).filter((b): b is Block => !!b))
   }
-  return { num: page.num, blocks: demoteLoneLetterItems(blocks), twoColumn: !!split }
+  return { num: prep.num, blocks: demoteLoneLetterItems(blocks), twoColumn: prep.twoColumn }
+}
+
+/** Analyse one page into reading-ordered blocks. */
+export function layoutPage(page: PageModel, opts: LayoutOptions): PageLayout {
+  return finishPage(preparePage(page, opts), opts.bodySize)
 }
 
 /**
@@ -616,12 +652,10 @@ function demoteLoneLetterItems(blocks: Block[]): Block[] {
 }
 
 /**
- * Whole-document pass: one body size for every page, then a paragraph cut
- * by a page break (no terminal punctuation, same size) is joined back.
+ * A paragraph cut by a page break (no terminal punctuation, same size) is
+ * joined back. Mutates the layouts in place.
  */
-export function layoutDocument(pages: PageModel[], opts: { stripPageNumbers?: boolean } = {}): { pages: PageLayout[]; bodySize: number } {
-  const bodySize = bodySizeOf(pages.flatMap((p) => p.items))
-  const out = pages.map((p) => layoutPage(p, { bodySize, stripPageNumbers: opts.stripPageNumbers }))
+export function joinPageBreaks(out: PageLayout[]): PageLayout[] {
   for (let i = 1; i < out.length; i++) {
     const prev = out[i - 1].blocks
     const cur = out[i].blocks
@@ -635,7 +669,21 @@ export function layoutDocument(pages: PageModel[], opts: { stripPageNumbers?: bo
       }
     }
   }
-  return { pages: out, bodySize }
+  return out
+}
+
+/**
+ * Whole-document pass: one body size for every page, then a paragraph cut
+ * by a page break (no terminal punctuation, same size) is joined back.
+ */
+export function layoutDocument(pages: PageModel[], opts: { stripPageNumbers?: boolean } = {}): { pages: PageLayout[]; bodySize: number } {
+  const tally = new BodySizeTally()
+  const prepared = pages.map((p) => {
+    tally.add(p.items)
+    return preparePage(p, opts)
+  })
+  const bodySize = tally.size
+  return { pages: joinPageBreaks(prepared.map((p) => finishPage(p, bodySize))), bodySize }
 }
 
 /** Lines of a page in reading order (columns left to right, top to bottom). */

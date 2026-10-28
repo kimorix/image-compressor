@@ -30,7 +30,7 @@ import {
   type ISectionOptions,
 } from 'docx'
 import type { ConvertMode, ConvertStats, PageImage, PageModel } from '../types'
-import { buildLines, layoutDocument, readingOrder, type Align, type Block, type ListMarker, type Span } from './layout'
+import { BodySizeTally, buildLines, finishPage, joinPageBreaks, preparePage, readingOrder, type Align, type Block, type ListMarker, type PreparedPage, type Span } from './layout'
 
 const TWIP = 20 // twips per point
 const EMU = 12700 // EMUs per point
@@ -47,16 +47,16 @@ export interface BuildResult {
   stats: ConvertStats
 }
 
-function emptyStats(pages: PageModel[]): ConvertStats {
+function emptyStats(): ConvertStats {
   return {
-    pages: pages.length,
+    pages: 0,
     headings: 0,
     images: 0,
     tables: 0,
     lists: 0,
     twoColumnPages: 0,
-    ocrPages: pages.filter((p) => p.ocr).length,
-    imagePages: pages.filter((p) => p.background).length,
+    ocrPages: 0,
+    imagePages: 0,
   }
 }
 
@@ -128,14 +128,16 @@ class Numbering {
   }
 }
 
-function buildEditable(pages: PageModel[], opts: BuildOptions, stats: ConvertStats) {
-  const { pages: layouts, bodySize } = layoutDocument(
-    pages.map((p) => ({ ...p, images: opts.keepImages ? p.images : [] })),
-    { stripPageNumbers: true },
-  )
-  const first = pages[0]
-  const pageW = first?.width ?? 595
-  const pageH = first?.height ?? 842
+/** What the editable build keeps of a page once its first analysis pass ran. */
+interface EditablePage {
+  prep: PreparedPage
+  background?: PageImage
+}
+
+function buildEditable(pages: EditablePage[], size: { width: number; height: number } | null, bodySize: number, opts: BuildOptions, stats: ConvertStats) {
+  const layouts = joinPageBreaks(pages.map((p) => finishPage(p.prep, bodySize)))
+  const pageW = size?.width ?? 595
+  const pageH = size?.height ?? 842
   const margin = Math.min(72, pageW * 0.12)
   const contentW = pageW - margin * 2
   const numbering = new Numbering()
@@ -233,49 +235,51 @@ function floatingImage(img: PageImage, behind = false) {
   })
 }
 
-function buildLayout(pages: PageModel[], opts: BuildOptions, stats: ConvertStats) {
-  const sections: ISectionOptions[] = pages.map((p) => {
-    const children: Paragraph[] = []
-    const pics: ImageRun[] = []
-    if (p.background) {
+/** One keep-layout section: the page at its own size, text in frames, pictures floating. */
+function layoutSection(p: PageModel, opts: BuildOptions, stats: ConvertStats): ISectionOptions {
+  const children: Paragraph[] = []
+  const pics: ImageRun[] = []
+  if (p.background) {
+    stats.images++
+    pics.push(floatingImage(p.background, true))
+  }
+  if (opts.keepImages) {
+    for (const img of p.images) {
       stats.images++
-      pics.push(floatingImage(p.background, true))
+      pics.push(floatingImage(img))
     }
-    if (opts.keepImages) {
-      for (const img of p.images) {
-        stats.images++
-        pics.push(floatingImage(img))
-      }
-    }
-    // The pictures anchor to one empty paragraph at the top of the page.
-    children.push(new Paragraph({ spacing: { before: 0, after: 0, line: 20, lineRule: LineRuleType.EXACT }, children: pics }))
-    // Frames in reading order: copy/paste and screen readers follow the
-    // columns, while each frame still sits at its PDF position.
-    for (const l of readingOrder(buildLines(p.items), p.width)) {
-      const width = (l.x1 - l.x0) * 1.12 + l.size * 1.5
-      children.push(new Paragraph({
-        frame: {
-          type: 'absolute',
-          position: { x: Math.round(l.x0 * TWIP), y: Math.round(l.top * TWIP) },
-          width: Math.round(Math.min(width, p.width - l.x0) * TWIP),
-          height: Math.round((l.bottom - l.top) * TWIP),
-          anchor: { horizontal: FrameAnchorType.PAGE, vertical: FrameAnchorType.PAGE },
-          rule: HeightRule.ATLEAST,
-        },
-        spacing: { before: 0, after: 0, line: Math.round(l.size * 1.15 * TWIP), lineRule: LineRuleType.AT_LEAST },
-        children: runs(l.spans, null),
-      }))
-    }
-    return {
-      properties: {
-        page: {
-          size: { width: Math.round(p.width * TWIP), height: Math.round(p.height * TWIP) },
-          margin: { top: 0, bottom: 0, left: 0, right: 0, header: 0, footer: 0, gutter: 0 },
-        },
+  }
+  // The pictures anchor to one empty paragraph at the top of the page.
+  children.push(new Paragraph({ spacing: { before: 0, after: 0, line: 20, lineRule: LineRuleType.EXACT }, children: pics }))
+  // Frames in reading order: copy/paste and screen readers follow the
+  // columns, while each frame still sits at its PDF position.
+  for (const l of readingOrder(buildLines(p.items), p.width)) {
+    const width = (l.x1 - l.x0) * 1.12 + l.size * 1.5
+    children.push(new Paragraph({
+      frame: {
+        type: 'absolute',
+        position: { x: Math.round(l.x0 * TWIP), y: Math.round(l.top * TWIP) },
+        width: Math.round(Math.min(width, p.width - l.x0) * TWIP),
+        height: Math.round((l.bottom - l.top) * TWIP),
+        anchor: { horizontal: FrameAnchorType.PAGE, vertical: FrameAnchorType.PAGE },
+        rule: HeightRule.ATLEAST,
       },
-      children,
-    }
-  })
+      spacing: { before: 0, after: 0, line: Math.round(l.size * 1.15 * TWIP), lineRule: LineRuleType.AT_LEAST },
+      children: runs(l.spans, null),
+    }))
+  }
+  return {
+    properties: {
+      page: {
+        size: { width: Math.round(p.width * TWIP), height: Math.round(p.height * TWIP) },
+        margin: { top: 0, bottom: 0, left: 0, right: 0, header: 0, footer: 0, gutter: 0 },
+      },
+    },
+    children,
+  }
+}
+
+function buildLayout(sections: ISectionOptions[], opts: BuildOptions) {
   return new Document({
     title: opts.title,
     creator: 'image-compressor PDF to Word',
@@ -283,10 +287,54 @@ function buildLayout(pages: PageModel[], opts: BuildOptions, stats: ConvertStats
   })
 }
 
-/** Build the Word document for the page models. */
+/**
+ * Incremental Word build, fed one page at a time as the PDF is read (the
+ * docx worker keeps one per conversion). Each page gets its size-independent
+ * work done on arrival: keep-layout pages become their finished section,
+ * editable pages their lines, columns and reading-order flows, plus their
+ * share of the body-size tally. The raw text items are not kept, and
+ * `finish()` only has the document-wide pass left (paragraphs and headings
+ * need the final body size) before packing.
+ */
+export class DocxSession {
+  private stats = emptyStats()
+  private tally = new BodySizeTally()
+  private editable: EditablePage[] = []
+  private sections: ISectionOptions[] = []
+  private size: { width: number; height: number } | null = null
+
+  constructor(private readonly opts: BuildOptions) {}
+
+  addPage(p: PageModel): void {
+    this.stats.pages++
+    if (p.ocr) this.stats.ocrPages++
+    if (p.background) this.stats.imagePages++
+    if (this.opts.mode === 'layout') {
+      this.sections.push(layoutSection(p, this.opts, this.stats))
+      return
+    }
+    if (!this.size) this.size = { width: p.width, height: p.height }
+    this.tally.add(p.items)
+    this.editable.push({
+      prep: preparePage({ ...p, images: this.opts.keepImages ? p.images : [] }, { stripPageNumbers: true }),
+      background: p.background,
+    })
+  }
+
+  async finish(): Promise<BuildResult> {
+    const doc = this.opts.mode === 'layout'
+      ? buildLayout(this.sections, this.opts)
+      : buildEditable(this.editable, this.size, this.tally.size, this.opts, this.stats)
+    const blob = await Packer.toBlob(doc)
+    this.editable = []
+    this.sections = []
+    return { blob, stats: this.stats }
+  }
+}
+
+/** Build the Word document for the page models in one go. */
 export async function buildDocx(pages: PageModel[], opts: BuildOptions): Promise<BuildResult> {
-  const stats = emptyStats(pages)
-  const doc = opts.mode === 'layout' ? buildLayout(pages, opts, stats) : buildEditable(pages, opts, stats)
-  const blob = await Packer.toBlob(doc)
-  return { blob, stats }
+  const session = new DocxSession(opts)
+  for (const p of pages) session.addPage(p)
+  return session.finish()
 }
