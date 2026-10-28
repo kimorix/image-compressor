@@ -1,0 +1,47 @@
+// Shared navigation surfaces in the first-load CSS: grouped side nav
+// (desktop) and the phone More menu entries. The PDF hub, the segmented
+// track and the tool placeholder carry their own styles in their (lazy)
+// components.
+
+// ---- side nav groups ----
+.side-group {
+  margin: 10px 12px 2px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: var(--subtle);
+  &:first-child {
+    margin-top: 0;
+  }
+}
+.side-sep {
+  margin: 8px 12px;
+  border-top: 1px solid var(--border);
+}
+.side-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+// ---- More menu: group label, chevron, current tool ----
+@media (max-width: 719px) {
+  .more-menu .more-group {
+    margin: 4px 10px 2px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--subtle);
+  }
+  .more-menu .more-tool.active {
+    background: var(--accent-soft);
+  }
+  .more-menu .more-tool.active .more-tool-copy strong {
+    color: var(--accent);
+  }
+  .more-chevron {
+    flex: none;
+    color: var(--subtle);
+    font-size: 18px;
+    line-height: 1;
+  }
+}

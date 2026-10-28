@@ -3,7 +3,7 @@
     <template #title><span>{{ t('appTitle') }}</span><span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3z" /><path d="M9 12l2 2 4-4" /></svg><span class="badge-text"><span class="badge-main">{{ t('badgeLocal') }}</span><span class="badge-sub">{{ t('badgeSub') }}</span></span></span></template>
   </AppHeader>
   <div class="layout" :inert="busy || sheetOpen ? true : undefined">
-    <SideNav :t="t" :active="view === 'history' ? 'history' : 'compress'" @compress="goTool" @pdf="goPdf" @history="goHistory">
+    <SideNav :t="t" :active="view === 'history' ? 'history' : 'compress'" @nav="onNav">
         <div class="side-card">
           <strong>{{ t('sideFormats') }}</strong>
           <p class="side-formats">JPG · PNG · WebP · AVIF · HEIC · HEIF</p>
@@ -181,7 +181,7 @@
     @settings="goSettings"
     @more="moreOpen = !moreOpen"
   />
-  <MoreMenu :t="t" :open="moreOpen" :menu-inert="busy || sheetOpen" @close="moreOpen = false" />
+  <MoreMenu :t="t" :open="moreOpen" :menu-inert="busy || sheetOpen" @close="moreOpen = false" @nav="onNav" />
   <!-- Blocking global loading: the scrim captures pointer/touch, the page
   sections above are inert, and the status pill stays visible above it. -->
   <div v-if="busy" class="busy-scrim" aria-hidden="true"></div>
@@ -235,7 +235,7 @@ import ProgressBar from './components/ProgressBar.vue'
 import { t as tx, type Lang } from '../../shared/i18n'
 import { applyTheme } from '../../shared/lib/theme'
 import { usePrefs } from '../../shared/composables/usePrefs'
-import { useHashRoute } from '../../shared/composables/useHashRoute'
+import { useHashRoute, type Feature, type NavKey } from '../../shared/composables/useHashRoute'
 import { downloadUrl, ymd, zipEntries } from '../../shared/lib/zip'
 import { CompressPool } from './lib/compress-pool'
 import { baseName, extOf, fmtSize, shortName } from '../../shared/lib/format'
@@ -249,7 +249,7 @@ import { appendMasonry, distributeMasonry, fallbackColumnWidth, type MasonryColu
 import { shareFilesOr } from '../../shared/lib/share'
 
 const { lang, theme, setLang: setPrefLang } = usePrefs()
-const { route, navigate, replaceSub } = useHashRoute()
+const { route, navigate, replaceSub, lastPdfTool } = useHashRoute()
 const settings = reactive<Settings>({ ...DEFAULT_SETTINGS, ...loadSavedSettings() })
 // Remember the last-used settings across visits. Writing storage never
 // mutates settings, so this watcher cannot loop.
@@ -396,13 +396,23 @@ function goTool() {
   moreOpen.value = false
   replaceSub('')
 }
-// Sidebar / tab bar: switch to the PDF to Word feature. This view stays
-// alive (KeepAlive) so a running batch and its results survive the trip.
+// Tab bar PDF: open the PDF tools hub on the last PDF tool used. This
+// view stays alive (KeepAlive) so a running batch and its results survive
+// the trip.
 function goPdf() {
+  goFeature(lastPdfTool())
+}
+function goFeature(f: Feature) {
   moreOpen.value = false
   settingsOpen.value = false
   detailId.value = null
-  navigate('pdf')
+  navigate(f)
+}
+// Side nav / More menu entries.
+function onNav(key: NavKey) {
+  if (key === 'compress') goTool()
+  else if (key === 'history') goHistory()
+  else goFeature(key)
 }
 // Tab bar Home: back to the tool, scrolled to the top. (Templates cannot
 // reach window, so this lives in script: the old inline call threw.)

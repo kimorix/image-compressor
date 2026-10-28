@@ -1,18 +1,28 @@
 <template>
-  <!-- Thin shell: the hash route picks the feature view. Both stay alive
+  <!-- Thin shell: the hash route picks the feature view. Views stay alive
   once opened (KeepAlive), so switching never drops a running batch or its
-  results. The PDF feature is its own lazy chunk; the compressor bundle
-  never loads pdf.js, docx or tesseract. -->
+  results. Everything but the compressor is its own lazy chunk; the
+  compressor bundle never loads pdf.js, docx or tesseract. Tools whose
+  feature PR has not landed yet render the shared placeholder. -->
   <KeepAlive>
-    <component :is="route.feature === 'pdf' ? PdfToWordView : CompressorView" />
+    <component :is="view" :key="route.feature" v-bind="viewProps" />
   </KeepAlive>
 </template>
 
 <script setup lang="ts">
-import { defineAsyncComponent } from 'vue'
+import { computed, defineAsyncComponent, type Component } from 'vue'
 import CompressorView from './features/image-compressor/CompressorView.vue'
-import { useHashRoute } from './shared/composables/useHashRoute'
+import { useHashRoute, type Feature } from './shared/composables/useHashRoute'
 
 const PdfToWordView = defineAsyncComponent(() => import('./features/pdf-to-word/PdfToWordView.vue'))
+const ToolPlaceholder = defineAsyncComponent(() => import('./shared/components/ToolPlaceholder.vue'))
+
+const VIEWS: Partial<Record<Feature, Component>> = {
+  compress: CompressorView,
+  pdf: PdfToWordView,
+}
+
 const { route } = useHashRoute()
+const view = computed(() => VIEWS[route.value.feature] ?? ToolPlaceholder)
+const viewProps = computed(() => (VIEWS[route.value.feature] ? {} : { feature: route.value.feature }))
 </script>

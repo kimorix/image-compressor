@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { MESSAGES } from '../../src/shared/i18n'
+import { LANGS, MESSAGES } from '../../src/shared/i18n'
+import { placeholderT } from '../../src/shared/components/placeholder-i18n'
 
 // Importing the dictionary runs its module-level guard, which throws when any
 // language is missing a key. This test additionally pins the result-table
@@ -24,6 +25,31 @@ describe('i18n dictionaries', () => {
     for (const messages of Object.values(MESSAGES)) {
       for (const key of mobile) {
         expect(messages[key]).toBeTypeOf('string')
+      }
+    }
+  })
+
+  it('defines the shared navigation copy (tool groups, PDF hub, placeholders) in every language', () => {
+    const nav = [
+      'navGroupImage', 'navGroupPdf', 'navTool', 'navConvert', 'navResize', 'navPdf', 'navImgToPdf', 'navPdfMerge', 'navHistory',
+      'hubTitle', 'hubToWord', 'hubImgToPdf', 'hubMerge', 'moreImageConvertDesc', 'moreResizeDesc',
+    ]
+    for (const messages of Object.values(MESSAGES)) {
+      for (const key of nav) {
+        expect(messages[key]).toBeTypeOf('string')
+        expect((messages[key] as string).length).toBeGreaterThan(0)
+      }
+    }
+  })
+
+  it('defines the tool placeholder copy in every language (no English fallback needed)', () => {
+    for (const key of ['descImgToPdf', 'descPdfMerge', 'soonSub', 'soonNote', 'soonTryCompress', 'soonTryPdf']) {
+      const en = placeholderT('en', key)
+      expect(en).not.toBe(key)
+      for (const { code } of LANGS) {
+        const v = placeholderT(code, key)
+        expect(v.length).toBeGreaterThan(0)
+        if (code !== 'en') expect(v).not.toBe(en)
       }
     }
   })
