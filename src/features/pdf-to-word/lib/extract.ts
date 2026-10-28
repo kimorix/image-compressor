@@ -5,8 +5,8 @@
 // rendered once and either OCR'd or kept whole.
 import type { OcrLang, TextItem } from '../types'
 import type { WireImage, WirePage } from '../worker/docx.worker'
-import type { Pdfjs, PdfDoc } from './pdf-loader'
-import { loadPdfjs } from './pdf-loader'
+import type { Pdfjs, PdfDoc } from '../../../shared/pdf/pdf-loader'
+import { loadPdfjs } from '../../../shared/pdf/pdf-loader'
 
 type Matrix = [number, number, number, number, number, number]
 type PdfPage = Awaited<ReturnType<PdfDoc['getPage']>>

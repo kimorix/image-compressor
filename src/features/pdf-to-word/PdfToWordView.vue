@@ -177,7 +177,7 @@ import PdfDetailSheet from './components/PdfDetailSheet.vue'
 import { pdfT } from './i18n'
 import { DEFAULT_PDF_SETTINGS, type PdfItem, type PdfSettings } from './types'
 import { defaultOcrLang, loadSettings, saveSettings, isPdfFile, fileKey, pdfConcurrency } from './lib/settings'
-import type { PdfDoc } from './lib/pdf-loader'
+import type { PdfDoc } from '../../shared/pdf/pdf-loader'
 import './styles/pdf.less'
 
 const { lang, t, setLang: setPrefLang } = usePrefs()
@@ -318,7 +318,7 @@ function addFiles(files: File[]) {
 }
 
 async function probe(item: PdfItem, password = '') {
-  const { openPdf, PdfPasswordError } = await import('./lib/pdf-loader')
+  const { openPdf, PdfPasswordError } = await import('../../shared/pdf/pdf-loader')
   const { probeDoc } = await import('./lib/extract')
   try {
     const doc = await openPdf(await item.file.arrayBuffer(), password)
@@ -573,7 +573,7 @@ const previewDocs = new Map<string, Promise<PdfDoc>>()
 function previewDoc(item: PdfItem): Promise<PdfDoc> {
   let d = previewDocs.get(item.id)
   if (!d) {
-    d = import('./lib/pdf-loader').then(async ({ openPdf }) => openPdf(await item.file.arrayBuffer(), item.password))
+    d = import('../../shared/pdf/pdf-loader').then(async ({ openPdf }) => openPdf(await item.file.arrayBuffer(), item.password))
     previewDocs.set(item.id, d)
     d.catch(() => { if (previewDocs.get(item.id) === d) previewDocs.delete(item.id) })
   }

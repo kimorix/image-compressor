@@ -46,7 +46,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { OcrLang, PdfSettings } from '../types'
-import { isValidRangeSyntax } from '../lib/page-range'
+import { isValidRangeSyntax } from '../../../shared/pdf/page-range'
 import { OCR_LANGS, ocrDownloadMB } from '../lib/settings'
 
 const props = defineProps<{

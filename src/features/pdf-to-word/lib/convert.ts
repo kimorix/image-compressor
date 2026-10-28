@@ -8,8 +8,8 @@ import type { ConvertStats, PdfSettings } from '../types'
 import type { DocxRequest, DocxResponse, WirePage } from '../worker/docx.worker'
 import type { BuildOptions } from './docx-builder'
 import { canUseOffscreen, deviceRenderPixelCap, extractPage } from './extract'
-import { parsePageRange } from './page-range'
-import { openPdf } from './pdf-loader'
+import { parsePageRange } from '../../../shared/pdf/page-range'
+import { openPdf } from '../../../shared/pdf/pdf-loader'
 
 export interface ConvertProgress {
   phase: 'read' | 'ocr' | 'build'
