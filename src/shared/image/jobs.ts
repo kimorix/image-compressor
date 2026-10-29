@@ -23,10 +23,11 @@ export interface ImageJob<P = unknown, R = unknown> {
   run(payload: P): Promise<JobOutput<R>>
 }
 
-export type JobKind = 'compress'
+export type JobKind = 'compress' | 'resize'
 
 const LOADERS: Record<JobKind, () => Promise<ImageJob>> = {
   compress: () => import('../../features/image-compressor/lib/compress-job').then((m) => m.compressJob as ImageJob),
+  resize: () => import('../../features/resize-watermark/lib/rw-job').then((m) => m.rwJob as ImageJob),
 }
 
 const cache = new Map<JobKind, Promise<ImageJob>>()
