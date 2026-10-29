@@ -64,6 +64,7 @@ Vue 3 + Vite + TypeScript：
   - `pdf/`：`pdf-loader`（pdf.js 懒加载）、`page-range`（页码范围，含按组解析 `parseRangeGroups`）
   - `composables/`、`i18n/`、`lib/`：usePrefs（语言/主题）、useHashRoute、六语词典、`share.ts`（系统分享 + 兜底）、`zip.ts`（流式 zip / 下载）、`drop.ts`（拖入文件夹）、`format.ts`、`theme.ts`
 - `src/features/image-compressor/`：图片压缩（`CompressorView.vue`、`components/`、`lib/`：compress（压缩管线，`forceFormat` 选项供格式转换用）、compress-job（图片池任务）、compress-pool（压缩器对共享池的封装）、ssim、presets、recompress、masonry、settings-store 等）
+- `src/features/format-convert/`：格式转换（`ConvertView.vue`、`components/`（ConvertSettings 桌面卡片与手机设置面板共用、ConvertDetailSheet 手机详情）、`lib/`：convert（纯逻辑：按来源推荐格式、命名去重、透明填充、设置签名）、convert-job（图片池任务：原尺寸解码 → JPEG/PNG/WebP/AVIF 编码，P3 回写，EXIF 跨格式保留且始终移除 GPS）、settings-store（`ic-convert-settings`，未手动选格式前为「自动」）；`styles/convert.less`；`i18n.ts` 功能内六语言文案）。与压缩器共用图片池、编码器和 `shared/image/exif-any.ts`，不改压缩器代码
 - `src/features/pdf-to-word/`：PDF 转 Word（`PdfToWordView.vue`、`components/`、`lib/`：layout、extract、docx-builder、ocr、convert、settings；`worker/docx.worker.ts`；`styles/pdf.less`；`i18n.ts` 功能内六语言文案）
 - `DESIGN.md`：设计规范。以 VoltAgent/awesome-design-md 的 `design-md/linear.app` 为基准，补充了本项目的浅色模式、扁平统计条、结果表格、移动端外壳和压缩语义色
 - `src/style.less`：样式（Less 嵌套写法；主题 token 仍用 CSS 变量，因为主题在运行时切换）
