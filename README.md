@@ -43,6 +43,16 @@
 - 性能：每页读完就交给 docx Worker 逐页分析（图片缓冲转移，不在主线程堆积）；支持 OffscreenCanvas 时裁图在 Worker 里编码；只有有图要裁或扫描页才渲染，渲染上限手机约 4MP、桌面约 10MP
 - 体积：首屏不加载任何 PDF 代码；pdf.js（legacy 构建，兼容老 iOS）、docx、tesseract 都在进入 PDF 页或真正用到时才下载，并且不进 PWA 预缓存，用过一次后缓存
 
+## PDF 合并拆分（`#/pdf-merge`）
+
+- 完全在浏览器本地处理，文件不上传；桌面侧栏「PDF 工具 → 合并拆分」，手机底栏 PDF → 顶部分段「合并拆分」，下面再分「合并 / 拆分」
+- 合并：拖入多个 PDF（可拖文件夹），每个文件一个色标；桌面中栏是全部页面的缩略图网格（共享 PageGrid，跨文件拖动排序、悬停旋转 / 复制 / 删除，点选、Shift 连选、⌘/Ctrl 多选 → 底部黑色选择条：左转、右转、复制、导出所选、删除）；顶部文件标签可拖动调整文件顺序，点标签可整份选中 / 旋转 / 上移下移 / 移除；全部旋转、按文件名排序（自然排序）；删除的页半透明斜纹保留在原位，⌘Z 撤销 / ⇧⌘Z 重做（最近 20 步）
+- 合并设置：文件名（默认第一个文件名 + 「-合并」）、页面尺寸（保持原样 / 统一 A4 / 统一首页，按各页方向等比缩放居中）、按文件生成书签（每个文件一个顶层书签，原书签重新指向新页码挂在下面）、保留表单与批注（关掉时表单值固定成页面内容；多个文件同名字段加 `f2_` 前缀，避免联动）、文件间插入空白页（奇数页文件后补白页，方便双面打印）
+- 拆分：按范围（`1-3, 4-10, 11-`，每组一个文件，实时预览分组）、每 N 页、提取所选、每页一个；文件名模板 `{name}_{range}` / `{name}_{n}`；多个文件各自拆分，ZIP 里每个文件一个文件夹；拆分按当前编辑后的页序和旋转
+- 手机：文件列表（拖 ⋮⋮ 排序、⋯ 菜单），「逐页编辑」全屏 3 列网格（长按拖动、点选多选、底部选择条），设置在底部面板；结果面板逐个分享 / 打包 ZIP / 系统分享全部
+- 加密：只有权限密码的文件（RC4、AES-128/256，含对象流）直接解密处理，输出不带原权限限制；需要打开密码的文件第一版不支持，显示说明卡片
+- 实现：写入用 [@cantoo/pdf-lib](https://www.npmjs.com/package/@cantoo/pdf-lib)（pdf-lib 维护分支，原生解密），只在 `merge.worker.ts` 里加载（不进页面 chunk、不进 PWA 预缓存，首次合并时下载并缓存）；每个源文件只加载、只 copyPages 一次；旋转 = 原 /Rotate + 编辑；缩略图用 pdf.js 按需渲染（视口内优先、最多 2 个并发），LRU 约 300 张，淘汰时回收 blob URL；生成在 Worker 里，逐页进度、可取消
+
 ## 已知限制
 
 - GIF 动图压缩后只保留首帧（动画 WebP 输出在计划中）
@@ -51,6 +61,7 @@
 - AVIF 编码器约 3.5MB，首次使用需要下载，编码也较慢；选 AVIF 时设置栏会提示
 - 智能画质每张图要多编码、解码几次（通常 2–3 次），比固定质量慢一些
 - 单张超过 50MB 或超过 8000 万像素的图片会被跳过/报错并提示（避免一次性把解码后的像素撑爆内存）
+- PDF 合并拆分：带打开密码的 PDF 暂不支持；统一页面尺寸时被缩放的页不保留表单和批注；内部跳转链接若目标页被删会失效；XFA 动态表单不支持；输出不加密
 - PDF 转 Word：复杂表格（合并单元格、单元格内多行、无对齐的表格）、公式、文本框、竖排文字和旋转文字不能还原结构（文字仍会保留）；图片是从渲染后的页面裁出来的，压在图片上的文字会一起进图片；OCR 首次使用需要联网
 
 ## 技术栈
@@ -64,13 +75,14 @@ Vue 3 + Vite + TypeScript：
   - `pdf/`：`pdf-loader`（pdf.js 懒加载）、`page-range`（页码范围，含按组解析 `parseRangeGroups`）
   - `composables/`、`i18n/`、`lib/`：usePrefs（语言/主题）、useHashRoute、六语词典、`share.ts`（系统分享 + 兜底）、`zip.ts`（流式 zip / 下载）、`drop.ts`（拖入文件夹）、`format.ts`、`theme.ts`
 - `src/features/image-compressor/`：图片压缩（`CompressorView.vue`、`components/`、`lib/`：compress（压缩管线，`forceFormat` 选项供格式转换用）、compress-job（图片池任务）、compress-pool（压缩器对共享池的封装）、ssim、presets、recompress、masonry、settings-store 等）
+- `src/features/pdf-merge/`：PDF 合并拆分（`PdfMergeView.vue`、`components/`：FileChips、SelectionBar、MergeSettingsPanel、SplitSettingsPanel、ResultList、MobileFileList；`lib/`：ops（纯函数：移动 / 旋转 / 软删除 / 复制 / 撤销）、split-plan、names、outline（书签读写）、write（@cantoo/pdf-lib 写入）、client（Worker 进度 / 取消）、thumbs（缩略图 + LRU）；`worker/merge.worker.ts`；`i18n.ts` 六语言）
 - `src/features/pdf-to-word/`：PDF 转 Word（`PdfToWordView.vue`、`components/`、`lib/`：layout、extract、docx-builder、ocr、convert、settings；`worker/docx.worker.ts`；`styles/pdf.less`；`i18n.ts` 功能内六语言文案）
 - `DESIGN.md`：设计规范。以 VoltAgent/awesome-design-md 的 `design-md/linear.app` 为基准，补充了本项目的浅色模式、扁平统计条、结果表格、移动端外壳和压缩语义色
 - `src/style.less`：样式（Less 嵌套写法；主题 token 仍用 CSS 变量，因为主题在运行时切换）
 - `scripts/seo-pages.mjs`：构建后按语言生成 `docs/<lang>/` 静态壳（标题 / 描述已翻译、资源路径上移一级、启动语言钉死该语言）
 - PWA：vite-plugin-pwa，Service Worker 预缓存应用与 worker；MozJPEG / PNG / imagequant / WebP / AVIF 的 WASM 和 HEIC 解码器首次用到时下载并缓存（`globIgnores` 排除了它们，首访预缓存约 0.54MB）；heic2any 以哈希资源发出一份，Worker 与主线程回退共用；导航兜底只限根路径（语言壳是真实文件，不能被根壳劫持）；语言壳各带一份注册脚本（指回根 sw.js、同根 scope，共用一个注册）
 - fflate：全部下载时打包 zip
-- `tests/fixtures/`：PDF 转 Word 的样例 PDF（`make-pdfs.py` 生成：中英混排报告、双栏论文、加密、扫描件）
+- `tests/fixtures/`：PDF 转 Word 的样例 PDF（`make-pdfs.py` 生成：中英混排报告、双栏论文、加密、扫描件）；合并拆分的样例（`make-merge-pdfs.py`：带书签和 /Rotate 的 outline.pdf、表单、只有权限密码的 RC4 / AES-256 / AES-128+对象流）
 - `src/i18n/`：六语词典与浏览器语言检测
 - `src/types.ts`：共享类型
 
