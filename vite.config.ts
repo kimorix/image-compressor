@@ -68,7 +68,10 @@ export default defineConfig({
         // files (CMaps, fonts, decoder wasm) are fetched only when a PDF is
         // opened, so they are cached on first use too. The PDF view chunk
         // itself stays precached (small) so the page opens offline.
-        globIgnores: ['**/mozjpeg_enc*.wasm', '**/squoosh_png*.wasm', '**/imagequant_bg*', '**/avif_enc*.wasm', '**/avif_enc*.js', '**/heic2any*.js', '**/webp_enc*.wasm', '**/webp_enc*.js', '**/pdf.worker*', '**/assets/pdf-*.js', '**/docx.worker*', '**/tesseract*', 'pdfjs/**'],
+        // PDF merge/split: the merge worker bundles @cantoo/pdf-lib
+        // (~590KB) and is only needed when a merge or split runs, so it is
+        // cached on first use as well; the merge view chunk stays precached.
+        globIgnores: ['**/mozjpeg_enc*.wasm', '**/squoosh_png*.wasm', '**/imagequant_bg*', '**/avif_enc*.wasm', '**/avif_enc*.js', '**/heic2any*.js', '**/webp_enc*.wasm', '**/webp_enc*.js', '**/pdf.worker*', '**/assets/pdf-*.js', '**/docx.worker*', '**/merge.worker*', '**/tesseract*', 'pdfjs/**'],
         // The plugin defaults every navigation to the precached index.html
         // (SPA fallback). This app has no client routing, and the language
         // shells are real files: restrict the fallback to the root page only,
@@ -84,7 +87,7 @@ export default defineConfig({
         // on first use so they still work offline afterwards. Hashed
         // filenames make old entries harmless orphans, bounded by maxEntries.
         runtimeCaching: [{
-          urlPattern: /\/(avif_enc|webp_enc|mozjpeg_enc|squoosh_png_bg|imagequant_bg)[^/]*\.(wasm|js)$|\/heic2any[^/]*\.js$|\/pdf\.worker[^/]*\.m?js$|\/assets\/pdf-[^/]*\.js$|\/docx\.worker[^/]*\.js$|\/tesseract[^/]*\.js$|\/pdfjs\/(cmaps|standard_fonts|wasm)\//,
+          urlPattern: /\/(avif_enc|webp_enc|mozjpeg_enc|squoosh_png_bg|imagequant_bg)[^/]*\.(wasm|js)$|\/heic2any[^/]*\.js$|\/pdf\.worker[^/]*\.m?js$|\/assets\/pdf-[^/]*\.js$|\/docx\.worker[^/]*\.js$|\/merge\.worker[^/]*\.js$|\/tesseract[^/]*\.js$|\/pdfjs\/(cmaps|standard_fonts|wasm)\//,
           handler: 'CacheFirst',
           options: {
             cacheName: 'lazy-assets',
