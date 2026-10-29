@@ -3,7 +3,11 @@
 // piexifjs is lazy-loaded: only JPEG + "keep metadata" runs ever fetch it.
 // Anything unexpected (no EXIF, malformed JPEG) falls back to the stripped
 // output — privacy-safe, never an error.
-export async function restoreExif(original: Blob, compressed: Blob): Promise<Blob> {
+//
+// `size` (optional) rewrites PixelXDimension / PixelYDimension for tools
+// that change the pixel size (resize): stale dimensions confuse some
+// viewers and photo libraries.
+export async function restoreExif(original: Blob, compressed: Blob, size?: { w: number; h: number }): Promise<Blob> {
   try {
     const piexif = (await import('piexifjs')).default
     const origBytes = new Uint8Array(await original.arrayBuffer())
@@ -43,6 +47,13 @@ export async function restoreExif(original: Blob, compressed: Blob): Promise<Blo
     // (A split keep-location toggle could preserve it on request; the
     // default is to strip.)
     delete exifObj['GPS']
+    // ...and its pointer in IFD0: piexif keeps a stale GPSTag offset that
+    // then points into whatever is written there (corrupt EXIF in readers).
+    delete exifObj['0th'][piexif.ImageIFD.GPSTag]
+    if (size && exifObj['Exif'] && Object.keys(exifObj['Exif']).length > 0) {
+      exifObj['Exif'][piexif.ExifIFD.PixelXDimension] = size.w
+      exifObj['Exif'][piexif.ExifIFD.PixelYDimension] = size.h
+    }
     const exifBytes = piexif.dump(exifObj)
     const outBinary = piexif.insert(exifBytes, toBinary(compBytes))
     return new Blob([fromBinary(outBinary) as BlobPart], { type: 'image/jpeg' })
