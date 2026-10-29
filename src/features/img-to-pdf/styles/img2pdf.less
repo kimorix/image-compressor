@@ -1,0 +1,633 @@
+// Images to PDF page. Loaded with the feature's lazy chunk; every rule is
+// i2p- prefixed (or scoped under an i2p- class) so the shared shell and the
+// other tools are untouched.
+
+// ---- upload strip ----
+.i2p-upload {
+  padding: 16px;
+}
+.i2p-drop {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border: 2px dashed var(--border-strong);
+  border-radius: 12px;
+  padding: 22px 22px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  &:hover,
+  &:focus-visible {
+    border-color: var(--accent);
+    outline: none;
+  }
+  &.dragover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  strong {
+    display: block;
+    font-size: 17px;
+    font-weight: 600;
+  }
+  p {
+    margin: 6px 0 0;
+    font-size: 13px;
+    color: var(--subtle);
+    line-height: 1.5;
+  }
+  &.compact {
+    padding: 14px 18px;
+    strong {
+      font-size: 15px;
+    }
+  }
+}
+.i2p-drop-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.i2p-pick {
+  flex: none;
+}
+.i2p-hint {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--warn);
+}
+.i2p-empty {
+  margin: 8px 4px;
+  font-size: 13px;
+  color: var(--subtle);
+}
+
+// ---- page order card + grid ----
+.i2p-order {
+  padding: 16px 20px 20px;
+}
+.i2p-order-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-bottom: 14px;
+  h3 {
+    margin: 0;
+    font-size: 17px;
+  }
+}
+.i2p-count {
+  padding: 1px 8px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 500;
+}
+.i2p-order-hint {
+  min-width: 0;
+  font-size: 12px;
+  color: var(--subtle);
+}
+.i2p-order-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  button {
+    min-width: 0;
+  }
+}
+.i2p-link {
+  background: transparent;
+  border-color: transparent;
+  color: var(--subtle);
+  &.danger {
+    color: var(--red);
+  }
+  &.accent {
+    color: var(--accent);
+  }
+}
+// The grid frame is the portrait sheet's slot; the paper itself is drawn
+// by PaperThumb (white, letterboxed for landscape pages).
+.i2p-order .pg-frame {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.i2p-order .pg-selected .pg-frame,
+.i2p-order .pg-tile:focus-visible .pg-frame {
+  border-radius: 8px;
+}
+.i2p-paper-frame {
+  position: absolute;
+  inset: 0;
+}
+.i2p-paper {
+  position: absolute;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
+  overflow: hidden;
+}
+:root:not([data-theme='light']) .i2p-paper {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.i2p-imgbox {
+  position: absolute;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  img {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: fill;
+    pointer-events: none;
+    transition: transform 0.18s ease;
+  }
+}
+.i2p-wait {
+  width: 50%;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #e5e7eb, #cbd5e1, #e5e7eb);
+  background-size: 200% 100%;
+  animation: pg-wait 1.2s linear infinite;
+}
+.i2p-bad {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(220, 38, 38, 0.12);
+  color: #b91c1c;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 24px;
+  text-align: center;
+}
+
+// ---- settings ----
+.i2p-settings-card,
+.i2p-result-card {
+  flex: none;
+  padding: 18px;
+  h3 {
+    margin: 0 0 14px;
+    font-size: 17px;
+  }
+}
+.i2p-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.i2p-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.i2p-dim {
+  opacity: 0.55;
+}
+.i2p-seg.seg {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 8px;
+  .seg-btn {
+    min-width: 0;
+    min-height: 38px;
+    padding: 6px 4px;
+    font-size: 13px;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+}
+.i2p-adv {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.i2p-q {
+  display: flex;
+  flex: 1 1 160px;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  span {
+    flex: none;
+    font-variant-numeric: tabular-nums;
+  }
+  input[type='range'] {
+    flex: 1 1 auto;
+    min-width: 0;
+    accent-color: var(--accent);
+  }
+}
+.i2p-edge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.i2p-input {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 0;
+  }
+}
+.i2p-num {
+  width: 78px;
+  min-height: 34px;
+  padding: 4px 8px;
+  font-variant-numeric: tabular-nums;
+}
+.i2p-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--subtle);
+  line-height: 1.55;
+}
+.i2p-name-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  .i2p-label {
+    margin: 0;
+  }
+}
+.i2p-name {
+  position: relative;
+  min-width: 0;
+  .i2p-input {
+    padding-right: 46px;
+  }
+}
+.i2p-ext {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  color: var(--subtle);
+  pointer-events: none;
+}
+.i2p-estimate {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 13px;
+  color: var(--muted);
+  strong {
+    color: var(--accent);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+}
+.i2p-generate {
+  width: 100%;
+  min-height: 46px;
+  font-size: 15px;
+}
+.i2p-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+  span {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.2s ease;
+  }
+}
+.i2p-progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+// ---- result ----
+.i2p-result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  h3 {
+    margin: 0;
+  }
+}
+.i2p-pill {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  &.ok {
+    background: var(--green-soft);
+    color: var(--green-text);
+  }
+}
+.i2p-file {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.i2p-file-thumb {
+  position: relative;
+  flex: none;
+  width: 52px;
+  aspect-ratio: 1 / 1.414;
+}
+.i2p-file-info {
+  min-width: 0;
+  strong {
+    display: block;
+    font-size: 14px;
+    overflow-wrap: anywhere;
+  }
+  span {
+    display: block;
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--subtle);
+  }
+}
+.i2p-result-notes,
+.i2p-result-stale {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--warn);
+}
+.i2p-result-stale {
+  color: var(--subtle);
+}
+.i2p-result-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.6fr;
+  gap: 10px;
+  margin-top: 14px;
+  button {
+    min-width: 0;
+    min-height: 42px;
+  }
+}
+.i2p-result-links {
+  display: flex;
+  justify-content: space-around;
+  margin-top: 6px;
+}
+.i2p-strip {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  padding: 2px 2px 8px;
+  -webkit-overflow-scrolling: touch;
+}
+.i2p-strip-page {
+  position: relative;
+  flex: none;
+  width: 38%;
+  max-width: 150px;
+  aspect-ratio: 1 / 1.414;
+  scroll-snap-align: start;
+}
+.i2p-rows {
+  margin: 10px 0 0;
+  > div {
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 10px;
+    padding: 5px 0;
+    font-size: 14px;
+  }
+  dt {
+    color: var(--subtle);
+  }
+  dd {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .i2p-strong {
+    font-weight: 600;
+  }
+  .i2p-warn {
+    color: var(--warn);
+  }
+}
+
+// ---- phone floating bar ----
+.i2p-float,
+.i2p-float-spacer {
+  display: none;
+}
+
+@media (max-width: 719px) {
+  .i2p-main {
+    display: flex;
+    flex-direction: column;
+  }
+  .i2p-right {
+    display: none !important;
+  }
+  .i2p-upload {
+    padding: 10px;
+  }
+  .i2p-drop {
+    gap: 12px;
+    padding: 12px 14px;
+    border-width: 1.5px;
+    strong {
+      font-size: 15px;
+    }
+    p {
+      margin-top: 2px;
+      font-size: 12px;
+    }
+    &.compact {
+      padding: 10px 14px;
+    }
+  }
+  .i2p-pick {
+    min-height: 40px;
+    padding: 0 18px;
+  }
+  // The order card dissolves into the page on phones.
+  .i2p-order {
+    padding: 4px 2px 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+  }
+  .i2p-order-head {
+    margin-bottom: 10px;
+    h3 {
+      font-size: 16px;
+    }
+  }
+  .i2p-order.sorting .pg-tile:not(.pg-selected):not(.pg-placeholder) {
+    opacity: 0.55;
+  }
+  .i2p-done {
+    min-height: 34px;
+    padding: 0 16px;
+  }
+  .i2p-float {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: calc(64px + env(safe-area-inset-bottom));
+    z-index: 30;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--card);
+    box-shadow: 0 6px 24px rgba(15, 23, 42, 0.16);
+    > button {
+      min-height: 44px;
+    }
+    &.dark {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 6px;
+      padding: 6px 6px 8px;
+      border-color: transparent;
+      background: #17181c;
+      color: #f7f8f8;
+    }
+  }
+  .i2p-summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1 1 auto;
+    min-width: 0;
+    background: transparent;
+    font-size: 13px;
+    text-align: left;
+    svg {
+      flex: none;
+      width: 16px;
+      height: 16px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+    }
+    span:not(.i2p-chev) {
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+  }
+  .i2p-chev {
+    margin-left: auto;
+    color: var(--subtle);
+  }
+  .i2p-gen-mob {
+    flex: 0 0 44%;
+    min-width: 0;
+    font-size: 15px;
+  }
+  .i2p-float-progress {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 12px;
+    color: var(--muted);
+    span {
+      display: block;
+      margin-top: 6px;
+    }
+  }
+  .i2p-float-hint {
+    margin: 0;
+    padding: 2px 8px 0;
+    font-size: 12px;
+    color: #b8bec9;
+    text-align: center;
+  }
+  .i2p-actbar {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 2px;
+    button {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      min-width: 0;
+      min-height: 52px;
+      padding: 4px 2px;
+      border: 0;
+      background: transparent;
+      color: #f7f8f8;
+      font-size: 11px;
+      line-height: 1.2;
+      overflow-wrap: anywhere;
+      &.bad {
+        color: #f87171;
+      }
+      &:disabled {
+        opacity: 0.4;
+      }
+    }
+    svg {
+      width: 20px;
+      height: 20px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+  }
+  .i2p-float-spacer {
+    display: block;
+    height: calc(150px + env(safe-area-inset-bottom));
+  }
+  .i2p-sheet .i2p-generate {
+    margin-top: 2px;
+  }
+}
+@media (max-width: 360px) {
+  .i2p-seg.seg .seg-btn {
+    font-size: 12px;
+  }
+}
