@@ -68,6 +68,10 @@ export default defineConfig({
         // files (CMaps, fonts, decoder wasm) are fetched only when a PDF is
         // opened, so they are cached on first use too. The PDF view chunk
         // itself stays precached (small) so the page opens offline.
+        // Images to PDF: pdf-lib (assets/pdf-lib-*.js, ~250KB gzip, named in
+        // build.rollupOptions below) loads only when a PDF is generated; the
+        // assets/pdf-*.js pattern keeps it out of the precache and in the
+        // runtime cache like pdf.js. The view chunk stays precached.
         globIgnores: ['**/mozjpeg_enc*.wasm', '**/squoosh_png*.wasm', '**/imagequant_bg*', '**/avif_enc*.wasm', '**/avif_enc*.js', '**/heic2any*.js', '**/webp_enc*.wasm', '**/webp_enc*.js', '**/pdf.worker*', '**/assets/pdf-*.js', '**/docx.worker*', '**/tesseract*', 'pdfjs/**'],
         // The plugin defaults every navigation to the precached index.html
         // (SPA fallback). This app has no client routing, and the language
@@ -118,6 +122,25 @@ export default defineConfig({
   build: {
     outDir: 'docs',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // pdf-lib (@cantoo/pdf-lib) and the libraries only it uses go into
+        // one named lazy chunk, assets/pdf-lib-<hash>.js, loaded when a PDF
+        // is generated. The name is what keeps it out of the precache
+        // (globIgnores) and in the runtime cache (runtimeCaching) below.
+        // fflate is shared with the zip helper ("download all"): it is
+        // pinned to its own chunk, or Rollup would pull it into pdf-lib's
+        // and every zip download would fetch pdf-lib too.
+        // Rollup's CommonJS helper (piexifjs needs it too) gets the same
+        // treatment, or loading piexif would fetch pdf-lib.
+        manualChunks(id) {
+          if (id.includes('commonjsHelpers')) return 'cjs-helpers'
+          if (/[\\/]node_modules[\\/]fflate[\\/]/.test(id)) return 'fflate'
+          if (/[\\/]node_modules[\\/](@cantoo[\\/]pdf-lib|culori|html-entities|node-html-better-parser|tslib)[\\/]/.test(id)) return 'pdf-lib'
+          return undefined
+        },
+      },
+    },
   },
   // Module workers with dynamic imports (lazy encoders, heic2any, piexifjs)
   // need code-splitting, which the default iife worker format forbids.
