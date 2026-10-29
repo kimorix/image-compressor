@@ -43,6 +43,16 @@
 - 性能：每页读完就交给 docx Worker 逐页分析（图片缓冲转移，不在主线程堆积）；支持 OffscreenCanvas 时裁图在 Worker 里编码；只有有图要裁或扫描页才渲染，渲染上限手机约 4MP、桌面约 10MP
 - 体积：首屏不加载任何 PDF 代码；pdf.js（legacy 构建，兼容老 iOS）、docx、tesseract 都在进入 PDF 页或真正用到时才下载，并且不进 PWA 预缓存，用过一次后缓存
 
+## 图片转 PDF（`#/img-to-pdf`）
+
+- 多张图片（照片、收据、截图、扫描件、iPhone HEIC、GIF 首帧、WebP/AVIF/BMP/SVG）按顺序合成一个 PDF，或每张一个 PDF 打包 zip；全部在浏览器本地完成，不上传
+- 添加：拖入 / 选择 / Ctrl+V 粘贴 / 拖入文件夹（按文件名自然排序）；重复文件允许并提示
+- 页面顺序：PageGrid 缩略图即「纸面预览」（与生成共用 `layout.ts`，所见即所得）；鼠标拖动、触摸长按拖动、键盘移动；悬停旋转 / 删除；按文件名排序、倒序、清空。手机点选页面后底部深色操作条：左转 / 右转 / 移到最前 / 移到最后 / 删除
+- 设置（`localStorage` `ic.img2pdf.settings.v1`）：输出方式、纸张（A4 / Letter / 按图片尺寸，美式地区默认 Letter）、方向（自动按每页横竖决定）、页边距（0 / 18 / 36 / 54pt）、质量（原图 / 均衡 长边 2000 q82 / 小体积 长边 1600 q70，可调质量和长边）、文件名（非法字符替换为 `-`）；实时显示预计大小
+- 图片等比 contain 放进页边距框内居中，不裁切。原图档：JPEG 原样嵌入（去掉 APP1/APP13/COM，即 EXIF、GPS、XMP、IPTC；保留 ICC 和 Adobe APP14），EXIF 方向和手动旋转都用 PDF 变换矩阵实现，不重编码；PNG 原样交给 pdf-lib。其他档在图片 Worker 里解码、缩放、编码：有透明 → PNG（小体积为调色板 PNG），否则 MozJPEG；未缩小且重编码更大时改用（去掉元数据的）原文件
+- 生成：编码在共享图片池（任务类型 `img2pdf`），主线程只用 pdf-lib 按顺序组装，进度可取消；结果卡 / 手机结果面板：预览、下载 / 分享（Web Share，失败回退下载）、清空重来、修改设置再生成。不写历史记录（v1）
+- 体积：pdf-lib 用维护中的 MIT 分支 `@cantoo/pdf-lib`，单独打成 `assets/pdf-lib-*.js`（约 250KB gzip），只在点「生成」时加载，不进 PWA 预缓存（首次使用后运行时缓存）
+
 ## 已知限制
 
 - GIF 动图压缩后只保留首帧（动画 WebP 输出在计划中）
@@ -51,6 +61,7 @@
 - AVIF 编码器约 3.5MB，首次使用需要下载，编码也较慢；选 AVIF 时设置栏会提示
 - 智能画质每张图要多编码、解码几次（通常 2–3 次），比固定质量慢一些
 - 单张超过 50MB 或超过 8000 万像素的图片会被跳过/报错并提示（避免一次性把解码后的像素撑爆内存）
+- 图片转 PDF：pdf-lib 在主线程组装，原图档的大 PNG 由 pdf-lib 在主线程解码再压缩，可能短暂卡顿；超过 8000 万像素的图片会被跳过；HEIC 解码依赖 heic2any（约 1.3MB，首次用到时下载）
 - PDF 转 Word：复杂表格（合并单元格、单元格内多行、无对齐的表格）、公式、文本框、竖排文字和旋转文字不能还原结构（文字仍会保留）；图片是从渲染后的页面裁出来的，压在图片上的文字会一起进图片；OCR 首次使用需要联网
 
 ## 技术栈
@@ -64,6 +75,7 @@ Vue 3 + Vite + TypeScript：
   - `pdf/`：`pdf-loader`（pdf.js 懒加载）、`page-range`（页码范围，含按组解析 `parseRangeGroups`）
   - `composables/`、`i18n/`、`lib/`：usePrefs（语言/主题）、useHashRoute、六语词典、`share.ts`（系统分享 + 兜底）、`zip.ts`（流式 zip / 下载）、`drop.ts`（拖入文件夹）、`format.ts`、`theme.ts`
 - `src/features/image-compressor/`：图片压缩（`CompressorView.vue`、`components/`、`lib/`：compress（压缩管线，`forceFormat` 选项供格式转换用）、compress-job（图片池任务）、compress-pool（压缩器对共享池的封装）、ssim、presets、recompress、masonry、settings-store 等）
+- `src/features/img-to-pdf/`：图片转 PDF（`ImgToPdfView.vue`；`components/`：设置面板、结果卡/面板、纸面缩略图；`lib/`：settings、layout（页面布局 + 方向矩阵）、jpeg（EXIF 方向 / 元数据剥离）、prepare（图片池任务：探测 + 编码）、build-pdf（懒加载 pdf-lib 组装）、estimate、filename；`i18n.ts` 六语言）
 - `src/features/pdf-to-word/`：PDF 转 Word（`PdfToWordView.vue`、`components/`、`lib/`：layout、extract、docx-builder、ocr、convert、settings；`worker/docx.worker.ts`；`styles/pdf.less`；`i18n.ts` 功能内六语言文案）
 - `DESIGN.md`：设计规范。以 VoltAgent/awesome-design-md 的 `design-md/linear.app` 为基准，补充了本项目的浅色模式、扁平统计条、结果表格、移动端外壳和压缩语义色
 - `src/style.less`：样式（Less 嵌套写法；主题 token 仍用 CSS 变量，因为主题在运行时切换）
