@@ -23,7 +23,7 @@
         :touch="true"
         :max-h="stageH"
         :label="t('previewTitle')"
-        :empty-text="t('stProbing')"
+        :empty-text="item.status === 'error' ? (item.error ?? '') : t('stProbing')"
         @wm="(p) => emit('wm', p)"
         @focus="(f) => emit('focus', f)"
         @swipe="(d) => (d > 0 ? emit('next') : emit('prev'))"
@@ -41,16 +41,16 @@
         </button>
       </div>
       <dl class="rw-ps-info">
-        <div><dt>{{ t('infoOrig') }}</dt><dd>{{ item.w }}×{{ item.h }} · {{ fmtSize(item.file.size) }}</dd></div>
-        <div><dt>{{ t('infoOut') }}</dt><dd>{{ outLine }}</dd></div>
+        <div><dt>{{ t('infoOrig') }}</dt><dd>{{ item.w ? `${item.w}×${item.h} · ` : '' }}{{ fmtSize(item.file.size) }}</dd></div>
+        <div v-if="outLine"><dt>{{ t('infoOut') }}</dt><dd>{{ outLine }}</dd></div>
         <div><dt>{{ t('infoWm') }}</dt><dd>{{ wmLine }}</dd></div>
       </dl>
       <p v-for="n in notes" :key="n" class="rw-note">{{ n }}</p>
-      <p v-if="item.error" class="rw-note rw-warn" role="alert">{{ item.error }}</p>
+      <p v-if="item.error && item.w" class="rw-note rw-warn" role="alert">{{ item.error }}</p>
       <div class="sheet-actions rw-ps-actions">
         <button type="button" class="rw-icon-btn" :title="t('remove')" :aria-label="t('remove')" @click="emit('remove')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg></button>
         <button type="button" @click="emit('adjust')">⚙︎ {{ t('adjust') }}</button>
-        <button type="button" class="primary" :disabled="busy" @click="emit('share')">{{ busy ? t('stProcessing') : t('share') }}</button>
+        <button type="button" class="primary" :disabled="busy || !item.w" @click="emit('share')">{{ busy ? t('stProcessing') : t('share') }}</button>
       </div>
     </div>
   </BottomSheet>

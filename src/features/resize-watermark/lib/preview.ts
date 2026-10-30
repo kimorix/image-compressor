@@ -56,12 +56,38 @@ export interface RenderOptions {
   dpr: number
 }
 
+/**
+ * Backing-store pixel ratio for a cssW × cssH stage: the device ratio
+ * (1–3), lowered so the canvas never exceeds `maxPx` pixels. iOS Safari
+ * refuses canvases above ~16.7 MP and shares a small canvas-memory budget
+ * across the page; a canvas that blows it stays blank without any error.
+ */
+export const STAGE_MAX_PX = 6_000_000
+export function stageDpr(cssW: number, cssH: number, dpr: number, maxPx = STAGE_MAX_PX): number {
+  const d = Math.max(1, Math.min(3, Number.isFinite(dpr) ? dpr : 1))
+  const area = Math.max(1, cssW) * Math.max(1, cssH)
+  return Math.max(0.25, Math.min(d, Math.sqrt(maxPx / area)))
+}
+
+/**
+ * Clamp a source rectangle to the image. Float rounding (crop × preview
+ * ratio) can overshoot the bitmap by a hair; some WebKit builds drop a
+ * drawImage whose source rect leaves the image instead of clipping it.
+ */
+export function clampSrc(x: number, y: number, w: number, h: number, iw: number, ih: number): [number, number, number, number] {
+  const x0 = Math.min(Math.max(0, x), iw)
+  const y0 = Math.min(Math.max(0, y), ih)
+  const x1 = Math.min(Math.max(x0, x + w), iw)
+  const y1 = Math.min(Math.max(y0, y + h), ih)
+  return [x0, y0, Math.max(1e-3, x1 - x0), Math.max(1e-3, y1 - y0)]
+}
+
 /** Checkerboard behind transparent output (the stage CSS shows it). */
 export function renderStage(canvas: HTMLCanvasElement, L: StageLayout, o: RenderOptions): WmLayout {
   const { g } = L
   const W = g.canvas.w
   const H = g.canvas.h
-  const dpr = Math.max(1, Math.min(3, o.dpr))
+  const dpr = stageDpr(L.cssW, L.cssH, o.dpr)
   const pw = Math.max(1, Math.round(L.cssW * dpr))
   const ph = Math.max(1, Math.round(L.cssH * dpr))
   if (canvas.width !== pw) canvas.width = pw
@@ -100,7 +126,8 @@ export function renderStage(canvas: HTMLCanvasElement, L: StageLayout, o: Render
     ctx.fillRect(0, 0, W, H)
     ctx.clearRect(g.draw.x, g.draw.y, g.draw.w, g.draw.h)
   }
-  ctx.drawImage(o.bmp, g.crop.x * kx, g.crop.y * ky, g.crop.w * kx, g.crop.h * ky, g.draw.x, g.draw.y, g.draw.w, g.draw.h)
+  const [sx, sy, sw, sh] = clampSrc(g.crop.x * kx, g.crop.y * ky, g.crop.w * kx, g.crop.h * ky, o.bmp.width, o.bmp.height)
+  ctx.drawImage(o.bmp, sx, sy, sw, sh, g.draw.x, g.draw.y, g.draw.w, g.draw.h)
   let layout: WmLayout = { items: [], fontPx: 0, bw: 0, bh: 0 }
   const wm = o.settings.wm
   if (wm.enabled) {
@@ -124,7 +151,7 @@ export function renderOriginal(canvas: HTMLCanvasElement, bmp: CanvasImageSource
   const k = Math.min(maxW / srcW, maxH / srcH)
   const cssW = srcW * k
   const cssH = srcH * k
-  const d = Math.max(1, Math.min(3, dpr))
+  const d = stageDpr(cssW, cssH, dpr)
   canvas.width = Math.max(1, Math.round(cssW * d))
   canvas.height = Math.max(1, Math.round(cssH * d))
   canvas.style.width = `${cssW}px`
