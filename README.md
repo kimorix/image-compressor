@@ -60,6 +60,15 @@
 - 手机：文件列表（拖 ⋮⋮ 排序、⋯ 菜单），「逐页编辑」全屏 3 列网格（长按拖动、点选多选、底部选择条），设置在底部面板；结果面板逐个分享 / 打包 ZIP / 系统分享全部
 - 加密：只有权限密码的文件（RC4、AES-128/256，含对象流）直接解密处理，输出不带原权限限制；需要打开密码的文件第一版不支持，显示说明卡片
 - 实现：写入用 [@cantoo/pdf-lib](https://www.npmjs.com/package/@cantoo/pdf-lib)（pdf-lib 维护分支，原生解密），只在 `merge.worker.ts` 里加载（不进页面 chunk、不进 PWA 预缓存，首次合并时下载并缓存）；每个源文件只加载、只 copyPages 一次；旋转 = 原 /Rotate + 编辑；缩略图用 pdf.js 按需渲染（视口内优先、最多 2 个并发），LRU 约 300 张，淘汰时回收 blob URL；生成在 Worker 里，逐页进度、可取消
+## 图片转 PDF（`#/img-to-pdf`）
+
+- 多张图片（照片、收据、截图、扫描件、iPhone HEIC、GIF 首帧、WebP/AVIF/BMP/SVG）按顺序合成一个 PDF，或每张一个 PDF 打包 zip；全部在浏览器本地完成，不上传
+- 添加：拖入 / 选择 / Ctrl+V 粘贴 / 拖入文件夹（按文件名自然排序）；重复文件允许并提示
+- 页面顺序：PageGrid 缩略图即「纸面预览」（与生成共用 `layout.ts`，所见即所得）；鼠标拖动、触摸长按拖动、键盘移动；悬停旋转 / 删除；按文件名排序、倒序、清空。手机点选页面后底部深色操作条：左转 / 右转 / 移到最前 / 移到最后 / 删除
+- 设置（`localStorage` `ic.img2pdf.settings.v1`）：输出方式、纸张（A4 / Letter / 按图片尺寸，美式地区默认 Letter）、方向（自动按每页横竖决定）、页边距（0 / 18 / 36 / 54pt）、质量（原图 / 均衡 长边 2000 q82 / 小体积 长边 1600 q70，可调质量和长边）、文件名（非法字符替换为 `-`）；实时显示预计大小
+- 图片等比 contain 放进页边距框内居中，不裁切。原图档：JPEG 原样嵌入（去掉 APP1/APP13/COM，即 EXIF、GPS、XMP、IPTC；保留 ICC 和 Adobe APP14），EXIF 方向和手动旋转都用 PDF 变换矩阵实现，不重编码；PNG 原样交给 pdf-lib。其他档在图片 Worker 里解码、缩放、编码：有透明 → PNG（小体积为调色板 PNG），否则 MozJPEG；未缩小且重编码更大时改用（去掉元数据的）原文件
+- 生成：编码在共享图片池（任务类型 `img2pdf`），主线程只用 pdf-lib 按顺序组装，进度可取消；结果卡 / 手机结果面板：预览、下载 / 分享（Web Share，失败回退下载）、清空重来、修改设置再生成。不写历史记录（v1）
+- 体积：pdf-lib 用维护中的 MIT 分支 `@cantoo/pdf-lib`，单独打成 `assets/pdf-lib-*.js`（约 250KB gzip），只在点「生成」时加载，不进 PWA 预缓存（首次使用后运行时缓存）
 
 ## 已知限制
 
@@ -71,6 +80,7 @@
 - 单张超过 50MB 或超过 8000 万像素的图片会被跳过/报错并提示（避免一次性把解码后的像素撑爆内存）
 - 尺寸与水印：动图只处理第一帧；水印只用系统字体（不同设备字形可能略有差异，思源字体按需加载留待后续）；预估体积按预览图外推，仅供参考
 - PDF 合并拆分：带打开密码的 PDF 暂不支持；统一页面尺寸时被缩放的页不保留表单和批注；内部跳转链接若目标页被删会失效；XFA 动态表单不支持；输出不加密
+- 图片转 PDF：pdf-lib 在主线程组装，原图档的大 PNG 由 pdf-lib 在主线程解码再压缩，可能短暂卡顿；超过 8000 万像素的图片会被跳过；HEIC 解码依赖 heic2any（约 1.3MB，首次用到时下载）
 - PDF 转 Word：复杂表格（合并单元格、单元格内多行、无对齐的表格）、公式、文本框、竖排文字和旋转文字不能还原结构（文字仍会保留）；图片是从渲染后的页面裁出来的，压在图片上的文字会一起进图片；OCR 首次使用需要联网
 
 ## 技术栈
@@ -87,6 +97,7 @@ Vue 3 + Vite + TypeScript：
 - `src/features/format-convert/`：格式转换（`ConvertView.vue`、`components/`（ConvertSettings 桌面卡片与手机设置面板共用、ConvertDetailSheet 手机详情）、`lib/`：convert（纯逻辑：按来源推荐格式、命名去重、透明填充、设置签名）、convert-job（图片池任务：原尺寸解码 → JPEG/PNG/WebP/AVIF 编码，P3 回写，EXIF 跨格式保留且始终移除 GPS）、settings-store（`ic-convert-settings`，未手动选格式前为「自动」）；`styles/convert.less`；`i18n.ts` 功能内六语言文案）。与压缩器共用图片池、编码器和 `shared/image/exif-any.ts`，不改压缩器代码
 - `src/features/resize-watermark/`：尺寸与水印（`ResizeWatermarkView.vue`、`components/`：PreviewStage（canvas 预览与拖动）、设置分区、九宫格、色板、预设、手机预览面板；`lib/`：geometry（纯函数几何）、downscale（逐级减半）、watermark（布局与绘制）、process（单张管线）、rw-job（图片池任务）、preview、presets、settings、fonts、exif-basics、logo-store；`i18n.ts`；`styles/rw.less`）
 - `src/features/pdf-merge/`：PDF 合并拆分（`PdfMergeView.vue`、`components/`：FileChips、SelectionBar、MergeSettingsPanel、SplitSettingsPanel、ResultList、MobileFileList；`lib/`：ops（纯函数：移动 / 旋转 / 软删除 / 复制 / 撤销）、split-plan、names、outline（书签读写）、write（@cantoo/pdf-lib 写入）、client（Worker 进度 / 取消）、thumbs（缩略图 + LRU）；`worker/merge.worker.ts`；`i18n.ts` 六语言）
+- `src/features/img-to-pdf/`：图片转 PDF（`ImgToPdfView.vue`；`components/`：设置面板、结果卡/面板、纸面缩略图；`lib/`：settings、layout（页面布局 + 方向矩阵）、jpeg（EXIF 方向 / 元数据剥离）、prepare（图片池任务：探测 + 编码）、build-pdf（懒加载 pdf-lib 组装）、estimate、filename；`i18n.ts` 六语言）
 - `src/features/pdf-to-word/`：PDF 转 Word（`PdfToWordView.vue`、`components/`、`lib/`：layout、extract、docx-builder、ocr、convert、settings；`worker/docx.worker.ts`；`styles/pdf.less`；`i18n.ts` 功能内六语言文案）
 - `DESIGN.md`：设计规范。以 VoltAgent/awesome-design-md 的 `design-md/linear.app` 为基准，补充了本项目的浅色模式、扁平统计条、结果表格、移动端外壳和压缩语义色
 - `src/style.less`：样式（Less 嵌套写法；主题 token 仍用 CSS 变量，因为主题在运行时切换）

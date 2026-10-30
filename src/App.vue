@@ -2,7 +2,7 @@
   <!-- Thin shell: the hash route picks the feature view. Views stay alive
   once opened (KeepAlive), so switching never drops a running batch or its
   results. Everything but the compressor is its own lazy chunk; the
-  compressor bundle never loads pdf.js, docx or tesseract. Tools whose
+  compressor bundle never loads pdf.js, pdf-lib, docx or tesseract. Tools whose
   feature PR has not landed yet render the shared placeholder. -->
   <KeepAlive>
     <component :is="view" :key="route.feature" v-bind="viewProps" />
@@ -18,6 +18,7 @@ const PdfToWordView = defineAsyncComponent(() => import('./features/pdf-to-word/
 const ConvertView = defineAsyncComponent(() => import('./features/format-convert/ConvertView.vue'))
 const ResizeWatermarkView = defineAsyncComponent(() => import('./features/resize-watermark/ResizeWatermarkView.vue'))
 const PdfMergeView = defineAsyncComponent(() => import('./features/pdf-merge/PdfMergeView.vue'))
+const ImgToPdfView = defineAsyncComponent(() => import('./features/img-to-pdf/ImgToPdfView.vue'))
 const ToolPlaceholder = defineAsyncComponent(() => import('./shared/components/ToolPlaceholder.vue'))
 
 const VIEWS: Partial<Record<Feature, Component>> = {
@@ -26,6 +27,7 @@ const VIEWS: Partial<Record<Feature, Component>> = {
   pdf: PdfToWordView,
   resize: ResizeWatermarkView,
   'pdf-merge': PdfMergeView,
+  img2pdf: ImgToPdfView,
 }
 
 const { route } = useHashRoute()
