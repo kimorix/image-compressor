@@ -213,8 +213,11 @@ function onMove(e: PointerEvent) {
     cursor.value = 'move'
   } else if (mode === 'pan' && startL) {
     const a = avg()
-    // CSS px → source px: the crop window moves against the drag.
-    const k = startL.ds * startL.g.scale
+    // CSS px → source px. Output-only stage: the picture follows the
+    // finger, so the crop window moves against the drag. Context stage
+    // (whole source shown, crop window outlined): the window itself
+    // follows the pointer.
+    const k = (startL.context ? -1 : 1) * startL.ds * startL.g.scale
     emit('focus', panFocus(startL.g, props.srcW, props.srcH, startFocus, (a.x - start.x) / k, (a.y - start.y) / k))
     cursor.value = 'grabbing'
   }
