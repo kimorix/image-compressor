@@ -43,6 +43,14 @@
 - 性能：每页读完就交给 docx Worker 逐页分析（图片缓冲转移，不在主线程堆积）；支持 OffscreenCanvas 时裁图在 Worker 里编码；只有有图要裁或扫描页才渲染，渲染上限手机约 4MP、桌面约 10MP
 - 体积：首屏不加载任何 PDF 代码；pdf.js（legacy 构建，兼容老 iOS）、docx、tesseract 都在进入 PDF 页或真正用到时才下载，并且不进 PWA 预缓存，用过一次后缓存
 
+## 尺寸与水印（`#/resize`）
+
+- 批量改尺寸：长边（默认 2048）/ 宽×高（适应、留边、裁剪；可锁定比例）/ 百分比 / 社媒预设（小红书 3:4、Instagram 方图 / 竖图、抖音 9:16、公众号封面、朋友圈、淘宝主图、X、YouTube、LinkedIn、1 寸 / 2 寸证件照）；默认不放大小图；大幅缩小时逐级减半，避免锯齿和摩尔纹
+- 水印：文字（`{name}` 文件名、`{date}` 拍摄日期变量；系统字体：无衬线 / 衬线 / 等宽 / 楷体；粗体、5 色 + 自定义、描边阴影）或图片 Logo（PNG / SVG / WebP，保留透明，存在 IndexedDB 下次自动用）；九宫格位置 / 自由拖动 / 错位平铺；大小按输出短边的百分比，换任何尺寸都在同一相对位置；透明度、旋转、边距
+- 实时预览和导出共用同一套几何与水印计算（所见即所得）：桌面直接在预览里拖水印、裁剪时拖画面取景（逐张记住）；手机全屏预览单指拖水印、双指取景、左右滑切换
+- 输出：跟随原图（HEIC→JPG、GIF→PNG）/ JPG / PNG / WebP / AVIF，质量，文件名后缀（`{w}`、`{h}`）；JPG→JPG 可保留 EXIF（去掉 GPS、方向写为正常、尺寸更新）；Display P3 照片保留色彩配置（AVIF 除外）
+- EXIF 方向自动校正；GIF 动图只处理第一帧并提示；透明图转 JPG 用填充色铺底并提示；设置变更后已完成的图标记“设置已变更”，再点处理只重跑这些
+- 解码、缩放、水印、编码都在共享图片 Worker 池里完成（任务类型 `resize`），复用压缩器的 WASM 编码器；页面懒加载，首屏 JS 只多一行路由
 ## PDF 合并拆分（`#/pdf-merge`）
 
 - 完全在浏览器本地处理，文件不上传；桌面侧栏「PDF 工具 → 合并拆分」，手机底栏 PDF → 顶部分段「合并拆分」，下面再分「合并 / 拆分」
@@ -61,6 +69,7 @@
 - AVIF 编码器约 3.5MB，首次使用需要下载，编码也较慢；选 AVIF 时设置栏会提示
 - 智能画质每张图要多编码、解码几次（通常 2–3 次），比固定质量慢一些
 - 单张超过 50MB 或超过 8000 万像素的图片会被跳过/报错并提示（避免一次性把解码后的像素撑爆内存）
+- 尺寸与水印：动图只处理第一帧；水印只用系统字体（不同设备字形可能略有差异，思源字体按需加载留待后续）；预估体积按预览图外推，仅供参考
 - PDF 合并拆分：带打开密码的 PDF 暂不支持；统一页面尺寸时被缩放的页不保留表单和批注；内部跳转链接若目标页被删会失效；XFA 动态表单不支持；输出不加密
 - PDF 转 Word：复杂表格（合并单元格、单元格内多行、无对齐的表格）、公式、文本框、竖排文字和旋转文字不能还原结构（文字仍会保留）；图片是从渲染后的页面裁出来的，压在图片上的文字会一起进图片；OCR 首次使用需要联网
 
@@ -75,6 +84,8 @@ Vue 3 + Vite + TypeScript：
   - `pdf/`：`pdf-loader`（pdf.js 懒加载）、`page-range`（页码范围，含按组解析 `parseRangeGroups`）
   - `composables/`、`i18n/`、`lib/`：usePrefs（语言/主题）、useHashRoute、六语词典、`share.ts`（系统分享 + 兜底）、`zip.ts`（流式 zip / 下载）、`drop.ts`（拖入文件夹）、`format.ts`、`theme.ts`
 - `src/features/image-compressor/`：图片压缩（`CompressorView.vue`、`components/`、`lib/`：compress（压缩管线，`forceFormat` 选项供格式转换用）、compress-job（图片池任务）、compress-pool（压缩器对共享池的封装）、ssim、presets、recompress、masonry、settings-store 等）
+- `src/features/format-convert/`：格式转换（`ConvertView.vue`、`components/`（ConvertSettings 桌面卡片与手机设置面板共用、ConvertDetailSheet 手机详情）、`lib/`：convert（纯逻辑：按来源推荐格式、命名去重、透明填充、设置签名）、convert-job（图片池任务：原尺寸解码 → JPEG/PNG/WebP/AVIF 编码，P3 回写，EXIF 跨格式保留且始终移除 GPS）、settings-store（`ic-convert-settings`，未手动选格式前为「自动」）；`styles/convert.less`；`i18n.ts` 功能内六语言文案）。与压缩器共用图片池、编码器和 `shared/image/exif-any.ts`，不改压缩器代码
+- `src/features/resize-watermark/`：尺寸与水印（`ResizeWatermarkView.vue`、`components/`：PreviewStage（canvas 预览与拖动）、设置分区、九宫格、色板、预设、手机预览面板；`lib/`：geometry（纯函数几何）、downscale（逐级减半）、watermark（布局与绘制）、process（单张管线）、rw-job（图片池任务）、preview、presets、settings、fonts、exif-basics、logo-store；`i18n.ts`；`styles/rw.less`）
 - `src/features/pdf-merge/`：PDF 合并拆分（`PdfMergeView.vue`、`components/`：FileChips、SelectionBar、MergeSettingsPanel、SplitSettingsPanel、ResultList、MobileFileList；`lib/`：ops（纯函数：移动 / 旋转 / 软删除 / 复制 / 撤销）、split-plan、names、outline（书签读写）、write（@cantoo/pdf-lib 写入）、client（Worker 进度 / 取消）、thumbs（缩略图 + LRU）；`worker/merge.worker.ts`；`i18n.ts` 六语言）
 - `src/features/pdf-to-word/`：PDF 转 Word（`PdfToWordView.vue`、`components/`、`lib/`：layout、extract、docx-builder、ocr、convert、settings；`worker/docx.worker.ts`；`styles/pdf.less`；`i18n.ts` 功能内六语言文案）
 - `DESIGN.md`：设计规范。以 VoltAgent/awesome-design-md 的 `design-md/linear.app` 为基准，补充了本项目的浅色模式、扁平统计条、结果表格、移动端外壳和压缩语义色

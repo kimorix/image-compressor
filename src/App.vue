@@ -15,12 +15,16 @@ import CompressorView from './features/image-compressor/CompressorView.vue'
 import { useHashRoute, type Feature } from './shared/composables/useHashRoute'
 
 const PdfToWordView = defineAsyncComponent(() => import('./features/pdf-to-word/PdfToWordView.vue'))
+const ConvertView = defineAsyncComponent(() => import('./features/format-convert/ConvertView.vue'))
+const ResizeWatermarkView = defineAsyncComponent(() => import('./features/resize-watermark/ResizeWatermarkView.vue'))
 const PdfMergeView = defineAsyncComponent(() => import('./features/pdf-merge/PdfMergeView.vue'))
 const ToolPlaceholder = defineAsyncComponent(() => import('./shared/components/ToolPlaceholder.vue'))
 
 const VIEWS: Partial<Record<Feature, Component>> = {
   compress: CompressorView,
+  convert: ConvertView,
   pdf: PdfToWordView,
+  resize: ResizeWatermarkView,
   'pdf-merge': PdfMergeView,
 }
 
