@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { gifFrameCount } from '../../src/features/image-compressor/lib/gif'
+import { gifFrameCount } from '../../src/shared/image/gif'
 
 function gif(frames: number): Uint8Array {
   // Header + logical screen descriptor, no global color table.

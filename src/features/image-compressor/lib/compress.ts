@@ -1,11 +1,12 @@
 import { baseName, extOf } from '../../../shared/lib/format'
-import { exceedsPixelLimit, MAX_PIXELS_MB } from './limits'
-import { restoreExif } from './exif'
-import { gifFrameCount } from './gif'
-import { canEmbedPng, embedIcc, extractIcc, isDisplayP3 } from './icc'
+import { exceedsPixelLimit, MAX_PIXELS_MB } from '../../../shared/image/limits'
+import { restoreExif } from '../../../shared/image/exif'
+import { gifFrameCount } from '../../../shared/image/gif'
+import { canEmbedPng, embedIcc, extractIcc, isDisplayP3 } from '../../../shared/image/icc'
+import { canvasToBlob, decodeSource, get2d, makeCanvas, type Ctx2D } from '../../../shared/image/codec'
 import { searchQuality, ssim, toLuma, type Luma } from './ssim'
 import type { CompressItem, Settings } from '../types'
-import { decodeHeicToPngBlob } from './heic'
+import { decodeHeicToPngBlob } from '../../../shared/image/heic'
 import {
   encodeAvif,
   encodeMozjpeg,
@@ -14,9 +15,38 @@ import {
   encodeWebp,
   isHeic,
   type RgbaImage,
-} from './wasm-encoders'
+} from '../../../shared/image/wasm-encoders'
 
 type T = (key: string, ...args: (string | number)[]) => string
+
+export interface CompressOptions {
+  // Output exactly the requested format (format conversion): no "keep the
+  // original when the result is bigger" shortcut, no silent WebP -> JPEG
+  // switch when canvas cannot encode WebP, no PNG stand-in for an
+  // unsupported type. Default off = the compressor's behaviour.
+  forceFormat?: boolean
+}
+
+const OUT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif']
+
+/**
+ * Initial output type from the settings (smart format re-decides after the
+ * pixel scan; WebP is its placeholder). Pure, unit tested.
+ */
+export function initialOutType(file: { type: string; name: string }, format: string, heic: boolean, opts: CompressOptions = {}): string {
+  let outType = format === 'auto' ? 'image/webp' : format === 'original' ? file.type : format
+  if (heic && format === 'original') outType = 'image/jpeg'
+  if (!OUT_TYPES.includes(outType)) {
+    if (opts.forceFormat) throw new Error('unsupported output type: ' + outType)
+    outType = 'image/png'
+  }
+  return outType
+}
+
+/** Whether the original file is returned instead of a bigger re-encode. */
+export function keepsOriginal(outSize: number, inSize: number, opts: CompressOptions = {}): boolean {
+  return !opts.forceFormat && outSize >= inSize
+}
 
 export interface CompressBlobSuccess {
   done: true
@@ -83,58 +113,6 @@ export interface CompressFailure {
 
 export type CompressResult = CompressSuccess | CompressFailure
 
-function loadImage(blob: Blob, t: T): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    const url = URL.createObjectURL(blob)
-    img.onload = () => { URL.revokeObjectURL(url); resolve(img) }
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(t('decodeError'))) }
-    img.src = url
-  })
-}
-
-// Decode to something a 2d context can draw. Workers have no <img>, so they
-// use createImageBitmap (which also decodes off the caller's thread); the
-// main thread keeps <img> for its wider format coverage (SVG on older
-// Safari). Either way the caller gets a drawable source plus its size.
-async function decodeSource(blob: Blob, t: T, keepValues = false): Promise<{ src: CanvasImageSource; w: number; h: number }> {
-  if (typeof document === 'undefined') {
-    try {
-      // P3 path: 'none' keeps the source values intact for the display-p3
-      // canvas; the default would pre-convert them to sRGB, which the P3
-      // tag would then mislabel.
-      const bmp = await createImageBitmap(blob, keepValues ? { colorSpaceConversion: 'none' } : undefined)
-      return { src: bmp, w: bmp.width, h: bmp.height }
-    } catch {
-      throw new Error(t('decodeError'))
-    }
-  }
-  const img = await loadImage(blob, t)
-  return { src: img, w: img.naturalWidth, h: img.naturalHeight }
-}
-
-type AnyCanvas = HTMLCanvasElement | OffscreenCanvas
-
-type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
-
-// getContext on the AnyCanvas union types as the generic RenderingContext;
-// every call here asks for '2d', so narrow it once.
-function get2d(c: AnyCanvas, opts: CanvasRenderingContext2DSettings): Ctx2D {
-  return c.getContext('2d', opts) as Ctx2D
-}
-
-function makeCanvas(): AnyCanvas {
-  if (typeof document === 'undefined') return new OffscreenCanvas(1, 1)
-  return document.createElement('canvas')
-}
-
-async function canvasToBlob(c: AnyCanvas, type: string, q?: number): Promise<Blob | null> {
-  if (typeof (c as OffscreenCanvas).convertToBlob === 'function') {
-    return (c as OffscreenCanvas).convertToBlob({ type, quality: q })
-  }
-  return new Promise((res) => (c as HTMLCanvasElement).toBlob(res, type, type === 'image/png' ? undefined : q))
-}
-
 // Smart quality bounds and threshold. Calibrated on 1920px photos with
 // WebP: mean SSIM 0.985 on the 1024px luma lands smooth photos around
 // q60-75 and detailed ones higher, while q80 scores 0.988-0.993. q50 is the
@@ -177,7 +155,7 @@ async function decodeLuma(blob: Blob, w: number, h: number, p3 = false): Promise
 // canvas path keeps the old WebP -> JPEG probe). AVIF has no reliable canvas
 // fallback, so an AVIF failure surfaces as an error instead of silently
 // changing the output format.
-export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: boolean): Promise<CompressBlobResult> {
+export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: boolean, opts: CompressOptions = {}): Promise<CompressBlobResult> {
   try {
     // iPhone photos arrive as HEIC, which Chrome cannot decode: decode them
     // to a PNG first, then run the normal pipeline on the decoded pixels.
@@ -197,9 +175,12 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
     const srcIcc = await extractIcc(source)
     const autoFormat = s.format === 'auto'
     // Smart format is decided after the pixel scan; WebP is a placeholder.
-    let outType = autoFormat ? 'image/webp' : s.format === 'original' ? file.type : s.format
-    if (isHeic(file) && s.format === 'original') outType = 'image/jpeg'
-    if (!['image/jpeg', 'image/png', 'image/webp', 'image/avif'].includes(outType)) outType = 'image/png'
+    let outType: string
+    try {
+      outType = initialOutType(file, s.format, isHeic(file), opts)
+    } catch {
+      throw new Error(t('formatError'))
+    }
     // Smart format cannot use the placeholder for its P3 decision: it only
     // ever emits taggable types (WebP, or PNG when it can carry the
     // profile), so assume taggable here and re-decide after the scan.
@@ -376,7 +357,7 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
         // test double on HTMLCanvasElement would be invisible there. When
         // canvas cannot do WebP at all, go straight to JPEG with the note
         // instead of trusting the fallback's type.
-        if (outType === 'image/webp' && !canvasWebp) {
+        if (outType === 'image/webp' && !canvasWebp && !opts.forceFormat) {
           outType = 'image/jpeg'
           typeNote = t('typeNoteWebp')
           const jpeg = await canvasEncode('image/jpeg', q)
@@ -499,7 +480,7 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
     // In that case return the original file itself and mark it already optimal.
     // The caller (main thread) makes a fresh object URL so revoking it
     // cannot touch the item's own preview URL.
-    if (blob!.size >= file.size) {
+    if (keepsOriginal(blob!.size, file.size, opts)) {
       return {
         done: true,
         error: null,
@@ -549,8 +530,8 @@ export async function compressToBlob(file: File, s: Settings, t: T, canvasWebp: 
 
 // Main-thread entry point: the blob core plus object-URL ownership. Workers
 // use compressToBlob directly and hand the blob back for the same treatment.
-export async function compressItem(item: CompressItem, s: Settings, t: T, canvasWebp: boolean): Promise<CompressResult> {
-  const res = await compressToBlob(item.file, s, t, canvasWebp)
+export async function compressItem(item: CompressItem, s: Settings, t: T, canvasWebp: boolean, opts: CompressOptions = {}): Promise<CompressResult> {
+  const res = await compressToBlob(item.file, s, t, canvasWebp, opts)
   if (!res.done) return res
   return {
     done: true,

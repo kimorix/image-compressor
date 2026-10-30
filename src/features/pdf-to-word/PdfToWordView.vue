@@ -1,15 +1,16 @@
 <template>
   <AppHeader :sub="p('sub')" :inert="sheetOpen ? true : undefined" @lang="setLang">
-    <template #title><span>{{ p('title') }}</span></template>
+    <template #title><span class="title-desk">{{ p('title') }}</span><span class="title-hub">{{ t('hubTitle') }}</span></template>
   </AppHeader>
   <div class="layout pdf-layout" :inert="sheetOpen ? true : undefined">
-    <SideNav :t="t" active="pdf" @compress="goCompress" @pdf="scrollTop" @history="goHistory">
+    <SideNav :t="t" active="pdf" @nav="onNav">
       <div class="side-card">
         <strong>{{ p('sideTitle') }}</strong>
         <p>{{ p('sideDesc') }}</p>
       </div>
     </SideNav>
     <main class="pdf-main">
+      <PdfHubSwitch active="pdf" :t="t" />
       <div class="card pdf-upload" :class="{ compact: items.length > 0 }">
         <div
           id="pdfDrop"
@@ -128,7 +129,7 @@
     @settings="toggleSettings"
     @more="moreOpen = !moreOpen"
   />
-  <MoreMenu :t="t" :open="moreOpen" :menu-inert="sheetOpen" @close="moreOpen = false" />
+  <MoreMenu :t="t" :open="moreOpen" :menu-inert="sheetOpen" @close="moreOpen = false" @nav="onNav" />
   <div v-if="pageDragging" class="page-drop-hint" aria-hidden="true">{{ p('dropAnywhere') }}</div>
   <BottomSheet
     v-if="settingsOpen && isMobile"
@@ -164,9 +165,10 @@ import AppHeader from '../../shared/components/AppHeader.vue'
 import SideNav from '../../shared/components/SideNav.vue'
 import TabBar from '../../shared/components/TabBar.vue'
 import MoreMenu from '../../shared/components/MoreMenu.vue'
+import PdfHubSwitch from '../../shared/components/PdfHubSwitch.vue'
 import BottomSheet from '../../shared/components/BottomSheet.vue'
 import { usePrefs } from '../../shared/composables/usePrefs'
-import { useHashRoute } from '../../shared/composables/useHashRoute'
+import { useHashRoute, type NavKey } from '../../shared/composables/useHashRoute'
 import { fmtSize } from '../../shared/lib/format'
 import { filesFromDrop } from '../../shared/lib/drop'
 import { shareFilesOr } from '../../shared/lib/share'
@@ -177,7 +179,7 @@ import PdfDetailSheet from './components/PdfDetailSheet.vue'
 import { pdfT } from './i18n'
 import { DEFAULT_PDF_SETTINGS, type PdfItem, type PdfSettings } from './types'
 import { defaultOcrLang, loadSettings, saveSettings, isPdfFile, fileKey, pdfConcurrency } from './lib/settings'
-import type { PdfDoc } from './lib/pdf-loader'
+import type { PdfDoc } from '../../shared/pdf/pdf-loader'
 import './styles/pdf.less'
 
 const { lang, t, setLang: setPrefLang } = usePrefs()
@@ -318,7 +320,7 @@ function addFiles(files: File[]) {
 }
 
 async function probe(item: PdfItem, password = '') {
-  const { openPdf, PdfPasswordError } = await import('./lib/pdf-loader')
+  const { openPdf, PdfPasswordError } = await import('../../shared/pdf/pdf-loader')
   const { probeDoc } = await import('./lib/extract')
   try {
     const doc = await openPdf(await item.file.arrayBuffer(), password)
@@ -573,7 +575,7 @@ const previewDocs = new Map<string, Promise<PdfDoc>>()
 function previewDoc(item: PdfItem): Promise<PdfDoc> {
   let d = previewDocs.get(item.id)
   if (!d) {
-    d = import('./lib/pdf-loader').then(async ({ openPdf }) => openPdf(await item.file.arrayBuffer(), item.password))
+    d = import('../../shared/pdf/pdf-loader').then(async ({ openPdf }) => openPdf(await item.file.arrayBuffer(), item.password))
     previewDocs.set(item.id, d)
     d.catch(() => { if (previewDocs.get(item.id) === d) previewDocs.delete(item.id) })
   }
@@ -613,6 +615,15 @@ function goCompress() {
 }
 function goHistory() {
   navigate('compress', 'history')
+}
+// Side nav / More menu / hub entries other than this page.
+function onNav(key: NavKey) {
+  if (key === 'pdf') { scrollTop(); return }
+  moreOpen.value = false
+  settingsOpen.value = false
+  detailId.value = null
+  if (key === 'history') goHistory()
+  else navigate(key)
 }
 function scrollTop() {
   window.scrollTo({ top: 0, behavior: 'smooth' })

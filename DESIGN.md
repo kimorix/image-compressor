@@ -1366,9 +1366,11 @@ switches at runtime.
 | Lightbox compare + zoom | `src/components/Lightbox.vue` |
 | Progress | `src/components/ProgressBar.vue` |
 | Preview card (rail, ≥720px) | `src/App.vue` |
-| Compression behavior | `src/lib/compress.ts`, `compress-pool.ts` |
+| Compression behavior | `src/features/image-compressor/lib/compress.ts`, `compress-pool.ts` (wraps `src/shared/image/image-pool.ts`) |
 | Recompress skip logic | `src/lib/recompress.ts` |
-| Pixel safety limit | `src/lib/limits.ts` |
+| Pixel safety limit | `src/shared/image/limits.ts` |
+| Tool navigation (side nav groups, phone PDF hub, More menu) | `src/shared/components/nav.ts`, `SideNav.vue`, `PdfHubSwitch.vue`, `MoreMenu.vue` |
+| Sortable page thumbnails (optional group headers via `groupKey`) | `src/shared/components/PageGrid.vue`, `page-grid.ts` |
 | Tokens / layout / responsive | `src/style.less` |
 
 ### Build and verification
