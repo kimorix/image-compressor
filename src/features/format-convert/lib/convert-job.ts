@@ -2,7 +2,8 @@
 // Its own small pipeline built from the shared primitives (the compressor
 // is untouched): decode once at the original size, scan alpha, resolve the
 // output format ('auto' = recommended by source), flatten transparency for
-// JPEG, encode with the wasm encoder (canvas fallback for JPEG/PNG/WebP
+// JPEG, encode with the wasm encoder (PNG: the lossless optimizing writer
+// in shared/image/png-lossless.ts; canvas fallback for JPEG/PNG/WebP
 // only, and only when it really produced the requested type), re-tag a
 // Display P3 source, then carry EXIF across containers with GPS removed.
 //
@@ -15,6 +16,7 @@ import { decodeHeicToPngBlob } from '../../../shared/image/heic'
 import { canEmbedPng, embedIcc, extractIcc, isDisplayP3 } from '../../../shared/image/icc'
 import { jobError, type ImageJob } from '../../../shared/image/jobs'
 import { exceedsPixelLimit } from '../../../shared/image/limits'
+import { encodePngLossless } from '../../../shared/image/png-lossless'
 import { encodeAvif, encodeMozjpeg, encodePng, encodeWebp, type RgbaImage } from '../../../shared/image/wasm-encoders'
 import type { ConvertJobPayload, ConvertJobResult, ExifOutcome, OutFormat } from '../types'
 import { clampQuality, flattenAlpha, hasAlpha, isAnimated, OUT_MIME, qualityFor, recommendFormat } from './convert'
@@ -23,6 +25,20 @@ import { clampQuality, flattenAlpha, hasAlpha, isAnimated, OUT_MIME, qualityFor,
 export type ConvertErrorKey = 'errDecode' | 'errAvifDecode' | 'errHeic' | 'errTooLarge' | 'errEncode' | 'errUnsupported'
 
 const keyT = (key: string) => key
+
+// PNG output is always lossless (the plan hides quality for PNG): the
+// optimizing writer shrinks the colour type exactly (palette / grey / RGB),
+// and the Rust wasm encoder (RGBA, fast deflate) stays as the fallback.
+// libimagequant is never used here: even at quality 100 it moves colours
+// of semi-transparent edges.
+async function encodePngStrictlyLossless(rgba: RgbaImage): Promise<ArrayBuffer> {
+  try {
+    return await encodePngLossless(rgba)
+  } catch (err) {
+    console.warn('[format-convert] optimized PNG failed, wasm fallback:', err)
+    return encodePng(rgba)
+  }
+}
 
 async function encode(fmt: OutFormat, img: ImageData, quality: number | null, canvas: AnyCanvas, ctx: Ctx2D): Promise<Blob> {
   const mime = OUT_MIME[fmt]
@@ -33,7 +49,7 @@ async function encode(fmt: OutFormat, img: ImageData, quality: number | null, ca
     if (fmt === 'jpeg') buf = await encodeMozjpeg(rgba, q)
     else if (fmt === 'webp') buf = await encodeWebp(rgba, q)
     else if (fmt === 'avif') buf = await encodeAvif(rgba, q)
-    else buf = await encodePng(rgba)
+    else buf = await encodePngStrictlyLossless(rgba)
     return new Blob([buf], { type: mime })
   } catch (err) {
     // AVIF has no dependable canvas encoder: fail instead of switching type.
