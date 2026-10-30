@@ -125,7 +125,9 @@ describe('built pdf-lib bundle (docs/)', () => {
   const SIGNATURES: Record<string, string[]> = {
     culori: ['rebeccapurple', 'cubehelix', 'lab65'],
     'html-entities': ['CounterClockwiseContourIntegral', 'ThickSpace'],
-    'node-html-better-parser': ['structuredText', 'figcaption', 'blockquote'],
+    // Not bare HTML tag names (figcaption, blockquote): the app's own
+    // templates use those (the converter's detail sheet has <figcaption>).
+    'node-html-better-parser': ['structuredText', 'rawTagName'],
   }
   const js = readdirSync(ASSETS).filter((f) => /\.m?js$/.test(f))
   const read = (f: string) => readFileSync(join(ASSETS, f), 'utf8')
@@ -139,10 +141,15 @@ describe('built pdf-lib bundle (docs/)', () => {
     expect(hits).toEqual([])
   })
 
-  it('the stub is inside the pdf-lib chunk and nowhere else', () => {
+  it('the stub is inside the pdf-lib bundles and nowhere else', () => {
+    // pdf-lib ships in at most two places: the page-side named chunk
+    // (assets/pdf-lib-*.js, images to PDF) and the merge worker, which
+    // Vite bundles on its own. Each carries the stub; nothing else does.
     const withPdfLib = js.filter((f) => read(f).includes('pdf-lib (https://github.com/Hopding/pdf-lib)'))
     const withStub = js.filter((f) => read(f).includes(SVG_UNSUPPORTED))
-    expect(withPdfLib.length).toBe(1)
+    expect(withPdfLib.length).toBeGreaterThanOrEqual(1)
+    for (const f of withPdfLib) expect(f).toMatch(/^(pdf-lib|merge\.worker)-[\w-]+\.js$/)
+    expect(new Set(withPdfLib.map((f) => f.split('-')[0])).size).toBe(withPdfLib.length)
     expect(withStub).toEqual(withPdfLib)
   })
 })
