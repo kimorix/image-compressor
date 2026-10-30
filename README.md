@@ -29,7 +29,7 @@
 - 压缩历史记录保存在本地（localStorage，最多 200 条）
 - 白天 / 黑夜主题（跟随系统，可手动切换并记住）
 - 界面语言下拉选择：中文、English、日本語、한국어、Français、Deutsch；默认跟随浏览器语言，手动选过后记住选择
-- 移动端：有结果后隐藏顶部上传卡（底部「+ 添加」接管），结果区直接贴在最上面；统计条压成两行；结果改为双列瀑布流，390×844 首屏至少 4 张完整卡片；底部固定「添加 / 清空 / 全部下载」栏 + 首页/设置/更多 Tab（三个按钮在 320px 德语下自动收缩换行，不横向溢出）；更多菜单只保留「图片格式转换」「PDF 转 Word」两个即将上线的本地工具（32px 图标、290px 宽、14px 圆角，点击只弹“即将推出”，支持点遮罩/再点更多/Esc 关闭），不再放主题、GitHub、清空和历史；预览卡不渲染，点卡片打开底部详情面板；分页/关闭/缩放/删除/详情按钮按 44px 触摸目标处理；移动端表单控件统一 16px 防止 iOS 聚焦自动放大，≤360px 设置项改为标签在上、控件在下，避免德语/法语选项文字被截断
+- 移动端：有结果后隐藏顶部上传卡（底部「+ 添加」接管），结果区直接贴在最上面；统计条压成两行；结果改为双列瀑布流，390×844 首屏至少 4 张完整卡片；底部固定「添加 / 清空 / 全部下载」栏 + 首页/设置/更多 Tab（三个按钮在 320px 德语下自动收缩换行，不横向溢出）；更多菜单列出「格式转换」「尺寸与水印」两个图片工具，分隔线下是「历史记录」（手机上进入压缩历史的入口，在历史页时高亮；32px 图标、290px 宽、14px 圆角，支持点遮罩/再点更多/Esc 关闭），不放主题、GitHub 和清空；预览卡不渲染，点卡片打开底部详情面板；分页/关闭/缩放/删除/详情按钮按 44px 触摸目标处理；移动端表单控件统一 16px 防止 iOS 聚焦自动放大，≤360px 设置项改为标签在上、控件在下，避免德语/法语选项文字被截断
 - PWA：可安装、断网可用（应用与压缩 Worker 预缓存；各编码器 WASM 和 HEIC 解码器首次用到时下载并缓存）
 - 隐私：压缩会去掉照片的位置等拍摄信息，图片不会上传；JPEG 可选「保留拍摄信息」
 
@@ -59,7 +59,7 @@ Vue 3 + Vite + TypeScript：
 
 - `src/App.vue`：薄壳，按 hash 路由切换功能视图，KeepAlive 保留各自状态；除压缩外都懒加载。路由：图片工具 `#/`（压缩）、`#/convert`（格式转换）、`#/resize`（尺寸与水印）；PDF 工具 `#/pdf-to-word`、`#/img-to-pdf`、`#/pdf-merge`；`#/history`。还没做好的工具先显示占位页（`ToolPlaceholder.vue`）
 - `src/shared/`：各功能共用的部分
-  - `components/`：AppHeader、SideNav（图片工具 / PDF 工具分组）、TabBar（压缩 / PDF / 设置 / 更多）、MoreMenu、PdfHubSwitch（手机 PDF 工具页的分段切换，记住上次用的 PDF 工具）、SegmentedControl、PageGrid（可拖动排序的缩略图网格，图片转 PDF 和合并拆分共用；纯逻辑在 `page-grid.ts`）、BottomSheet、`nav.ts`（工具清单，一处定义）
+  - `components/`：AppHeader、SideNav（图片工具 / PDF 工具分组）、TabBar（压缩 / PDF / 设置 / 更多）、MoreMenu、PdfHubSwitch（手机 PDF 工具页的分段切换，记住上次用的 PDF 工具）、SegmentedControl、PageGrid（可拖动排序的缩略图网格，图片转 PDF 和合并拆分共用；可选分组标题：传 `groupKey`（+ `groupLabel` 或 `#group-header` 插槽）后连续同组的项另起一行并带标题，不传时 DOM 和行为与原来完全一致；纯逻辑在 `page-grid.ts`）、BottomSheet、`nav.ts`（工具清单，一处定义）
   - `image/`：图片编解码：`wasm-encoders`、`heic`、`gif`、`icc`、`exif`、`limits`、`codec`（解码 / canvas / 编码辅助）、`sniff`（按文件头识别格式）、`image-pool`（全站唯一的图片 Worker 池，按任务类型分派，见 `jobs.ts`）
   - `pdf/`：`pdf-loader`（pdf.js 懒加载）、`page-range`（页码范围，含按组解析 `parseRangeGroups`）
   - `composables/`、`i18n/`、`lib/`：usePrefs（语言/主题）、useHashRoute、六语词典、`share.ts`（系统分享 + 兜底）、`zip.ts`（流式 zip / 下载）、`drop.ts`（拖入文件夹）、`format.ts`、`theme.ts`
