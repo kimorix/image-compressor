@@ -5,7 +5,10 @@
   same for the shared styles. -->
   <header>
     <div>
-      <h1><slot name="title" /></h1>
+      <!-- The privacy badge is shared so every tool's phone header has the
+      same height (no jump when switching tools); on desktop only the
+      compressor shows it. -->
+      <h1><slot name="title" /><span class="badge" :class="{ 'badge-phone': !badge }"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3z" /><path d="M9 12l2 2 4-4" /></svg><span class="badge-text"><span class="badge-main">{{ t('badgeLocal') }}</span><span class="badge-sub">{{ t('badgeSub') }}</span></span></span></h1>
       <p>{{ sub }}</p>
     </div>
     <div class="header-actions">
@@ -23,7 +26,8 @@ import { computed } from 'vue'
 import type { Lang } from '../i18n'
 import { usePrefs } from '../composables/usePrefs'
 
-defineProps<{ sub: string }>()
+// `badge`: show the privacy badge on desktop too (the compressor).
+defineProps<{ sub: string; badge?: boolean }>()
 // Language changes go through the feature (it also updates the document
 // title/description for its own page); the theme is app-wide.
 const emit = defineEmits<{ (e: 'lang', l: Lang): void }>()

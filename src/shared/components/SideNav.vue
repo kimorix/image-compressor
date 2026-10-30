@@ -13,8 +13,8 @@
             v-for="entry in group.items"
             :key="entry.key"
             type="button"
-            :class="{ active: active === entry.key }"
-            :aria-current="active === entry.key ? 'page' : undefined"
+            :class="{ active: current === entry.key }"
+            :aria-current="current === entry.key ? 'page' : undefined"
             @click="emit('nav', entry.key)"
           ><NavIcon :name="entry.key" />{{ t(entry.label) }}</button>
         </div>
@@ -25,10 +25,14 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { NavKey } from '../composables/useHashRoute'
+import { pendingFeature } from '../composables/useViewSwitch'
 import NavIcon from './NavIcon.vue'
 import { NAV_GROUPS } from './nav'
 
-defineProps<{ active: NavKey | ''; t: (key: string, ...args: (string | number)[]) => string }>()
+const props = defineProps<{ active: NavKey | ''; t: (key: string, ...args: (string | number)[]) => string }>()
+// A tool whose chunk is still loading is highlighted right away.
+const current = computed<NavKey | ''>(() => pendingFeature.value ?? props.active)
 const emit = defineEmits<{ (e: 'nav', key: NavKey): void }>()
 </script>
