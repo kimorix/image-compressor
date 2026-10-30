@@ -52,7 +52,7 @@ const zh: Messages = {
   smartQ: (q) => `智能画质 ${q}`, lbKeysHint: '← → 切换图片，空格切换原图/压缩后',
   langAria: '显示语言',
   // Navigation: tool groups, the phone PDF tools hub, tool placeholders
-  navGroupImage: '图片工具', navGroupPdf: 'PDF 工具', navConvert: '格式转换', navResize: '尺寸与水印', navImgToPdf: '图片转 PDF', navPdfMerge: '合并拆分', hubTitle: 'PDF 工具', hubToWord: '转 Word', hubImgToPdf: '图片转 PDF', hubMerge: '合并拆分', moreResizeDesc: '批量改尺寸 · 文字或 Logo 水印',
+  navGroupImage: '图片工具', navGroupPdf: 'PDF 工具', navConvert: '格式转换', navResize: '尺寸与水印', navImgToPdf: '图片转 PDF', navPdfMerge: '合并拆分', hubTitle: 'PDF 工具', hubToWord: '转 Word', hubImgToPdf: '图片转 PDF', hubMerge: '合并拆分', moreResizeDesc: '批量改尺寸 · 文字或 Logo 水印', moreHistoryDesc: '压缩记录与累计节省',
 }
 
 const en: Messages = {
@@ -95,7 +95,7 @@ const en: Messages = {
   smartQ: (q) => `Smart quality ${q}`, lbKeysHint: '← → switch images, Space toggles original/compressed',
   langAria: 'Display language',
   // Navigation: tool groups, the phone PDF tools hub, tool placeholders
-  navGroupImage: 'Image tools', navGroupPdf: 'PDF tools', navConvert: 'Convert format', navResize: 'Resize & watermark', navImgToPdf: 'Images to PDF', navPdfMerge: 'Merge & split', hubTitle: 'PDF tools', hubToWord: 'To Word', hubImgToPdf: 'Images to PDF', hubMerge: 'Merge & split', moreResizeDesc: 'Batch resize · text or logo watermark',
+  navGroupImage: 'Image tools', navGroupPdf: 'PDF tools', navConvert: 'Convert format', navResize: 'Resize & watermark', navImgToPdf: 'Images to PDF', navPdfMerge: 'Merge & split', hubTitle: 'PDF tools', hubToWord: 'To Word', hubImgToPdf: 'Images to PDF', hubMerge: 'Merge & split', moreResizeDesc: 'Batch resize · text or logo watermark', moreHistoryDesc: 'Past compressions & savings',
 }
 
 const ja: Messages = {
@@ -138,7 +138,7 @@ const ja: Messages = {
   smartQ: (q) => `スマート画質 ${q}`, lbKeysHint: '← → で画像切替、スペースで元画像/圧縮後を切替',
   langAria: '表示言語',
   // Navigation: tool groups, the phone PDF tools hub, tool placeholders
-  navGroupImage: '画像ツール', navGroupPdf: 'PDF ツール', navConvert: '形式変換', navResize: 'サイズと透かし', navImgToPdf: '画像を PDF に', navPdfMerge: '結合・分割', hubTitle: 'PDF ツール', hubToWord: 'Word へ', hubImgToPdf: '画像→PDF', hubMerge: '結合・分割', moreResizeDesc: '一括リサイズ · 文字やロゴの透かし',
+  navGroupImage: '画像ツール', navGroupPdf: 'PDF ツール', navConvert: '形式変換', navResize: 'サイズと透かし', navImgToPdf: '画像を PDF に', navPdfMerge: '結合・分割', hubTitle: 'PDF ツール', hubToWord: 'Word へ', hubImgToPdf: '画像→PDF', hubMerge: '結合・分割', moreResizeDesc: '一括リサイズ · 文字やロゴの透かし', moreHistoryDesc: '過去の圧縮と合計節約量',
 }
 
 const ko: Messages = {
@@ -181,7 +181,7 @@ const ko: Messages = {
   smartQ: (q) => `스마트 화질 ${q}`, lbKeysHint: '← → 이미지 전환, 스페이스로 원본/압축본 전환',
   langAria: '표시 언어',
   // Navigation: tool groups, the phone PDF tools hub, tool placeholders
-  navGroupImage: '이미지 도구', navGroupPdf: 'PDF 도구', navConvert: '형식 변환', navResize: '크기 및 워터마크', navImgToPdf: '이미지를 PDF로', navPdfMerge: '병합 및 분할', hubTitle: 'PDF 도구', hubToWord: 'Word로', hubImgToPdf: '이미지→PDF', hubMerge: '병합·분할', moreResizeDesc: '일괄 크기 조정 · 텍스트 또는 로고 워터마크',
+  navGroupImage: '이미지 도구', navGroupPdf: 'PDF 도구', navConvert: '형식 변환', navResize: '크기 및 워터마크', navImgToPdf: '이미지를 PDF로', navPdfMerge: '병합 및 분할', hubTitle: 'PDF 도구', hubToWord: 'Word로', hubImgToPdf: '이미지→PDF', hubMerge: '병합·분할', moreResizeDesc: '일괄 크기 조정 · 텍스트 또는 로고 워터마크', moreHistoryDesc: '지난 압축 기록과 누적 절약량',
 }
 
 const fr: Messages = {
@@ -224,7 +224,7 @@ const fr: Messages = {
   smartQ: (q) => `Qualité intelligente ${q}`, lbKeysHint: '← → changer d’image, Espace bascule original/compressé',
   langAria: "Langue d'affichage",
   // Navigation: tool groups, the phone PDF tools hub, tool placeholders
-  navGroupImage: 'Outils image', navGroupPdf: 'Outils PDF', navConvert: 'Convertir le format', navResize: 'Taille et filigrane', navImgToPdf: 'Images en PDF', navPdfMerge: 'Fusionner et diviser', hubTitle: 'Outils PDF', hubToWord: 'Vers Word', hubImgToPdf: 'Images en PDF', hubMerge: 'Fusion & division', moreResizeDesc: 'Redimensionner par lot · filigrane texte ou logo',
+  navGroupImage: 'Outils image', navGroupPdf: 'Outils PDF', navConvert: 'Convertir le format', navResize: 'Taille et filigrane', navImgToPdf: 'Images en PDF', navPdfMerge: 'Fusionner et diviser', hubTitle: 'Outils PDF', hubToWord: 'Vers Word', hubImgToPdf: 'Images en PDF', hubMerge: 'Fusion & division', moreResizeDesc: 'Redimensionner par lot · filigrane texte ou logo', moreHistoryDesc: 'Vos compressions et gains',
 }
 
 const de: Messages = {
@@ -267,7 +267,7 @@ const de: Messages = {
   smartQ: (q) => `Smart-Qualität ${q}`, lbKeysHint: '← → Bild wechseln, Leertaste wechselt Original/komprimiert',
   langAria: 'Anzeigesprache',
   // Navigation: tool groups, the phone PDF tools hub, tool placeholders
-  navGroupImage: 'Bildwerkzeuge', navGroupPdf: 'PDF-Werkzeuge', navConvert: 'Format umwandeln', navResize: 'Größe & Wasserzeichen', navImgToPdf: 'Bilder zu PDF', navPdfMerge: 'Zusammenfügen & teilen', hubTitle: 'PDF-Werkzeuge', hubToWord: 'Zu Word', hubImgToPdf: 'Bilder zu PDF', hubMerge: 'Verbinden & teilen', moreResizeDesc: 'Stapelweise skalieren · Text- oder Logo-Wasserzeichen',
+  navGroupImage: 'Bildwerkzeuge', navGroupPdf: 'PDF-Werkzeuge', navConvert: 'Format umwandeln', navResize: 'Größe & Wasserzeichen', navImgToPdf: 'Bilder zu PDF', navPdfMerge: 'Zusammenfügen & teilen', hubTitle: 'PDF-Werkzeuge', hubToWord: 'Zu Word', hubImgToPdf: 'Bilder zu PDF', hubMerge: 'Verbinden & teilen', moreResizeDesc: 'Stapelweise skalieren · Text- oder Logo-Wasserzeichen', moreHistoryDesc: 'Komprimierungen & Ersparnis',
 }
 
 export const MESSAGES: Record<Lang, Messages> = { zh, en, ja, ko, fr, de }

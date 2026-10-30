@@ -181,7 +181,7 @@
     @settings="goSettings"
     @more="moreOpen = !moreOpen"
   />
-  <MoreMenu :t="t" :open="moreOpen" :menu-inert="busy || sheetOpen" @close="moreOpen = false" @nav="onNav" />
+  <MoreMenu :t="t" :open="moreOpen" :active="view === 'history' ? 'history' : ''" :menu-inert="busy || sheetOpen" @close="moreOpen = false" @nav="onNav" />
   <!-- Blocking global loading: the scrim captures pointer/touch, the page
   sections above are inert, and the status pill stays visible above it. -->
   <div v-if="busy" class="busy-scrim" aria-hidden="true"></div>

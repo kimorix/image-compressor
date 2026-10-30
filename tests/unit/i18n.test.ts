@@ -32,7 +32,7 @@ describe('i18n dictionaries', () => {
   it('defines the shared navigation copy (tool groups, PDF hub, placeholders) in every language', () => {
     const nav = [
       'navGroupImage', 'navGroupPdf', 'navTool', 'navConvert', 'navResize', 'navPdf', 'navImgToPdf', 'navPdfMerge', 'navHistory',
-      'hubTitle', 'hubToWord', 'hubImgToPdf', 'hubMerge', 'moreImageConvertDesc', 'moreResizeDesc',
+      'hubTitle', 'hubToWord', 'hubImgToPdf', 'hubMerge', 'moreImageConvertDesc', 'moreResizeDesc', 'moreHistoryDesc',
     ]
     for (const messages of Object.values(MESSAGES)) {
       for (const key of nav) {

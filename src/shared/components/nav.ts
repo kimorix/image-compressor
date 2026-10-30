@@ -39,3 +39,9 @@ export const MORE_TOOLS: { key: NavKey; label: string; desc: string }[] = [
   { key: 'convert', label: 'navConvert', desc: 'moreImageConvertDesc' },
   { key: 'resize', label: 'navResize', desc: 'moreResizeDesc' },
 ]
+
+/** Phone More menu, below the tools: the compressor history (the desktop
+side nav lists it under the tool groups). */
+export const MORE_OTHER: { key: NavKey; label: string; desc: string }[] = [
+  { key: 'history', label: 'navHistory', desc: 'moreHistoryDesc' },
+]
