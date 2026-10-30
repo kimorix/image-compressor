@@ -23,10 +23,12 @@ export interface ImageJob<P = unknown, R = unknown> {
   run(payload: P): Promise<JobOutput<R>>
 }
 
-export type JobKind = 'compress' | 'img2pdf'
+export type JobKind = 'compress' | 'convert' | 'resize' | 'img2pdf'
 
 const LOADERS: Record<JobKind, () => Promise<ImageJob>> = {
   compress: () => import('../../features/image-compressor/lib/compress-job').then((m) => m.compressJob as ImageJob),
+  convert: () => import('../../features/format-convert/lib/convert-job').then((m) => m.convertJob as ImageJob),
+  resize: () => import('../../features/resize-watermark/lib/rw-job').then((m) => m.rwJob as ImageJob),
   img2pdf: () => import('../../features/img-to-pdf/lib/prepare').then((m) => m.img2pdfJob as ImageJob),
 }
 
