@@ -1,6 +1,7 @@
 import { defineConfig, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
+import { pdfLibSlimAlias } from './scripts/pdf-lib-slim'
 import { createReadStream, existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, normalize } from 'node:path'
@@ -118,6 +119,8 @@ export default defineConfig({
     }),
   ],
   base: './',
+  // Drop pdf-lib's unused SVG dependencies (see scripts/pdf-lib-slim.ts).
+  resolve: { alias: pdfLibSlimAlias },
   build: {
     outDir: 'docs',
     emptyOutDir: true,
