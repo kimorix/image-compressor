@@ -175,3 +175,104 @@ export function rotatedScale(imgWH: number, frameHW: number, rot: number): numbe
   // Rotated, the box occupies bh × bw (w × h); fit that into 1 × frameHW.
   return Math.min(1 / bh, frameHW / bw)
 }
+
+// ---- optional group headers ----
+//
+// With a `groupKey`, PageGrid splits the items into runs of consecutive
+// items that share a group id. Each run starts on a new row under a header
+// row (spanning all columns); a run whose id is empty (null / undefined /
+// '') starts a new row without a header. Runs are contiguous: an item moved
+// into the middle of another group splits that group into two runs, each
+// with its own header — the parent decides what a move across groups means.
+// Without a `groupKey` none of this is used.
+
+export interface GroupRun {
+  /** The group id ('' = no header). */
+  group: string
+  /** First item index and item count. */
+  start: number
+  count: number
+  /** 0-based grid row of the header, or -1 for a run without one. */
+  headerRow: number
+}
+
+export interface GroupLayout {
+  runs: GroupRun[]
+  /** Per item (display slot): 0-based grid row and column. */
+  slots: { row: number; col: number }[]
+  /** Per grid row: a header row or a row of tiles. */
+  rowKinds: ('header' | 'tiles')[]
+  /** Item indices per grid row (empty for header rows). */
+  rowSlots: number[][]
+}
+
+/** Grid placement for items with these group ids (in display order) at `cols` columns. */
+export function groupLayout(groups: readonly (string | null | undefined)[], cols: number): GroupLayout {
+  const c = Math.max(1, Math.floor(cols) || 1)
+  const runs: GroupRun[] = []
+  const slots: { row: number; col: number }[] = []
+  const rowKinds: ('header' | 'tiles')[] = []
+  const rowSlots: number[][] = []
+  for (let i = 0; i < groups.length; i++) {
+    const g = groups[i] ?? ''
+    const prev = runs[runs.length - 1]
+    if (prev && prev.group === g) {
+      prev.count++
+    } else {
+      runs.push({ group: g, start: i, count: 1, headerRow: g ? rowKinds.length : -1 })
+      if (g) { rowKinds.push('header'); rowSlots.push([]) }
+    }
+    const run = runs[runs.length - 1]
+    const k = i - run.start
+    if (k % c === 0) { rowKinds.push('tiles'); rowSlots.push([]) }
+    const row = rowKinds.length - 1
+    slots.push({ row, col: k % c })
+    rowSlots[row].push(i)
+  }
+  return { runs, slots, rowKinds, rowSlots }
+}
+
+/** Top of each grid row (px, grid-local) for uniform tile rows of `rowH` and header rows of `headerH`. */
+export function groupRowTops(layout: GroupLayout, rowH: number, headerH: number, gap: number): number[] {
+  const tops: number[] = []
+  let y = 0
+  for (const kind of layout.rowKinds) {
+    tops.push(y)
+    y += (kind === 'header' ? headerH : rowH) + gap
+  }
+  return tops
+}
+
+/**
+ * Grouped counterpart of gridIndexAt: the slot under a grid-local point.
+ * A point on a header row targets the first slot of the row below it (the
+ * start of that group); a point past the end of a short row snaps to that
+ * row's last slot; above / below the grid snaps to the first / last row.
+ */
+export function groupedIndexAt(x: number, y: number, layout: GroupLayout, g: GridGeom, headerH: number): number {
+  const n = layout.slots.length
+  if (n <= 0) return -1
+  const tops = groupRowTops(layout, g.rowH, headerH, g.gap)
+  let r = 0
+  for (let i = 0; i < tops.length; i++) if (y + g.gap / 2 >= tops[i]) r = i
+  if (layout.rowKinds[r] === 'header') r = Math.min(r + 1, tops.length - 1)
+  // Every header is followed by its tiles, so this row is never empty.
+  const row = layout.rowSlots[r]
+  if (!row.length) return 0
+  const col = Math.max(0, Math.floor((x + g.gap / 2) / (g.colW + g.gap)))
+  return row[Math.min(col, row.length - 1)]
+}
+
+/** Grouped counterpart of keyTarget: Up/Down move between tile rows (skipping headers), keeping the column where it exists. */
+export function groupedKeyTarget(key: string, i: number, layout: GroupLayout): number | null {
+  const n = layout.slots.length
+  if (key !== 'ArrowUp' && key !== 'ArrowDown') return keyTarget(key, i, 1, n)
+  const here = layout.slots[i]
+  if (!here) return null
+  const step = key === 'ArrowUp' ? -1 : 1
+  for (let r = here.row + step; r >= 0 && r < layout.rowSlots.length; r += step) {
+    const row = layout.rowSlots[r]
+    if (row.length) return row[Math.min(here.col, row.length - 1)]
+  }
+  return i
+}

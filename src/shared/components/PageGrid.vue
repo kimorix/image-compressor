@@ -11,11 +11,16 @@
   Moves are announced in an aria-live region. Over `virtualizeOver` items
   only the visible rows (plus overscan) are rendered. The grid never
   mutates `items`: it emits reorder(from, to) and the parent applies it
-  (moveItem from page-grid.ts does exactly that). -->
+  (moveItem from page-grid.ts does exactly that).
+  Optional group headers: pass `groupKey` (item → group id) and runs of
+  consecutive items with the same id start on a new row under a header
+  (text from `groupLabel`, or the #group-header slot). Grouped grids are
+  never virtualized. Without `groupKey` the grid renders exactly as it did
+  before headers existed. -->
   <div
     ref="root"
     class="page-grid"
-    :class="{ 'pg-dragging': drag.active, 'pg-virtual': virtual, 'pg-disabled': disabled }"
+    :class="{ 'pg-dragging': drag.active, 'pg-virtual': virtual, 'pg-disabled': disabled, 'pg-grouped': grouped }"
     :style="rootStyle"
     role="listbox"
     aria-multiselectable="true"
@@ -37,10 +42,10 @@
           'pg-dimmed': item.dimmed,
           'pg-has-color': !!item.color,
         }"
-        :style="item.color ? { '--pg-color': item.color } : undefined"
+        :style="tileStyle(item, offset + vi)"
         role="option"
         :aria-selected="selSet.has(item.key)"
-        :aria-label="m.page(offset + vi + 1) + (item.label ? ', ' + item.label : '')"
+        :aria-label="m.page(offset + vi + 1) + (item.label ? ', ' + item.label : '') + groupSuffix(offset + vi)"
         :tabindex="(focusKey ?? display[0]?.key) === item.key ? 0 : -1"
         :data-key="item.key"
         @pointerdown="onDown($event, offset + vi)"
@@ -75,11 +80,34 @@
         </div>
       </div>
     </component>
-    <div v-if="drag.active && dragItem" class="pg-ghost" :style="ghostStyle" aria-hidden="true">
+    <div v-if="!grouped && drag.active && dragItem" class="pg-ghost" :style="ghostStyle" aria-hidden="true">
       <div class="pg-frame" :style="{ aspectRatio: `1 / ${pageAspect}` }">
         <img v-if="dragItem.thumb" class="pg-img" :src="dragItem.thumb" alt="" draggable="false" :style="imgStyle(dragItem)" />
       </div>
       <span class="pg-ghost-badge">{{ m.moveBadge(drag.from + 1, drag.to + 1) }}</span>
+    </div>
+    <!-- Grouped only (a v-else-if, so an ungrouped grid keeps the single
+    placeholder it always had here): headers laid over the empty header rows
+    the tiles leave free, plus the drag ghost. Hidden from assistive tech;
+    each tile's label carries its group instead. -->
+    <div v-else-if="grouped" class="pg-groups">
+      <div
+        v-for="h in headers"
+        :key="h.key"
+        class="pg-group-header"
+        :style="{ top: `${h.top}px`, height: `${groupHeaderHeight}px` }"
+        aria-hidden="true"
+      >
+        <slot name="group-header" :group="h.group" :label="h.label" :start="h.start" :count="h.count">
+          <span class="pg-group-label">{{ h.label }}</span>
+        </slot>
+      </div>
+      <div v-if="drag.active && dragItem" class="pg-ghost" :style="ghostStyle" aria-hidden="true">
+        <div class="pg-frame" :style="{ aspectRatio: `1 / ${pageAspect}` }">
+          <img v-if="dragItem.thumb" class="pg-img" :src="dragItem.thumb" alt="" draggable="false" :style="imgStyle(dragItem)" />
+        </div>
+        <span class="pg-ghost-badge">{{ m.moveBadge(drag.from + 1, drag.to + 1) }}</span>
+      </div>
     </div>
     <p :id="hintId" class="pg-sr">{{ m.instructions }}</p>
     <div class="pg-sr" aria-live="assertive" aria-atomic="true">{{ live }}</div>
@@ -89,8 +117,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, TransitionGroup, watch } from 'vue'
 import {
-  autoScrollStep, columnsFor, gridIndexAt, keyTarget, moveItem, nextSelection, normRotation,
-  rotatedScale, virtualRows, type GridGeom, type PageAction, type PageGridItem,
+  autoScrollStep, columnsFor, gridIndexAt, groupedIndexAt, groupedKeyTarget, groupLayout, groupRowTops,
+  keyTarget, moveItem, nextSelection, normRotation, rotatedScale, virtualRows, type GridGeom,
+  type PageAction, type PageGridItem,
 } from './page-grid'
 
 export interface PageGridMessages {
@@ -149,6 +178,16 @@ const props = withDefaults(defineProps<{
   animate?: boolean
   ariaLabel?: string
   messages?: Partial<PageGridMessages>
+  /**
+   * Optional group headers: the group id of each item. Consecutive items
+   * with the same id form a group that starts on a new row under a header;
+   * an empty id starts a new row without a header. Omit for a plain grid.
+   */
+  groupKey?: (item: PageGridItem, index: number) => string | null | undefined
+  /** Header text for a group (default: the id). Also appended to each tile's accessible name. */
+  groupLabel?: (group: string, count: number) => string
+  /** Header row height in px. */
+  groupHeaderHeight?: number
 }>(), {
   selection: () => [],
   columns: 'auto',
@@ -164,6 +203,9 @@ const props = withDefaults(defineProps<{
   animate: true,
   ariaLabel: undefined,
   messages: () => ({}),
+  groupKey: undefined,
+  groupLabel: undefined,
+  groupHeaderHeight: 32,
 })
 
 const emit = defineEmits<{
@@ -200,8 +242,49 @@ const dragItem = computed(() => props.items.find((i) => i.key === drag.key) ?? n
 /** Display order: the real order, or the preview order while dragging. */
 const display = computed(() => (drag.active && drag.from >= 0 ? moveItem(props.items, drag.from, drag.to) : props.items))
 
+// ---- optional group headers ----
+const grouped = computed(() => typeof props.groupKey === 'function')
+/** Placement from the real order, so headers stay put while a drag previews. */
+const layout = computed(() => (grouped.value ? groupLayout(props.items.map((it, i) => props.groupKey!(it, i)), cols.value) : null))
+const labelOf = (group: string, count: number) => (props.groupLabel ? props.groupLabel(group, count) : group)
+/** Header top per run start, measured from the run's first tile (geometry until measured). */
+const headerTops = ref<Record<number, number>>({})
+const headers = computed(() => {
+  const L = layout.value
+  if (!L) return []
+  const tops = groupRowTops(L, rowH.value, props.groupHeaderHeight, props.gap)
+  return L.runs.filter((r) => r.group).map((r) => ({
+    key: `${r.group}\u0000${r.start}`, group: r.group, label: labelOf(r.group, r.count), start: r.start, count: r.count,
+    top: headerTops.value[r.start] ?? tops[r.headerRow],
+  }))
+})
+function groupSuffix(i: number): string {
+  const L = layout.value
+  if (!L) return ''
+  const run = L.runs.find((r) => i >= r.start && i < r.start + r.count)
+  return run?.group ? `, ${labelOf(run.group, run.count)}` : ''
+}
+function tileStyle(item: PageGridItem, i: number) {
+  const color = item.color ? { '--pg-color': item.color } : undefined
+  const slot = layout.value?.slots[i]
+  if (!slot) return color
+  return { ...color, gridRow: String(slot.row + 1), gridColumn: String(slot.col + 1) }
+}
+function placeHeaders() {
+  const L = layout.value
+  if (!L) return
+  const next: Record<number, number> = {}
+  for (const r of L.runs) {
+    if (!r.group) continue
+    const it = display.value[r.start]
+    const el = it && tileEls.get(it.key)
+    if (el && el.offsetParent) next[r.start] = el.offsetTop - props.gap - props.groupHeaderHeight
+  }
+  headerTops.value = next
+}
+
 // ---- virtualization ----
-const virtual = computed(() => props.items.length > props.virtualizeOver)
+const virtual = computed(() => !grouped.value && props.items.length > props.virtualizeOver)
 const animated = computed(() => props.animate && !virtual.value)
 const viewTop = ref(0)
 const viewH = ref(typeof window !== 'undefined' ? window.innerHeight : 800)
@@ -212,6 +295,7 @@ const totalRows = computed(() => Math.ceil(props.items.length / cols.value))
 const rootStyle = computed(() => (virtual.value ? { height: `${Math.max(0, totalRows.value * (rowH.value + props.gap) - props.gap)}px` } : undefined))
 const innerStyle = computed(() => ({
   gridTemplateColumns: `repeat(${cols.value}, minmax(0, 1fr))`,
+  ...(layout.value ? { gridTemplateRows: layout.value.rowKinds.map((k) => (k === 'header' ? `${props.groupHeaderHeight}px` : 'auto')).join(' ') } : {}),
   gap: `${props.gap}px`,
   ...(virtual.value ? { transform: `translateY(${rowsRange.value.start * (rowH.value + props.gap)}px)` } : {}),
 }))
@@ -274,6 +358,7 @@ function measure() {
   width.value = root.value.clientWidth
   const first = tileEls.values().next().value as HTMLElement | undefined
   if (first && first.offsetHeight) measuredRowH.value = first.offsetHeight
+  if (grouped.value) placeHeaders()
 }
 
 let ro: ResizeObserver | null = null
@@ -297,6 +382,7 @@ onMounted(() => {
   window.addEventListener('resize', onScroll, { passive: true })
 })
 watch(() => [props.items.length, cols.value, props.pageAspect], () => void nextTick(measure))
+watch([layout, () => props.groupHeaderHeight, () => props.gap], () => void nextTick(placeHeaders))
 
 // ---- pointer drag ----
 let pending: { id: number; idx: number; x: number; y: number; touch: boolean; timer: ReturnType<typeof setTimeout> | null } | null = null
@@ -361,7 +447,7 @@ function updateTarget() {
   // then matches what the user sees.
   const cx = drag.x - drag.offX + drag.w / 2 - r.left
   const cy = drag.y - drag.offY + rowH.value / 2 - r.top
-  const to = gridIndexAt(cx, cy, geom.value)
+  const to = layout.value ? groupedIndexAt(cx, cy, layout.value, geom.value, props.groupHeaderHeight) : gridIndexAt(cx, cy, geom.value)
   if (to >= 0) drag.to = to
 }
 
@@ -458,7 +544,7 @@ function onKey(e: KeyboardEvent, idx: number) {
   const item = props.items[idx]
   if (!item) return
   const n = props.items.length
-  const target = keyTarget(e.key, idx, cols.value, n)
+  const target = layout.value ? groupedKeyTarget(e.key, idx, layout.value) : keyTarget(e.key, idx, cols.value, n)
   const mod = e.ctrlKey || e.metaKey
   if (target !== null) {
     e.preventDefault()
@@ -756,6 +842,36 @@ onBeforeUnmount(() => {
 }
 .pg-move {
   transition: transform 0.18s ease;
+}
+// Group headers sit over the header rows the tiles leave empty; the layer
+// itself lets pointer events through to the grid.
+.pg-groups {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.pg-group-header {
+  position: absolute;
+  left: 0;
+  right: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  min-width: 0;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  pointer-events: auto;
+}
+.pg-group-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .pg-sr {
   position: absolute;
