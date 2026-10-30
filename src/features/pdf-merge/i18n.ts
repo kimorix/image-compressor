@@ -1,0 +1,186 @@
+// PDF merge / split strings, kept inside the feature (same approach as PDF
+// to Word): the shared dictionary only carries the nav label. Six languages;
+// English is the fallback for a missing key.
+import type { Lang } from '../../shared/i18n'
+
+type Fn = (...args: (string | number)[]) => string
+type Messages = Record<string, string | Fn>
+
+const zh: Messages = {
+  title: '合并拆分', sub: '本地处理 · 文件不上传', docTitle: 'PDF 合并拆分 - 本地处理，文件不上传', metaDesc: '免费的 PDF 合并、拆分与页面整理工具：排序、旋转、删除、复制页面，全部在浏览器本地完成，文件不会上传。',
+  modeMerge: '合并', modeSplit: '拆分', modeAria: '合并或拆分',
+  dropTitle: '拖入或选择 PDF', dropTitleTouch: '选择 PDF', dropSub: '可多选，也可拖入文件夹 · 文件只在你的浏览器里处理，不会上传', dropSubTouch: '文件只在本机处理，不会上传', dropAria: '选择 PDF 文件', addMore: '+ 添加 PDF', add: '+ 添加', dropAnywhere: '松开添加 PDF',
+  notPdf: (n) => `已跳过 ${n} 个非 PDF 文件`, dupSkipped: (n) => `已跳过 ${n} 个重复文件`,
+  rotateAll: '全部旋转', sortByName: '按文件名排序', clear: '清空', clearConfirm: '确认清空？', undo: '撤销', redo: '重做', undone: '已撤销',
+  dragFileHint: '拖动标签可调整文件顺序，点标签可整份操作', dragFileHintTouch: '长按 ⋮⋮ 拖动调整文件顺序', totalPages: (n) => `共 ${n} 页`,
+  origPage: (n) => `原 P${n}`, pagesSize: (n, s) => `${n} 页 · ${s}`,
+  selectFile: '选中此文件的页', rotateFile: '整份旋转', removeFile: '移除文件', moveUp: '上移', moveDown: '下移', fileActions: (n) => `${n} 的操作`, dragHandle: '拖动调整顺序',
+  rotateLeft: '左转', rotateRight: '右转', duplicate: '复制', delete: '删除', restore: '恢复', exportSelected: '导出所选', selectedN: (n) => `已选 ${n} 页`, clearSelection: '取消选择', selectAll: '全选',
+  editPages: '逐页编辑', done: '完成', back: '返回', editTitle: (n) => `逐页编辑 · ${n} 页`,
+  locked: '已加密', needPassword: '需要打开密码', openPwUnsupported: '这个文件设置了打开密码，暂不支持合并拆分。请先在原软件中移除密码后再添加。', ownerTag: '权限密码', ownerPwNote: '有权限密码：可以正常处理，输出文件不保留原有的权限限制。', formTag: '表单', errOpen: '无法读取这个 PDF，文件可能已损坏', probing: '读取中…', remove: '移除',
+  mergeSettings: '合并设置', fileName: '文件名', pageSize: '页面尺寸', sizeKeep: '保持原样', sizeA4: '统一 A4', sizeFirst: '统一首页', sizeHint: '保持原样最快、无损；统一尺寸按各页方向等比缩放居中，这些页上的表单和批注不保留。',
+  bookmarks: '按文件生成书签', bookmarksHint: '每个文件一个顶层书签，原书签放在下面', keepForms: '保留表单与批注', keepFormsOff: '关闭后表单内容会固定成普通文字', blankBetween: '文件间插入空白页', blankHint: '页数为奇数的文件后补一页空白，方便双面打印',
+  labelSources: '来源', labelOutput: '输出', labelEstimate: '预计', sumSources: (n, l) => (Number(l) ? `${n} 个文件（${l} 个不可用）` : `${n} 个文件`), sumOutput: (p, d, r) => [`${p} 页`, Number(d) ? `已删 ${d} 页` : '', Number(r) ? `旋转 ${r} 页` : ''].filter(Boolean).join(' · '), sumEstimate: (s) => `约 ${s}`,
+  mergeDownload: '合并并下载', mergeN: (n) => `合并 ${n} 页`, kbdHint: '⌘Z 撤销 · Shift 连选 · ⌘/Ctrl 多选', needTwo: '添加两个以上 PDF 即可合并；只有一个文件时可以整理页面或拆分。',
+  splitSettings: '拆分设置', splitBy: '拆分方式', byRanges: '按范围', everyN: '每 N 页', extractSelected: '提取所选', onePerPage: '每页一个',
+  rangeLabel: '页码范围（每组一个文件）', rangePh: '如 1-3, 4-10, 11-', rangeHint: '用逗号分组，“11-” 表示到最后一页。', rangeBad: '格式不对，例：1-3, 4-10, 11-', rangeOut: '页码超出了文件页数', rangeEmpty: '先输入页码范围', nLabel: '每个文件的页数', badN: '请输入 1 以上的整数', noSelection: '先在页面网格里选中要提取的页', selectedInfo: (n) => `将提取已选的 ${n} 页为一个文件`, singleInfo: (n) => `每页一个文件，共 ${n} 个`,
+  nameTemplate: '文件名', nameTplHint: '{name} 原文件名 · {range} 页码 · {n} 序号', splitN: (n) => `拆分成 ${n} 个文件`, splitEach: '多个文件会分别拆分，每个文件的结果放在各自的文件夹里', groupPages: (n) => `${n} 页`, pagesOf: (n) => `${n} 页`,
+  resultMerged: '合并完成', resultSplit: '拆分完成', resultMeta: (n, s, t) => `${n} 个文件 · 共 ${s} · 用时 ${t} 秒`, zip: '打包 ZIP', shareAll: (n) => `分享 / 存储 ${n} 个文件`, downloadAllZip: '全部下载（ZIP）', download: '下载', share: '分享', continueEdit: '继续编辑', zipping: '正在打包…', results: '结果',
+  formsNote: '原文件含表单，结果中的表单字段仍可填写。', warn_formRenamed: '多个文件有同名表单字段，后面文件的字段已加前缀（如 f2_）。', warn_formsFlattenedBySize: '统一尺寸的页面不再带表单和批注。', warn_xfaDropped: 'XFA 动态表单不受支持，结果只保留普通表单。',
+  errWrite: '生成失败，请重试', errLockedWrite: '有文件需要打开密码，无法处理', cancel: '取消', progress: (p) => `正在生成… ${p}%`, emptyPages: '没有可输出的页面',
+  bigFileWarn: '文件较大，处理可能需要一些时间', memoryBlock: '文件总大小超过 500 MB，手机浏览器可能内存不足，请分批处理。',
+  sideTitle: '小提示', sideDesc: '拖动缩略图调整页序；按住 Shift 连选、⌘/Ctrl 多选；点文件标签可整份旋转、选中或移除。删除的页可撤销。',
+  close: '关闭', more: '更多',
+  pgPage: (n) => `第 ${n} 页`, pgMoved: (a, b) => `第 ${a} 页移到了第 ${b} 位`, pgPicked: (n) => `已拿起第 ${n} 页。方向键移动，空格放下，Esc 取消。`, pgDropped: (n) => `已放到第 ${n} 位`, pgCancelled: '已取消移动', pgInstructions: '空格拿起页面，方向键移动；回车选中；Delete 删除，R 旋转，D 复制。',
+}
+
+const en: Messages = {
+  title: 'Merge & split', sub: 'Processed locally · Never uploaded', docTitle: 'Merge & split PDF - processed locally, never uploaded', metaDesc: 'Free PDF merge, split and page organiser: reorder, rotate, delete and duplicate pages. Everything runs in your browser; files are never uploaded.',
+  modeMerge: 'Merge', modeSplit: 'Split', modeAria: 'Merge or split',
+  dropTitle: 'Drop or choose PDFs', dropTitleTouch: 'Choose PDFs', dropSub: 'Several files or a folder · Processed only in your browser, never uploaded', dropSubTouch: 'Processed on this device, never uploaded', dropAria: 'Choose PDF files', addMore: '+ Add PDFs', add: '+ Add', dropAnywhere: 'Drop to add PDFs',
+  notPdf: (n) => `Skipped ${n} non-PDF files`, dupSkipped: (n) => `Skipped ${n} duplicate files`,
+  rotateAll: 'Rotate all', sortByName: 'Sort by name', clear: 'Clear', clearConfirm: 'Clear all?', undo: 'Undo', redo: 'Redo', undone: 'Undone',
+  dragFileHint: 'Drag the chips to reorder files; click one for file actions', dragFileHintTouch: 'Long-press ⋮⋮ and drag to reorder files', totalPages: (n) => `${n} pages in total`,
+  origPage: (n) => `orig. p${n}`, pagesSize: (n, s) => `${n} pages · ${s}`,
+  selectFile: 'Select this file’s pages', rotateFile: 'Rotate file', removeFile: 'Remove file', moveUp: 'Move up', moveDown: 'Move down', fileActions: (n) => `Actions for ${n}`, dragHandle: 'Drag to reorder',
+  rotateLeft: 'Rotate left', rotateRight: 'Rotate right', duplicate: 'Duplicate', delete: 'Delete', restore: 'Restore', exportSelected: 'Export selected', selectedN: (n) => `${n} selected`, clearSelection: 'Clear selection', selectAll: 'Select all',
+  editPages: 'Edit pages', done: 'Done', back: 'Back', editTitle: (n) => `Edit pages · ${n}`,
+  locked: 'Encrypted', needPassword: 'Open password required', openPwUnsupported: 'This file has an open password, which merge & split does not support yet. Remove the password in the original app, then add it again.', ownerTag: 'Permissions password', ownerPwNote: 'Has a permissions password: it works normally, and the output does not keep the original restrictions.', formTag: 'Form', errOpen: 'Could not read this PDF; it may be damaged', probing: 'Reading…', remove: 'Remove',
+  mergeSettings: 'Merge settings', fileName: 'File name', pageSize: 'Page size', sizeKeep: 'Keep', sizeA4: 'All A4', sizeFirst: 'Like page 1', sizeHint: 'Keep is fastest and lossless. Unifying scales each page to fit, centred, in its own orientation; forms and annotations on those pages are not kept.',
+  bookmarks: 'Bookmark per file', bookmarksHint: 'One top-level bookmark per file, original bookmarks nested under it', keepForms: 'Keep forms & annotations', keepFormsOff: 'When off, form values become plain page content', blankBetween: 'Blank page between files', blankHint: 'Adds a blank page after a file with an odd page count, for duplex printing',
+  labelSources: 'Sources', labelOutput: 'Output', labelEstimate: 'Estimate', sumSources: (n, l) => (Number(l) ? `${n} files (${l} unusable)` : `${n} files`), sumOutput: (p, d, r) => [`${p} pages`, Number(d) ? `${d} deleted` : '', Number(r) ? `${r} rotated` : ''].filter(Boolean).join(' · '), sumEstimate: (s) => `about ${s}`,
+  mergeDownload: 'Merge & download', mergeN: (n) => `Merge ${n} pages`, kbdHint: '⌘Z undo · Shift range · ⌘/Ctrl multi-select', needTwo: 'Add two or more PDFs to merge; with one file you can reorganise or split it.',
+  splitSettings: 'Split settings', splitBy: 'Split by', byRanges: 'Ranges', everyN: 'Every N pages', extractSelected: 'Selected pages', onePerPage: 'One per page',
+  rangeLabel: 'Page ranges (one file per group)', rangePh: 'e.g. 1-3, 4-10, 11-', rangeHint: 'Separate groups with commas; “11-” runs to the last page.', rangeBad: 'Invalid format, e.g. 1-3, 4-10, 11-', rangeOut: 'Pages beyond the end of the file', rangeEmpty: 'Enter page ranges first', nLabel: 'Pages per file', badN: 'Enter a whole number of 1 or more', noSelection: 'Select the pages to extract in the grid first', selectedInfo: (n) => `The ${n} selected pages become one file`, singleInfo: (n) => `One file per page, ${n} in total`,
+  nameTemplate: 'File name', nameTplHint: '{name} original name · {range} pages · {n} number', splitN: (n) => `Split into ${n} files`, splitEach: 'Each file is split on its own; results go into one folder per file', groupPages: (n) => `${n} pages`, pagesOf: (n) => `${n} pages`,
+  resultMerged: 'Merged', resultSplit: 'Split done', resultMeta: (n, s, t) => `${n} files · ${s} in total · ${t}s`, zip: 'Download ZIP', shareAll: (n) => `Share / save ${n} files`, downloadAllZip: 'Download all (ZIP)', download: 'Download', share: 'Share', continueEdit: 'Keep editing', zipping: 'Zipping…', results: 'Results',
+  formsNote: 'The source has a form; its fields stay fillable in the result.', warn_formRenamed: 'Several files had form fields with the same name; later files’ fields got a prefix (such as f2_).', warn_formsFlattenedBySize: 'Pages resized to a common size no longer carry forms or annotations.', warn_xfaDropped: 'XFA dynamic forms are not supported; only the regular form is kept.',
+  errWrite: 'Could not create the file, try again', errLockedWrite: 'A file needs an open password and cannot be processed', cancel: 'Cancel', progress: (p) => `Working… ${p}%`, emptyPages: 'No pages to write',
+  bigFileWarn: 'Large files may take a while', memoryBlock: 'Over 500 MB in total may exceed a phone browser’s memory; process the files in batches.',
+  sideTitle: 'Tips', sideDesc: 'Drag thumbnails to reorder; Shift selects a range, ⌘/Ctrl adds to the selection; click a file chip to rotate, select or remove the whole file. Deleted pages can be undone.',
+  close: 'Close', more: 'More',
+  pgPage: (n) => `Page ${n}`, pgMoved: (a, b) => `Page ${a} moved to position ${b}`, pgPicked: (n) => `Picked up page ${n}. Arrow keys move it, Space drops it, Escape cancels.`, pgDropped: (n) => `Dropped at position ${n}`, pgCancelled: 'Move cancelled', pgInstructions: 'Space picks up a page, arrow keys move it. Enter selects. Delete removes, R rotates, D duplicates.',
+}
+
+const ja: Messages = {
+  title: '結合・分割', sub: 'ローカル処理 · アップロードなし', docTitle: 'PDF 結合・分割 - ローカル処理、アップロードなし', metaDesc: '無料の PDF 結合・分割・ページ整理ツール。並べ替え、回転、削除、複製をすべてブラウザ内で行い、ファイルはアップロードされません。',
+  modeMerge: '結合', modeSplit: '分割', modeAria: '結合または分割',
+  dropTitle: 'PDF をドロップまたは選択', dropTitleTouch: 'PDF を選択', dropSub: '複数ファイルやフォルダも可 · ブラウザ内だけで処理し、アップロードしません', dropSubTouch: 'この端末内で処理し、アップロードしません', dropAria: 'PDF ファイルを選択', addMore: '+ PDF を追加', add: '+ 追加', dropAnywhere: '離して PDF を追加',
+  notPdf: (n) => `PDF 以外の ${n} 件をスキップしました`, dupSkipped: (n) => `重複する ${n} 件をスキップしました`,
+  rotateAll: 'すべて回転', sortByName: '名前順', clear: 'クリア', clearConfirm: 'すべて消去？', undo: '元に戻す', redo: 'やり直す', undone: '元に戻しました',
+  dragFileHint: 'タグをドラッグしてファイル順を変更、クリックでファイル操作', dragFileHintTouch: '⋮⋮ を長押ししてドラッグで並べ替え', totalPages: (n) => `合計 ${n} ページ`,
+  origPage: (n) => `元 P${n}`, pagesSize: (n, s) => `${n} ページ · ${s}`,
+  selectFile: 'このファイルのページを選択', rotateFile: 'ファイルごと回転', removeFile: 'ファイルを削除', moveUp: '上へ', moveDown: '下へ', fileActions: (n) => `${n} の操作`, dragHandle: 'ドラッグで並べ替え',
+  rotateLeft: '左回転', rotateRight: '右回転', duplicate: '複製', delete: '削除', restore: '復元', exportSelected: '選択を書き出し', selectedN: (n) => `${n} ページ選択中`, clearSelection: '選択解除', selectAll: 'すべて選択',
+  editPages: 'ページ編集', done: '完了', back: '戻る', editTitle: (n) => `ページ編集 · ${n} ページ`,
+  locked: '暗号化', needPassword: '開くパスワードが必要', openPwUnsupported: 'このファイルには開くパスワードが設定されており、まだ対応していません。元のアプリでパスワードを外してから追加してください。', ownerTag: '権限パスワード', ownerPwNote: '権限パスワードあり：通常どおり処理でき、出力には元の制限は残りません。', formTag: 'フォーム', errOpen: 'この PDF を読み込めません。破損している可能性があります', probing: '読み込み中…', remove: '削除',
+  mergeSettings: '結合の設定', fileName: 'ファイル名', pageSize: 'ページサイズ', sizeKeep: 'そのまま', sizeA4: 'A4 に統一', sizeFirst: '1 ページ目に統一', sizeHint: 'そのままが最速で劣化なし。統一すると各ページの向きのまま縮小して中央に配置し、そのページのフォームと注釈は残りません。',
+  bookmarks: 'ファイルごとにしおり', bookmarksHint: 'ファイルごとに上位しおりを作り、元のしおりをその下に', keepForms: 'フォームと注釈を保持', keepFormsOff: 'オフにするとフォームの値は通常の内容に固定されます', blankBetween: 'ファイル間に白紙を挿入', blankHint: 'ページ数が奇数のファイルの後に白紙を 1 枚追加（両面印刷用）',
+  labelSources: '元ファイル', labelOutput: '出力', labelEstimate: '予想', sumSources: (n, l) => (Number(l) ? `${n} ファイル（${l} 件は使用不可）` : `${n} ファイル`), sumOutput: (p, d, r) => [`${p} ページ`, Number(d) ? `${d} 削除` : '', Number(r) ? `${r} 回転` : ''].filter(Boolean).join(' · '), sumEstimate: (s) => `約 ${s}`,
+  mergeDownload: '結合してダウンロード', mergeN: (n) => `${n} ページを結合`, kbdHint: '⌘Z 元に戻す · Shift 範囲 · ⌘/Ctrl 複数選択', needTwo: '2 つ以上の PDF を追加すると結合できます。1 つならページ整理や分割ができます。',
+  splitSettings: '分割の設定', splitBy: '分割方法', byRanges: '範囲', everyN: 'N ページごと', extractSelected: '選択を抽出', onePerPage: '1 ページずつ',
+  rangeLabel: 'ページ範囲（グループごとに 1 ファイル）', rangePh: '例：1-3, 4-10, 11-', rangeHint: 'カンマで区切り、「11-」は最後のページまで。', rangeBad: '形式が正しくありません。例：1-3, 4-10, 11-', rangeOut: 'ページ数を超えています', rangeEmpty: 'ページ範囲を入力してください', nLabel: '1 ファイルのページ数', badN: '1 以上の整数を入力してください', noSelection: '先にグリッドで抽出するページを選択してください', selectedInfo: (n) => `選択した ${n} ページを 1 ファイルにします`, singleInfo: (n) => `1 ページずつ、合計 ${n} ファイル`,
+  nameTemplate: 'ファイル名', nameTplHint: '{name} 元の名前 · {range} ページ · {n} 番号', splitN: (n) => `${n} ファイルに分割`, splitEach: '複数ファイルはそれぞれ分割し、結果はファイルごとのフォルダに入ります', groupPages: (n) => `${n} ページ`, pagesOf: (n) => `${n} ページ`,
+  resultMerged: '結合完了', resultSplit: '分割完了', resultMeta: (n, s, t) => `${n} ファイル · 合計 ${s} · ${t} 秒`, zip: 'ZIP でダウンロード', shareAll: (n) => `${n} ファイルを共有 / 保存`, downloadAllZip: 'すべてダウンロード（ZIP）', download: 'ダウンロード', share: '共有', continueEdit: '編集を続ける', zipping: 'ZIP 作成中…', results: '結果',
+  formsNote: '元ファイルにフォームがあり、結果でも入力できます。', warn_formRenamed: '同名のフォームフィールドがあったため、後のファイルのフィールドに接頭辞（f2_ など）を付けました。', warn_formsFlattenedBySize: 'サイズを統一したページにはフォームと注釈が残りません。', warn_xfaDropped: 'XFA 動的フォームは非対応のため、通常のフォームのみ残します。',
+  errWrite: '作成に失敗しました。もう一度お試しください', errLockedWrite: '開くパスワードが必要なファイルがあり、処理できません', cancel: 'キャンセル', progress: (p) => `作成中… ${p}%`, emptyPages: '出力するページがありません',
+  bigFileWarn: 'ファイルが大きいため時間がかかる場合があります', memoryBlock: '合計 500 MB を超えるとスマホのブラウザではメモリ不足になる恐れがあります。分けて処理してください。',
+  sideTitle: 'ヒント', sideDesc: 'サムネイルをドラッグして並べ替え。Shift で範囲選択、⌘/Ctrl で追加選択。ファイルタグをクリックするとファイルごとに回転・選択・削除できます。削除は元に戻せます。',
+  close: '閉じる', more: 'その他',
+  pgPage: (n) => `${n} ページ`, pgMoved: (a, b) => `${a} ページを ${b} 番目に移動しました`, pgPicked: (n) => `${n} ページを持ち上げました。矢印キーで移動、スペースで置く、Esc で取消。`, pgDropped: (n) => `${n} 番目に置きました`, pgCancelled: '移動を取り消しました', pgInstructions: 'スペースで持ち上げ、矢印キーで移動。Enter で選択。Delete で削除、R で回転、D で複製。',
+}
+
+const ko: Messages = {
+  title: '병합 및 분할', sub: '로컬 처리 · 업로드 없음', docTitle: 'PDF 병합 및 분할 - 로컬 처리, 업로드 없음', metaDesc: '무료 PDF 병합·분할·페이지 정리 도구. 순서 변경, 회전, 삭제, 복제를 모두 브라우저에서 처리하며 파일은 업로드되지 않습니다.',
+  modeMerge: '병합', modeSplit: '분할', modeAria: '병합 또는 분할',
+  dropTitle: 'PDF를 끌어 놓거나 선택', dropTitleTouch: 'PDF 선택', dropSub: '여러 파일이나 폴더 가능 · 브라우저에서만 처리하며 업로드하지 않습니다', dropSubTouch: '이 기기에서만 처리하며 업로드하지 않습니다', dropAria: 'PDF 파일 선택', addMore: '+ PDF 추가', add: '+ 추가', dropAnywhere: '놓으면 PDF 추가',
+  notPdf: (n) => `PDF가 아닌 파일 ${n}개를 건너뛰었습니다`, dupSkipped: (n) => `중복 파일 ${n}개를 건너뛰었습니다`,
+  rotateAll: '모두 회전', sortByName: '이름순 정렬', clear: '비우기', clearConfirm: '모두 비울까요?', undo: '실행 취소', redo: '다시 실행', undone: '실행 취소됨',
+  dragFileHint: '태그를 끌어 파일 순서 변경, 클릭하면 파일 작업', dragFileHintTouch: '⋮⋮를 길게 눌러 끌면 순서 변경', totalPages: (n) => `총 ${n}페이지`,
+  origPage: (n) => `원 P${n}`, pagesSize: (n, s) => `${n}페이지 · ${s}`,
+  selectFile: '이 파일의 페이지 선택', rotateFile: '파일 전체 회전', removeFile: '파일 제거', moveUp: '위로', moveDown: '아래로', fileActions: (n) => `${n} 작업`, dragHandle: '끌어서 순서 변경',
+  rotateLeft: '왼쪽 회전', rotateRight: '오른쪽 회전', duplicate: '복제', delete: '삭제', restore: '복원', exportSelected: '선택 내보내기', selectedN: (n) => `${n}페이지 선택됨`, clearSelection: '선택 해제', selectAll: '모두 선택',
+  editPages: '페이지 편집', done: '완료', back: '뒤로', editTitle: (n) => `페이지 편집 · ${n}페이지`,
+  locked: '암호화됨', needPassword: '열기 암호 필요', openPwUnsupported: '이 파일에는 열기 암호가 있어 아직 지원하지 않습니다. 원래 앱에서 암호를 제거한 뒤 다시 추가하세요.', ownerTag: '권한 암호', ownerPwNote: '권한 암호가 있음: 정상적으로 처리되며, 결과에는 원래 제한이 남지 않습니다.', formTag: '양식', errOpen: '이 PDF를 읽을 수 없습니다. 파일이 손상되었을 수 있습니다', probing: '읽는 중…', remove: '제거',
+  mergeSettings: '병합 설정', fileName: '파일 이름', pageSize: '페이지 크기', sizeKeep: '그대로', sizeA4: 'A4로 통일', sizeFirst: '첫 페이지로 통일', sizeHint: '그대로가 가장 빠르고 무손실입니다. 통일하면 각 페이지 방향대로 비율을 유지해 가운데 배치하며, 해당 페이지의 양식과 주석은 유지되지 않습니다.',
+  bookmarks: '파일별 책갈피', bookmarksHint: '파일마다 최상위 책갈피 하나, 원래 책갈피는 그 아래에', keepForms: '양식과 주석 유지', keepFormsOff: '끄면 양식 값이 일반 내용으로 고정됩니다', blankBetween: '파일 사이에 빈 페이지', blankHint: '페이지 수가 홀수인 파일 뒤에 빈 페이지 추가(양면 인쇄용)',
+  labelSources: '원본', labelOutput: '출력', labelEstimate: '예상', sumSources: (n, l) => (Number(l) ? `파일 ${n}개 (${l}개 사용 불가)` : `파일 ${n}개`), sumOutput: (p, d, r) => [`${p}페이지`, Number(d) ? `${d} 삭제` : '', Number(r) ? `${r} 회전` : ''].filter(Boolean).join(' · '), sumEstimate: (s) => `약 ${s}`,
+  mergeDownload: '병합 후 다운로드', mergeN: (n) => `${n}페이지 병합`, kbdHint: '⌘Z 실행 취소 · Shift 범위 · ⌘/Ctrl 다중 선택', needTwo: 'PDF를 두 개 이상 추가하면 병합할 수 있습니다. 하나면 페이지 정리나 분할이 가능합니다.',
+  splitSettings: '분할 설정', splitBy: '분할 방식', byRanges: '범위', everyN: 'N페이지마다', extractSelected: '선택 추출', onePerPage: '페이지마다',
+  rangeLabel: '페이지 범위(그룹마다 파일 하나)', rangePh: '예: 1-3, 4-10, 11-', rangeHint: '쉼표로 그룹을 나누고, "11-"은 마지막 페이지까지입니다.', rangeBad: '형식이 올바르지 않습니다. 예: 1-3, 4-10, 11-', rangeOut: '파일 페이지 수를 넘었습니다', rangeEmpty: '먼저 페이지 범위를 입력하세요', nLabel: '파일당 페이지 수', badN: '1 이상의 정수를 입력하세요', noSelection: '먼저 그리드에서 추출할 페이지를 선택하세요', selectedInfo: (n) => `선택한 ${n}페이지를 파일 하나로 만듭니다`, singleInfo: (n) => `페이지마다 파일 하나, 총 ${n}개`,
+  nameTemplate: '파일 이름', nameTplHint: '{name} 원래 이름 · {range} 페이지 · {n} 번호', splitN: (n) => `파일 ${n}개로 분할`, splitEach: '여러 파일은 각각 분할되며, 결과는 파일별 폴더에 담깁니다', groupPages: (n) => `${n}페이지`, pagesOf: (n) => `${n}페이지`,
+  resultMerged: '병합 완료', resultSplit: '분할 완료', resultMeta: (n, s, t) => `파일 ${n}개 · 총 ${s} · ${t}초`, zip: 'ZIP 다운로드', shareAll: (n) => `파일 ${n}개 공유 / 저장`, downloadAllZip: '모두 다운로드(ZIP)', download: '다운로드', share: '공유', continueEdit: '계속 편집', zipping: '압축 중…', results: '결과',
+  formsNote: '원본에 양식이 있으며, 결과에서도 입력할 수 있습니다.', warn_formRenamed: '같은 이름의 양식 필드가 있어 뒤 파일의 필드에 접두사(예: f2_)를 붙였습니다.', warn_formsFlattenedBySize: '크기를 통일한 페이지에는 양식과 주석이 남지 않습니다.', warn_xfaDropped: 'XFA 동적 양식은 지원하지 않아 일반 양식만 유지합니다.',
+  errWrite: '생성하지 못했습니다. 다시 시도하세요', errLockedWrite: '열기 암호가 필요한 파일이 있어 처리할 수 없습니다', cancel: '취소', progress: (p) => `생성 중… ${p}%`, emptyPages: '출력할 페이지가 없습니다',
+  bigFileWarn: '파일이 커서 시간이 걸릴 수 있습니다', memoryBlock: '총 500MB를 넘으면 휴대폰 브라우저 메모리가 부족할 수 있습니다. 나눠서 처리하세요.',
+  sideTitle: '도움말', sideDesc: '썸네일을 끌어 순서를 바꾸고, Shift로 범위 선택, ⌘/Ctrl로 추가 선택합니다. 파일 태그를 클릭하면 파일 전체를 회전·선택·제거할 수 있습니다. 삭제는 실행 취소할 수 있습니다.',
+  close: '닫기', more: '더보기',
+  pgPage: (n) => `${n}페이지`, pgMoved: (a, b) => `${a}페이지를 ${b}번째로 옮겼습니다`, pgPicked: (n) => `${n}페이지를 들었습니다. 화살표로 이동, 스페이스로 놓기, Esc로 취소.`, pgDropped: (n) => `${n}번째에 놓았습니다`, pgCancelled: '이동 취소됨', pgInstructions: '스페이스로 페이지를 들고 화살표로 이동합니다. Enter로 선택, Delete로 삭제, R로 회전, D로 복제.',
+}
+
+const de: Messages = {
+  title: 'Zusammenfügen & teilen', sub: 'Lokal verarbeitet · Kein Upload', docTitle: 'PDF zusammenfügen & teilen - lokal, ohne Upload', metaDesc: 'Kostenloses Werkzeug zum Zusammenfügen, Teilen und Ordnen von PDF-Seiten: sortieren, drehen, löschen, duplizieren. Alles läuft im Browser; Dateien werden nie hochgeladen.',
+  modeMerge: 'Zusammenfügen', modeSplit: 'Teilen', modeAria: 'Zusammenfügen oder teilen',
+  dropTitle: 'PDFs ablegen oder auswählen', dropTitleTouch: 'PDFs auswählen', dropSub: 'Mehrere Dateien oder ein Ordner · Nur im Browser verarbeitet, nie hochgeladen', dropSubTouch: 'Auf diesem Gerät verarbeitet, nie hochgeladen', dropAria: 'PDF-Dateien auswählen', addMore: '+ PDFs hinzufügen', add: '+ Hinzufügen', dropAnywhere: 'Loslassen zum Hinzufügen',
+  notPdf: (n) => `${n} Nicht-PDF-Dateien übersprungen`, dupSkipped: (n) => `${n} doppelte Dateien übersprungen`,
+  rotateAll: 'Alle drehen', sortByName: 'Nach Name sortieren', clear: 'Leeren', clearConfirm: 'Alles leeren?', undo: 'Rückgängig', redo: 'Wiederholen', undone: 'Rückgängig gemacht',
+  dragFileHint: 'Chips ziehen, um Dateien umzusortieren; anklicken für Dateiaktionen', dragFileHintTouch: '⋮⋮ lange drücken und ziehen, um Dateien umzusortieren', totalPages: (n) => `${n} Seiten insgesamt`,
+  origPage: (n) => `urspr. S. ${n}`, pagesSize: (n, s) => `${n} Seiten · ${s}`,
+  selectFile: 'Seiten dieser Datei auswählen', rotateFile: 'Datei drehen', removeFile: 'Datei entfernen', moveUp: 'Nach oben', moveDown: 'Nach unten', fileActions: (n) => `Aktionen für ${n}`, dragHandle: 'Zum Sortieren ziehen',
+  rotateLeft: 'Links drehen', rotateRight: 'Rechts drehen', duplicate: 'Duplizieren', delete: 'Löschen', restore: 'Wiederherstellen', exportSelected: 'Auswahl exportieren', selectedN: (n) => `${n} ausgewählt`, clearSelection: 'Auswahl aufheben', selectAll: 'Alle auswählen',
+  editPages: 'Seiten bearbeiten', done: 'Fertig', back: 'Zurück', editTitle: (n) => `Seiten bearbeiten · ${n}`,
+  locked: 'Verschlüsselt', needPassword: 'Öffnungspasswort nötig', openPwUnsupported: 'Diese Datei hat ein Öffnungspasswort, das noch nicht unterstützt wird. Entferne das Passwort in der Ursprungs-App und füge sie erneut hinzu.', ownerTag: 'Berechtigungspasswort', ownerPwNote: 'Hat ein Berechtigungspasswort: funktioniert normal, die Ausgabe übernimmt die Einschränkungen nicht.', formTag: 'Formular', errOpen: 'Dieses PDF lässt sich nicht lesen; es ist evtl. beschädigt', probing: 'Wird gelesen…', remove: 'Entfernen',
+  mergeSettings: 'Einstellungen', fileName: 'Dateiname', pageSize: 'Seitengröße', sizeKeep: 'Beibehalten', sizeA4: 'Alle A4', sizeFirst: 'Wie Seite 1', sizeHint: 'Beibehalten ist am schnellsten und verlustfrei. Beim Vereinheitlichen wird jede Seite in ihrer Ausrichtung skaliert und zentriert; Formulare und Anmerkungen dieser Seiten gehen verloren.',
+  bookmarks: 'Lesezeichen pro Datei', bookmarksHint: 'Ein Lesezeichen pro Datei, die ursprünglichen darunter', keepForms: 'Formulare & Anmerkungen behalten', keepFormsOff: 'Aus: Formularwerte werden fester Seiteninhalt', blankBetween: 'Leerseite zwischen Dateien', blankHint: 'Fügt nach einer Datei mit ungerader Seitenzahl eine Leerseite ein (Duplexdruck)',
+  labelSources: 'Quellen', labelOutput: 'Ausgabe', labelEstimate: 'Geschätzt', sumSources: (n, l) => (Number(l) ? `${n} Dateien (${l} nicht nutzbar)` : `${n} Dateien`), sumOutput: (p, d, r) => [`${p} Seiten`, Number(d) ? `${d} gelöscht` : '', Number(r) ? `${r} gedreht` : ''].filter(Boolean).join(' · '), sumEstimate: (s) => `ca. ${s}`,
+  mergeDownload: 'Zusammenfügen & laden', mergeN: (n) => `${n} Seiten zusammenfügen`, kbdHint: '⌘Z rückgängig · Shift Bereich · ⌘/Strg Mehrfachauswahl', needTwo: 'Füge zwei oder mehr PDFs hinzu, um sie zusammenzufügen; eine einzelne Datei kannst du ordnen oder teilen.',
+  splitSettings: 'Teilen', splitBy: 'Teilen nach', byRanges: 'Bereichen', everyN: 'Alle N Seiten', extractSelected: 'Auswahl', onePerPage: 'Je Seite',
+  rangeLabel: 'Seitenbereiche (je Gruppe eine Datei)', rangePh: 'z. B. 1-3, 4-10, 11-', rangeHint: 'Gruppen mit Kommas trennen; „11-“ geht bis zur letzten Seite.', rangeBad: 'Ungültiges Format, z. B. 1-3, 4-10, 11-', rangeOut: 'Seiten jenseits des Dateiendes', rangeEmpty: 'Zuerst Seitenbereiche eingeben', nLabel: 'Seiten pro Datei', badN: 'Ganze Zahl ab 1 eingeben', noSelection: 'Wähle zuerst im Raster die Seiten aus', selectedInfo: (n) => `Die ${n} ausgewählten Seiten werden eine Datei`, singleInfo: (n) => `Eine Datei pro Seite, ${n} insgesamt`,
+  nameTemplate: 'Dateiname', nameTplHint: '{name} Originalname · {range} Seiten · {n} Nummer', splitN: (n) => `In ${n} Dateien teilen`, splitEach: 'Mehrere Dateien werden einzeln geteilt; je Datei ein Ordner', groupPages: (n) => `${n} Seiten`, pagesOf: (n) => `${n} Seiten`,
+  resultMerged: 'Zusammengefügt', resultSplit: 'Geteilt', resultMeta: (n, s, t) => `${n} Dateien · ${s} insgesamt · ${t} s`, zip: 'ZIP laden', shareAll: (n) => `${n} Dateien teilen / sichern`, downloadAllZip: 'Alle laden (ZIP)', download: 'Laden', share: 'Teilen', continueEdit: 'Weiter bearbeiten', zipping: 'Wird gepackt…', results: 'Ergebnisse',
+  formsNote: 'Die Quelle enthält ein Formular; die Felder bleiben ausfüllbar.', warn_formRenamed: 'Mehrere Dateien hatten gleichnamige Formularfelder; spätere bekamen ein Präfix (z. B. f2_).', warn_formsFlattenedBySize: 'Auf eine gemeinsame Größe gebrachte Seiten haben keine Formulare oder Anmerkungen mehr.', warn_xfaDropped: 'XFA-Formulare werden nicht unterstützt; nur das normale Formular bleibt.',
+  errWrite: 'Datei konnte nicht erstellt werden, bitte erneut versuchen', errLockedWrite: 'Eine Datei braucht ein Öffnungspasswort und kann nicht verarbeitet werden', cancel: 'Abbrechen', progress: (p) => `Wird erstellt… ${p} %`, emptyPages: 'Keine Seiten zum Schreiben',
+  bigFileWarn: 'Große Dateien können eine Weile dauern', memoryBlock: 'Über 500 MB insgesamt können den Speicher eines Handy-Browsers übersteigen; verarbeite die Dateien in Etappen.',
+  sideTitle: 'Tipps', sideDesc: 'Miniaturen ziehen zum Sortieren; Shift wählt einen Bereich, ⌘/Strg fügt hinzu; ein Klick auf einen Datei-Chip dreht, wählt oder entfernt die ganze Datei. Löschen lässt sich rückgängig machen.',
+  close: 'Schließen', more: 'Mehr',
+  pgPage: (n) => `Seite ${n}`, pgMoved: (a, b) => `Seite ${a} an Position ${b} verschoben`, pgPicked: (n) => `Seite ${n} aufgenommen. Pfeiltasten bewegen, Leertaste legt ab, Esc bricht ab.`, pgDropped: (n) => `An Position ${n} abgelegt`, pgCancelled: 'Verschieben abgebrochen', pgInstructions: 'Leertaste nimmt eine Seite auf, Pfeiltasten bewegen sie. Enter wählt aus. Entf löscht, R dreht, D dupliziert.',
+}
+
+const fr: Messages = {
+  title: 'Fusionner et diviser', sub: 'Traité localement · Jamais envoyé', docTitle: 'Fusionner et diviser un PDF - en local, sans envoi', metaDesc: 'Outil gratuit pour fusionner, diviser et organiser les pages d’un PDF : réordonner, pivoter, supprimer, dupliquer. Tout se fait dans le navigateur ; aucun fichier n’est envoyé.',
+  modeMerge: 'Fusionner', modeSplit: 'Diviser', modeAria: 'Fusionner ou diviser',
+  dropTitle: 'Déposez ou choisissez des PDF', dropTitleTouch: 'Choisir des PDF', dropSub: 'Plusieurs fichiers ou un dossier · Traités dans le navigateur, jamais envoyés', dropSubTouch: 'Traités sur cet appareil, jamais envoyés', dropAria: 'Choisir des fichiers PDF', addMore: '+ Ajouter des PDF', add: '+ Ajouter', dropAnywhere: 'Relâchez pour ajouter',
+  notPdf: (n) => `${n} fichiers non PDF ignorés`, dupSkipped: (n) => `${n} doublons ignorés`,
+  rotateAll: 'Tout pivoter', sortByName: 'Trier par nom', clear: 'Vider', clearConfirm: 'Tout vider ?', undo: 'Annuler', redo: 'Rétablir', undone: 'Annulé',
+  dragFileHint: 'Faites glisser les étiquettes pour réordonner ; cliquez pour les actions du fichier', dragFileHintTouch: 'Appui long sur ⋮⋮ puis glisser pour réordonner', totalPages: (n) => `${n} pages au total`,
+  origPage: (n) => `p. ${n} orig.`, pagesSize: (n, s) => `${n} pages · ${s}`,
+  selectFile: 'Sélectionner les pages du fichier', rotateFile: 'Pivoter le fichier', removeFile: 'Retirer le fichier', moveUp: 'Monter', moveDown: 'Descendre', fileActions: (n) => `Actions pour ${n}`, dragHandle: 'Glisser pour réordonner',
+  rotateLeft: 'Pivoter à gauche', rotateRight: 'Pivoter à droite', duplicate: 'Dupliquer', delete: 'Supprimer', restore: 'Restaurer', exportSelected: 'Exporter la sélection', selectedN: (n) => `${n} sélectionnées`, clearSelection: 'Désélectionner', selectAll: 'Tout sélectionner',
+  editPages: 'Éditer les pages', done: 'OK', back: 'Retour', editTitle: (n) => `Éditer les pages · ${n}`,
+  locked: 'Chiffré', needPassword: 'Mot de passe d’ouverture requis', openPwUnsupported: 'Ce fichier a un mot de passe d’ouverture, pas encore pris en charge. Retirez-le dans l’application d’origine puis ajoutez le fichier à nouveau.', ownerTag: 'Mot de passe de droits', ownerPwNote: 'Mot de passe de droits : traitement normal, le résultat ne garde pas les restrictions d’origine.', formTag: 'Formulaire', errOpen: 'Impossible de lire ce PDF ; il est peut-être endommagé', probing: 'Lecture…', remove: 'Retirer',
+  mergeSettings: 'Réglages de fusion', fileName: 'Nom du fichier', pageSize: 'Taille des pages', sizeKeep: 'Inchangée', sizeA4: 'Tout en A4', sizeFirst: 'Comme la p. 1', sizeHint: 'Inchangée est le plus rapide et sans perte. L’uniformisation met chaque page à l’échelle, centrée, dans son orientation ; formulaires et annotations de ces pages ne sont pas conservés.',
+  bookmarks: 'Signet par fichier', bookmarksHint: 'Un signet principal par fichier, les signets d’origine en dessous', keepForms: 'Garder formulaires et annotations', keepFormsOff: 'Désactivé : les valeurs deviennent du contenu fixe', blankBetween: 'Page blanche entre fichiers', blankHint: 'Ajoute une page blanche après un fichier au nombre de pages impair (recto verso)',
+  labelSources: 'Sources', labelOutput: 'Sortie', labelEstimate: 'Estimation', sumSources: (n, l) => (Number(l) ? `${n} fichiers (${l} inutilisables)` : `${n} fichiers`), sumOutput: (p, d, r) => [`${p} pages`, Number(d) ? `${d} supprimées` : '', Number(r) ? `${r} pivotées` : ''].filter(Boolean).join(' · '), sumEstimate: (s) => `environ ${s}`,
+  mergeDownload: 'Fusionner et télécharger', mergeN: (n) => `Fusionner ${n} pages`, kbdHint: '⌘Z annuler · Maj plage · ⌘/Ctrl multiple', needTwo: 'Ajoutez au moins deux PDF pour les fusionner ; avec un seul, vous pouvez l’organiser ou le diviser.',
+  splitSettings: 'Réglages de division', splitBy: 'Diviser par', byRanges: 'Plages', everyN: 'Toutes les N pages', extractSelected: 'Sélection', onePerPage: 'Une par page',
+  rangeLabel: 'Plages de pages (un fichier par groupe)', rangePh: 'ex. 1-3, 4-10, 11-', rangeHint: 'Séparez les groupes par des virgules ; « 11- » va jusqu’à la dernière page.', rangeBad: 'Format invalide, ex. 1-3, 4-10, 11-', rangeOut: 'Pages au-delà de la fin du fichier', rangeEmpty: 'Saisissez d’abord des plages', nLabel: 'Pages par fichier', badN: 'Entrez un entier supérieur ou égal à 1', noSelection: 'Sélectionnez d’abord les pages dans la grille', selectedInfo: (n) => `Les ${n} pages sélectionnées forment un fichier`, singleInfo: (n) => `Un fichier par page, ${n} au total`,
+  nameTemplate: 'Nom du fichier', nameTplHint: '{name} nom d’origine · {range} pages · {n} numéro', splitN: (n) => `Diviser en ${n} fichiers`, splitEach: 'Chaque fichier est divisé séparément ; un dossier par fichier', groupPages: (n) => `${n} pages`, pagesOf: (n) => `${n} pages`,
+  resultMerged: 'Fusion terminée', resultSplit: 'Division terminée', resultMeta: (n, s, t) => `${n} fichiers · ${s} au total · ${t} s`, zip: 'Télécharger le ZIP', shareAll: (n) => `Partager / enregistrer ${n} fichiers`, downloadAllZip: 'Tout télécharger (ZIP)', download: 'Télécharger', share: 'Partager', continueEdit: 'Continuer l’édition', zipping: 'Compression…', results: 'Résultats',
+  formsNote: 'La source contient un formulaire ; ses champs restent remplissables.', warn_formRenamed: 'Plusieurs fichiers avaient des champs de même nom ; ceux des fichiers suivants ont reçu un préfixe (ex. f2_).', warn_formsFlattenedBySize: 'Les pages mises à une taille commune n’ont plus de formulaires ni d’annotations.', warn_xfaDropped: 'Les formulaires XFA ne sont pas pris en charge ; seul le formulaire standard est conservé.',
+  errWrite: 'Échec de la création, réessayez', errLockedWrite: 'Un fichier nécessite un mot de passe d’ouverture et ne peut pas être traité', cancel: 'Annuler', progress: (p) => `Création… ${p} %`, emptyPages: 'Aucune page à écrire',
+  bigFileWarn: 'Les gros fichiers peuvent prendre du temps', memoryBlock: 'Plus de 500 Mo au total peut dépasser la mémoire d’un navigateur mobile ; traitez les fichiers par lots.',
+  sideTitle: 'Astuces', sideDesc: 'Faites glisser les vignettes pour réordonner ; Maj sélectionne une plage, ⌘/Ctrl ajoute ; cliquez une étiquette de fichier pour pivoter, sélectionner ou retirer tout le fichier. Les suppressions s’annulent.',
+  close: 'Fermer', more: 'Plus',
+  pgPage: (n) => `Page ${n}`, pgMoved: (a, b) => `Page ${a} déplacée en position ${b}`, pgPicked: (n) => `Page ${n} saisie. Flèches pour déplacer, Espace pour déposer, Échap pour annuler.`, pgDropped: (n) => `Déposée en position ${n}`, pgCancelled: 'Déplacement annulé', pgInstructions: 'Espace saisit une page, les flèches la déplacent. Entrée sélectionne. Suppr supprime, R pivote, D duplique.',
+}
+
+export const MERGE_MESSAGES: Record<Lang, Messages> = { zh, en, ja, ko, de, fr }
+
+export function mergeT(lang: Lang, key: string, ...args: (string | number)[]): string {
+  const v = MERGE_MESSAGES[lang]?.[key] ?? en[key]
+  if (v === undefined) return key
+  return typeof v === 'function' ? v(...args) : v
+}
+
+/** Suffix for the automatic merge file name ("-合并", "-merged"). */
+export const MERGE_SUFFIX: Record<Lang, string> = { zh: '-合并', en: '-merged', ja: '-結合', ko: '-병합', de: '-zusammengefügt', fr: '-fusionné' }
