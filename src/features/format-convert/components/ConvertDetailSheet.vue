@@ -17,7 +17,8 @@
           <figcaption>{{ p('origLabel', srcLabel) }}</figcaption>
         </figure>
         <figure class="cv-checker">
-          <img v-if="item.outUrl" :src="item.outUrl" alt="" />
+          <img v-if="item.outUrl && canPreview(item.target)" :src="item.outUrl" alt="" />
+          <span v-else-if="item.outUrl" class="cv-thumb-label">{{ FORMAT_LABEL[item.target] }}</span>
           <span v-else-if="busy" class="cv-spinner" aria-hidden="true"></span>
           <figcaption>{{ FORMAT_LABEL[item.target] }}</figcaption>
         </figure>
@@ -26,7 +27,7 @@
         <div><dt>{{ p('detailOrig') }}</dt><dd>{{ fmtSize(item.file.size) }}<template v-if="item.width"> · {{ item.width }}×{{ item.height }}</template> · {{ srcLabel }}</dd></div>
         <div v-if="item.outBlob"><dt>{{ p('detailOut') }}</dt><dd>{{ fmtSize(item.outBlob.size) }} · {{ FORMAT_LABEL[item.target] }} · {{ item.quality === null ? p('lossless') : p('qualityN', item.quality) }}</dd></div>
         <div v-if="item.outBlob"><dt>{{ p('detailSize') }}</dt><dd :class="delta <= 0 ? 'good' : 'warn'">{{ delta > 0 ? '+' : '' }}{{ delta }}%</dd></div>
-        <div v-if="item.exif"><dt>{{ p('detailExif') }}</dt><dd>{{ p(EXIF_KEY[item.exif]) }}</dd></div>
+        <div v-if="item.exif"><dt>{{ p('detailExif') }}</dt><dd>{{ p(EXIF_KEY[item.exif], FORMAT_LABEL[item.target]) }}</dd></div>
         <div v-for="(n, i) in notes" :key="i"><dt>{{ i === 0 ? p('detailNote') : '' }}</dt><dd class="warn">{{ n }}</dd></div>
         <div v-if="item.error"><dt>{{ p('detailNote') }}</dt><dd class="bad">{{ item.error }}</dd></div>
       </dl>
@@ -46,6 +47,7 @@ import BottomSheet from '../../../shared/components/BottomSheet.vue'
 import { fmtSize } from '../../../shared/lib/format'
 import type { ConvertItem, ExifOutcome, OutFormat } from '../types'
 import { FORMAT_LABEL, OUT_EXT, sourceLabel } from '../lib/convert'
+import { canPreview } from '../lib/preview'
 
 const props = defineProps<{
   item: ConvertItem

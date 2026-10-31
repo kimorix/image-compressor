@@ -70,3 +70,63 @@ export async function sniffFile(file: Blob): Promise<ImageFormat | null> {
   const head = new Uint8Array(await file.slice(0, SNIFF_BYTES).arrayBuffer())
   return sniffFormat(head)
 }
+
+// ---- Extended detection (format converter) ----
+// Formats only the converter reads, with its own decoders. Kept apart from
+// sniffFormat on purpose: the other tools treat these files as unknown,
+// exactly as before.
+
+/** Every input the format converter recognises. */
+export type AnyImageFormat = ImageFormat | 'jxl' | 'psd' | 'qoi' | 'tga' | 'raw'
+
+/** Camera RAW extensions (TIFF-based ones sniff as TIFF by their bytes). */
+export const RAW_EXT = /\.(dng|cr2|cr3|nef|nrw|arw|srf|sr2|pef|orf|rw2|rwl|raf|srw|erf|3fr|fff|iiq|mef|mos|kdc|dcr|x3f)$/i
+
+function looksLikeTgaHeader(b: Uint8Array): boolean {
+  if (b.length < 18) return false
+  const cmType = b[1], type = b[2], w = b[12] | (b[13] << 8), h = b[14] | (b[15] << 8), depth = b[16]
+  if (![1, 2, 3, 9, 10, 11].includes(type) || cmType > 1 || !w || !h || (b[17] & 0xc0) !== 0) return false
+  if (type === 1 || type === 9) return cmType === 1 && depth === 8
+  if (type === 2 || type === 10) return [15, 16, 24, 32].includes(depth)
+  return depth === 8 || depth === 16
+}
+
+/**
+ * sniffFormat plus JPEG XL, PSD/PSB, QOI, camera RAW (CR2/ORF/RW2/RAF/CR3
+ * by their bytes; DNG/NEF/ARW and other TIFF-based RAWs by DNGVersion in
+ * IFD0 or by extension) and TGA (no signature: extension + a sane header,
+ * or the TGA 2.0 footer in `tail`).
+ */
+export function sniffAny(head: Uint8Array, name = '', tail?: Uint8Array): AnyImageFormat | null {
+  const b = head
+  if (b.length >= 2 && b[0] === 0xff && b[1] === 0x0a) return 'jxl'
+  if (b.length >= 12 && b[0] === 0 && b[1] === 0 && b[2] === 0 && b[3] === 0x0c && ascii(b, 4, 4) === 'JXL ') return 'jxl'
+  if (b.length >= 26 && ascii(b, 0, 4) === '8BPS' && b[4] === 0 && (b[5] === 1 || b[5] === 2)) return 'psd'
+  if (b.length >= 14 && ascii(b, 0, 4) === 'qoif') return 'qoi'
+  if (b.length >= 16) {
+    if (b[0] === 0x49 && b[1] === 0x49 && b[2] === 0x2a && b[3] === 0 && b[8] === 0x43 && b[9] === 0x52) return 'raw' // CR2
+    const m4 = ascii(b, 0, 4)
+    if (m4 === 'IIRO' || m4 === 'IIRS' || m4 === 'MMOR') return 'raw' // ORF
+    if (b[0] === 0x49 && b[1] === 0x49 && b[2] === 0x55 && b[3] === 0) return 'raw' // RW2
+    if (ascii(b, 0, 15) === 'FUJIFILMCCD-RAW') return 'raw' // RAF
+    if (ascii(b, 4, 8) === 'ftypcrx ') return 'raw' // CR3
+  }
+  const base = sniffFormat(b)
+  if (base === 'tiff' && (RAW_EXT.test(name) || hasDngVersion(b))) return 'raw'
+  if (base) return base
+  const tga = tail && tail.length >= 18 && ascii(tail, tail.length - 18, 16) === 'TRUEVISION-XFILE'
+  if ((tga || /\.(tga|icb|vda|vst|tpic)$/i.test(name)) && looksLikeTgaHeader(b)) return 'tga'
+  return null
+}
+
+/** IFD0 has a DNGVersion (50706) tag, when IFD0 lies inside the prefix. */
+function hasDngVersion(b: Uint8Array): boolean {
+  const le = b[0] === 0x49
+  const u16 = (o: number) => (le ? b[o] | (b[o + 1] << 8) : (b[o] << 8) | b[o + 1])
+  const u32 = (o: number) => (le ? (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0 : ((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]) >>> 0)
+  const at = u32(4)
+  if (at < 8 || at + 2 > b.length) return false
+  const n = u16(at)
+  for (let i = 0; i < n && at + 2 + i * 12 + 2 <= b.length; i++) if (u16(at + 2 + i * 12) === 50706) return true
+  return false
+}

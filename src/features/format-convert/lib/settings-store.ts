@@ -5,7 +5,7 @@
 // save falls back to the defaults for the bad fields only. Storage is
 // injectable for tests.
 import type { ConvertSettings, LossyFormat } from '../types'
-import { DEFAULT_QUALITY, DEFAULT_SETTINGS, normalizeHex, OUT_FORMATS } from './convert'
+import { DEFAULT_QUALITY, DEFAULT_SETTINGS, LOSSY_FORMATS, normalizeHex, normalizeIcoSizes, OUT_FORMATS } from './convert'
 
 export const SETTINGS_KEY = 'ic-convert-settings'
 
@@ -14,10 +14,10 @@ function store(): Store | null {
   try { return typeof localStorage !== 'undefined' ? localStorage : null } catch { return null }
 }
 
-const LOSSY: LossyFormat[] = ['jpeg', 'webp', 'avif']
+const LOSSY: readonly LossyFormat[] = LOSSY_FORMATS
 
 export function loadConvertSettings(s: Store | null = store()): ConvertSettings {
-  const out: ConvertSettings = { ...DEFAULT_SETTINGS, quality: { ...DEFAULT_QUALITY } }
+  const out: ConvertSettings = { ...DEFAULT_SETTINGS, quality: { ...DEFAULT_QUALITY }, icoSizes: [...DEFAULT_SETTINGS.icoSizes] }
   try {
     const raw = s?.getItem(SETTINGS_KEY)
     if (!raw) return out
@@ -33,15 +33,17 @@ export function loadConvertSettings(s: Store | null = store()): ConvertSettings 
     if (typeof v.fill === 'string') out.fill = normalizeHex(v.fill) ?? out.fill
     if (typeof v.keepExif === 'boolean') out.keepExif = v.keepExif
     if (typeof v.keepName === 'boolean') out.keepName = v.keepName
+    if (Array.isArray(v.icoSizes)) out.icoSizes = normalizeIcoSizes(v.icoSizes)
+    if (v.tiffPages === 'all' || v.tiffPages === 'first') out.tiffPages = v.tiffPages
   } catch { /* corrupt save: defaults */ }
   return out
 }
 
 export function saveConvertSettings(v: ConvertSettings, s: Store | null = store()): void {
   try {
-    const { format, quality, fill, keepExif, keepName } = v
+    const { format, quality, fill, keepExif, keepName, icoSizes, tiffPages } = v
     // 'auto' is not a choice: saving it would pin nothing, so leave it out.
-    const body: Record<string, unknown> = { quality, fill, keepExif, keepName }
+    const body: Record<string, unknown> = { quality, fill, keepExif, keepName, icoSizes, tiffPages }
     if (format !== 'auto') body.format = format
     s?.setItem(SETTINGS_KEY, JSON.stringify(body))
   } catch { /* storage full or blocked */ }
