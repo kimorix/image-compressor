@@ -35,17 +35,37 @@ describe('format recommendation (auto)', () => {
     expect(predictTarget(item, S({ format: 'avif' }))).toBe('avif')
     expect(predictTarget({ ...item, override: 'png' }, S({ format: 'jpeg' }))).toBe('png')
   })
-  it('defaults to auto and offers no BMP/GIF output', () => {
+  it('transparent TIFF / PSD / TGA / QOI -> PNG, opaque ones -> JPEG; SVG / ICO -> PNG; JPEG XL like PNG', () => {
+    for (const f of ['tiff', 'psd', 'tga', 'qoi'] as const) {
+      expect(recommendFormat(f, true), f).toBe('png')
+      expect(recommendFormat(f, false), f).toBe('jpeg')
+    }
+    expect(recommendFormat('svg', false)).toBe('png')
+    expect(recommendFormat('ico', true)).toBe('png')
+    expect(recommendFormat('jxl', true)).toBe('webp')
+    expect(recommendFormat('jxl', false)).toBe('jpeg')
+    expect(recommendFormat('raw', false)).toBe('jpeg')
+  })
+  it('defaults to auto and offers JPEG XL / GIF / BMP / TIFF / ICO / QOI output', () => {
     expect(DEFAULT_SETTINGS.format).toBe('auto')
-    expect(formatFromParam('bmp')).toBeNull()
-    expect(formatFromParam('gif')).toBeNull()
+    expect(formatFromParam('bmp')).toBe('bmp')
+    expect(formatFromParam('gif')).toBe('gif')
+    expect(formatFromParam('ico')).toBe('ico')
+    expect(formatFromParam('qoi')).toBe('qoi')
+    expect(formatFromParam('TIF')).toBe('tiff')
+    expect(formatFromParam('tiff')).toBe('tiff')
+    expect(formatFromParam('jxl')).toBe('jxl')
+    expect(formatFromParam('jpeg-xl')).toBe('jxl')
+    expect(formatFromParam('heic')).toBeNull()
+    expect(formatFromParam('svg')).toBeNull()
   })
 })
 
 describe('inputs', () => {
-  it('accepts decodable formats and refuses TIFF / SVG / ICO / unknown', () => {
-    for (const f of ['jpeg', 'png', 'gif', 'webp', 'avif', 'heic', 'bmp'] as const) expect(isSupportedInput(f)).toBe(true)
-    for (const f of ['tiff', 'svg', 'ico'] as const) expect(isSupportedInput(f)).toBe(false)
+  it('accepts every decodable format, including TIFF / PSD / TGA / QOI / SVG / ICO / JXL / RAW, and refuses unknown', () => {
+    for (const f of ['jpeg', 'png', 'gif', 'webp', 'avif', 'heic', 'bmp', 'tiff', 'svg', 'ico', 'jxl', 'psd', 'qoi', 'tga', 'raw'] as const) {
+      expect(isSupportedInput(f), f).toBe(true)
+    }
     expect(isSupportedInput(null)).toBe(false)
   })
   it('tells images (even unsupported ones) from other files', () => {
@@ -150,13 +170,14 @@ describe('misc helpers', () => {
     expect(qualityFor(S(), 'jpeg')).toBe(85)
     expect(qualityFor(S(), 'webp')).toBe(82)
     expect(qualityFor(S(), 'avif')).toBe(60)
-    expect(qualityFor(S(), 'png')).toBeNull()
+    expect(qualityFor(S(), 'jxl')).toBe(80)
+    for (const f of ['png', 'gif', 'bmp', 'tiff', 'ico', 'qoi'] as const) expect(qualityFor(S(), f), f).toBeNull()
     expect(clampQuality(0)).toBe(1)
     expect(clampQuality(150)).toBe(100)
     expect(clampQuality(NaN)).toBe(80)
     expect(clampQuality(84.6)).toBe(85)
   })
-  it('?to= accepts jpg/jpeg/png/webp/avif', () => {
+  it('?to= accepts jpg/jpeg/png/webp/avif and the new outputs', () => {
     expect(formatFromParam('JPG')).toBe('jpeg')
     expect(formatFromParam('webp')).toBe('webp')
     expect(formatFromParam(undefined)).toBeNull()
@@ -191,15 +212,19 @@ describe('settings store', () => {
     expect(loadConvertSettings(s).format).toBe('auto')
     saveConvertSettings(S(), s)
     expect(JSON.parse(s.m.get(SETTINGS_KEY)!).format).toBeUndefined()
-    saveConvertSettings(S({ format: 'webp', quality: { jpeg: 70, webp: 75, avif: 40 }, fill: '#000000', keepExif: false, keepName: false }), s)
-    expect(loadConvertSettings(s)).toEqual(S({ format: 'webp', quality: { jpeg: 70, webp: 75, avif: 40 }, fill: '#000000', keepExif: false, keepName: false }))
+    const picked = S({ format: 'webp', quality: { jpeg: 70, webp: 75, avif: 40, jxl: 90 }, fill: '#000000', keepExif: false, keepName: false, icoSizes: [16, 32], tiffPages: 'first' })
+    saveConvertSettings(picked, s)
+    expect(loadConvertSettings(s)).toEqual(picked)
+    saveConvertSettings(S({ format: 'tiff' }), s)
+    expect(loadConvertSettings(s).format).toBe('tiff')
   })
   it('validates field by field', () => {
     const s = mem()
-    s.setItem(SETTINGS_KEY, JSON.stringify({ format: 'bmp', quality: { jpeg: 0, webp: 77, avif: 'x' }, fill: 'nope', keepExif: 'yes' }))
+    s.setItem(SETTINGS_KEY, JSON.stringify({ format: 'heic', quality: { jpeg: 0, webp: 77, avif: 'x', jxl: 101 }, fill: 'nope', keepExif: 'yes', tiffPages: 'some' }))
     const v = loadConvertSettings(s)
     expect(v.format).toBe('auto')
-    expect(v.quality).toEqual({ jpeg: 85, webp: 77, avif: 60 })
+    expect(v.quality).toEqual({ jpeg: 85, webp: 77, avif: 60, jxl: 80 })
+    expect(v.tiffPages).toBe('all')
     expect(v.fill).toBe('#ffffff')
     expect(v.keepExif).toBe(true)
     s.setItem(SETTINGS_KEY, '{broken')

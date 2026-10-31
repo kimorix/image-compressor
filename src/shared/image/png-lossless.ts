@@ -234,8 +234,8 @@ export const SMALL_IMAGE_MAX_PIXELS = 1_500_000
  * size (one byte per pixel, cheap), also get the other strategy; the
  * smaller result wins.
  */
-export function preparePng(img: PngInput): { plan: PngPlan; candidates: Uint8Array[] } {
-  const plan = planPng(img)
+export function preparePng(img: PngInput, forceRgba = false): { plan: PngPlan; candidates: Uint8Array[] } {
+  const plan: PngPlan = forceRgba ? { colorType: 'rgba', bitDepth: 8 } : planPng(img)
   const { rows, stride, bpp } = packRows(img, plan)
   const adaptiveFirst = plan.colorType !== 'palette' && plan.bitDepth === 8
   const candidates = [filterRows(rows, stride, img.height, bpp, adaptiveFirst)]
@@ -263,9 +263,13 @@ export async function deflateForPng(data: Uint8Array, small: boolean): Promise<U
   return zlibSync(data, small ? { level: 9, mem: 12 } : { level: 6 })
 }
 
-/** Encode RGBA pixels as the smallest exact PNG this writer can make. */
-export async function encodePngLossless(img: PngInput): Promise<ArrayBuffer> {
-  const { plan, candidates } = preparePng(img)
+/**
+ * Encode RGBA pixels as the smallest exact PNG this writer can make.
+ * `forceRgba` keeps 8-bit RGBA (no colour-type reduction): PNG-in-ICO
+ * entries are expected to be 32-bit by Windows and several icon readers.
+ */
+export async function encodePngLossless(img: PngInput, forceRgba = false): Promise<ArrayBuffer> {
+  const { plan, candidates } = preparePng(img, forceRgba)
   const small = img.width * img.height <= SMALL_IMAGE_MAX_PIXELS
   let best: Uint8Array | null = null
   for (const filtered of candidates) {

@@ -4,16 +4,19 @@
   <div class="cv-settings">
     <div class="cv-field">
       <span class="cv-label" :id="`${uid}-fmt`">{{ p('outFormat') }}</span>
-      <div class="cv-chips" role="radiogroup" :aria-labelledby="`${uid}-fmt`">
-        <button
-          v-for="f in CHOICES"
-          :key="f"
-          type="button"
-          role="radio"
-          :aria-checked="settings.format === f"
-          :class="{ active: settings.format === f }"
-          @click="setFormat(f)"
-        >{{ f === 'auto' ? p('fmtAuto') : FORMAT_LABEL[f] }}</button>
+      <div class="cv-fmt" role="radiogroup" :aria-labelledby="`${uid}-fmt`">
+        <div v-for="(row, r) in ROWS" :key="r" class="cv-chips" :class="{ more: r > 0 }">
+          <button
+            v-for="f in row"
+            :key="f"
+            type="button"
+            role="radio"
+            :aria-checked="settings.format === f"
+            :class="{ active: settings.format === f }"
+            :title="f === 'auto' ? undefined : FORMAT_LABEL[f]"
+            @click="setFormat(f)"
+          >{{ f === 'auto' ? p('fmtAuto') : CHIP_LABEL[f] ?? FORMAT_LABEL[f] }}</button>
+        </div>
       </div>
       <p class="cv-note">{{ p(HINT[settings.format]) }}</p>
     </div>
@@ -38,7 +41,31 @@
         <div class="cv-range-ends" aria-hidden="true"><span>{{ p('smaller') }}</span><span>{{ p('sharper') }}</span></div>
         <p v-if="settings.format === 'auto'" class="cv-note">{{ p('qualityAuto', settings.quality.jpeg, settings.quality.webp) }}</p>
       </template>
-      <p v-else class="cv-note">{{ p('pngLossless') }}</p>
+      <p v-else class="cv-note">{{ settings.format === 'png' ? p('pngLossless') : settings.format === 'gif' ? p('gifNoQuality') : p('losslessNoQuality', FORMAT_LABEL[settings.format]) }}</p>
+    </div>
+
+    <div v-if="settings.format === 'ico'" class="cv-field">
+      <span class="cv-label" :id="`${uid}-ico`">{{ p('icoSizes') }}</span>
+      <div class="cv-chips cv-ico-sizes" role="group" :aria-labelledby="`${uid}-ico`">
+        <button
+          v-for="n in ICO_SIZE_CHOICES"
+          :key="n"
+          type="button"
+          :aria-pressed="settings.icoSizes.includes(n)"
+          :class="{ active: settings.icoSizes.includes(n) }"
+          @click="toggleIco(n)"
+        >{{ n }}</button>
+      </div>
+      <p class="cv-note">{{ p('icoSizesHint') }}</p>
+    </div>
+
+    <div v-if="showPages" class="cv-field">
+      <span class="cv-label" :id="`${uid}-pages`">{{ p('tiffPages') }}</span>
+      <div class="cv-chips" role="radiogroup" :aria-labelledby="`${uid}-pages`">
+        <button type="button" role="radio" :aria-checked="settings.tiffPages === 'all'" :class="{ active: settings.tiffPages === 'all' }" @click="set({ tiffPages: 'all' })">{{ p('tiffPagesAll') }}</button>
+        <button type="button" role="radio" :aria-checked="settings.tiffPages === 'first'" :class="{ active: settings.tiffPages === 'first' }" @click="set({ tiffPages: 'first' })">{{ p('tiffPagesFirst') }}</button>
+      </div>
+      <p v-if="settings.tiffPages === 'all'" class="cv-note">{{ p('tiffPagesHint') }}</p>
     </div>
 
     <div v-if="showFill" class="cv-field">
@@ -88,20 +115,27 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { ConvertSettings, FormatChoice, LossyFormat } from '../types'
-import { clampQuality, FORMAT_LABEL, normalizeHex } from '../lib/convert'
+import { clampQuality, FORMAT_LABEL, ICO_SIZE_CHOICES, isLossy, normalizeHex, OUT_FORMATS } from '../lib/convert'
 
 const props = withDefaults(defineProps<{
   settings: ConvertSettings
   startCount: number
   showStart?: boolean
+  /** A multi-page TIFF is in the list: offer every page / first page. */
+  showPages?: boolean
   p: (key: string, ...args: (string | number)[]) => string
-}>(), { showStart: true })
+}>(), { showStart: true, showPages: false })
 const emit = defineEmits<{ (e: 'update', s: ConvertSettings): void; (e: 'start'): void }>()
 
 const uid = `cvs${Math.random().toString(36).slice(2, 8)}`
 
-const CHOICES: FormatChoice[] = ['auto', 'jpeg', 'png', 'webp', 'avif']
-const HINT: Record<FormatChoice, string> = { auto: 'fmtHintAuto', jpeg: 'fmtHintJpeg', png: 'fmtHintPng', webp: 'fmtHintWebp', avif: 'fmtHintAvif' }
+// Two rows: auto + the everyday four, then the specialist formats.
+const ROWS: FormatChoice[][] = [['auto', ...OUT_FORMATS.slice(0, 4)], [...OUT_FORMATS.slice(4)]]
+const CHIP_LABEL: Partial<Record<FormatChoice, string>> = { jxl: 'JXL' }
+const HINT: Record<FormatChoice, string> = {
+  auto: 'fmtHintAuto', jpeg: 'fmtHintJpeg', png: 'fmtHintPng', webp: 'fmtHintWebp', avif: 'fmtHintAvif',
+  jxl: 'fmtHintJxl', gif: 'fmtHintGif', bmp: 'fmtHintBmp', tiff: 'fmtHintTiff', ico: 'fmtHintIco', qoi: 'fmtHintQoi',
+}
 const SWATCHES = [
   { hex: '#ffffff', label: 'fillWhite' },
   { hex: '#000000', label: 'fillBlack' },
@@ -111,8 +145,8 @@ const SWATCHES = [
 /** Slider target: the chosen lossy format; auto edits JPEG (its usual pick). */
 const qFormat = computed<LossyFormat | null>(() => {
   const f = props.settings.format
-  if (f === 'png') return null
-  return f === 'auto' ? 'jpeg' : f
+  if (f === 'auto') return 'jpeg'
+  return isLossy(f) ? f : null
 })
 // Auto can land on JPEG for a transparent WebP/GIF, so the fill shows there too.
 const showFill = computed(() => props.settings.format === 'jpeg' || props.settings.format === 'auto')
@@ -131,6 +165,12 @@ function setFormat(f: FormatChoice) {
 }
 function setQuality(f: LossyFormat, q: number) {
   set({ quality: { ...props.settings.quality, [f]: clampQuality(q) } })
+}
+function toggleIco(n: number) {
+  const cur = props.settings.icoSizes
+  const next = cur.includes(n) ? cur.filter((x) => x !== n) : [...cur, n].sort((a, b) => a - b)
+  // At least one size stays selected.
+  if (next.length) set({ icoSizes: next })
 }
 function setFill(hex: string) {
   hexDraft.value = hex.toUpperCase()

@@ -139,7 +139,7 @@ describe('built pdf-lib bundle (docs/)', () => {
       for (const [pkg, sigs] of Object.entries(SIGNATURES)) for (const s of sigs) if (src.includes(s)) hits.push(`${f}: ${pkg} (${s})`)
     }
     expect(hits).toEqual([])
-  })
+  }, 30_000) // scans every emitted chunk (now incl. the JPEG XL codecs); slow under a loaded full run
 
   it('the stub is inside the pdf-lib bundles and nowhere else', () => {
     // pdf-lib ships in at most two places: the page-side named chunk

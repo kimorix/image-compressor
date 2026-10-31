@@ -5,6 +5,7 @@ import { pdfLibSlimAlias } from './scripts/pdf-lib-slim'
 import { createReadStream, existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, normalize } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 // pdf.js data files the PDF to Word feature loads at run time: CMaps (CJK
 // fonts that are not embedded), the 14 standard fonts, and the JPX/JBIG2
@@ -36,11 +37,27 @@ function pdfjsData(): Plugin {
   }
 }
 
+// UTIF (TIFF decoder) requires `pako` only for inflateRaw; route that one
+// import to a fflate shim (src/shared/image/formats/pako-shim.ts). Scoped to
+// UTIF: other packages that bundle pako (docx/jszip) are left untouched.
+const PAKO_SHIM = fileURLToPath(new URL('./src/shared/image/formats/pako-shim.ts', import.meta.url))
+function utifPakoShim(): Plugin {
+  return {
+    name: 'utif-pako-shim',
+    enforce: 'pre',
+    resolveId(source, importer) {
+      if (source === 'pako' && importer && /[\\/]utif2[\\/]/.test(importer)) return PAKO_SHIM
+      return null
+    },
+  }
+}
+
 // GitHub Pages serves the /docs folder of main, so the build output goes there.
 // base './' keeps asset paths relative, so the site works under /image-compressor/.
 export default defineConfig({
   plugins: [
     vue(),
+    utifPakoShim(),
     pdfjsData(),
     VitePWA({
       registerType: 'autoUpdate',
@@ -76,7 +93,11 @@ export default defineConfig({
         // build.rollupOptions below) loads only when a PDF is generated; the
         // assets/pdf-*.js pattern keeps it out of the precache and in the
         // runtime cache like pdf.js. The view chunk stays precached.
-        globIgnores: ['**/mozjpeg_enc*.wasm', '**/squoosh_png*.wasm', '**/imagequant_bg*', '**/avif_enc*.wasm', '**/avif_enc*.js', '**/heic2any*.js', '**/webp_enc*.wasm', '**/webp_enc*.js', '**/pdf.worker*', '**/assets/pdf-*.js', '**/docx.worker*', '**/merge.worker*', '**/tesseract*', 'pdfjs/**'],
+        // Format converter extras: every extra codec (TIFF / PSD / TGA /
+        // QOI / ICO / RAW / SVG / BMP / GIF writers, assets/codec-*.js) and
+        // libjxl (jxl_enc / jxl_dec glue + wasm) load only when a file of
+        // that kind is converted, so they are cached on first use too.
+        globIgnores: ['**/assets/codec-*', '**/jxl_*', '**/mozjpeg_enc*.wasm', '**/squoosh_png*.wasm', '**/imagequant_bg*', '**/avif_enc*.wasm', '**/avif_enc*.js', '**/heic2any*.js', '**/webp_enc*.wasm', '**/webp_enc*.js', '**/pdf.worker*', '**/assets/pdf-*.js', '**/docx.worker*', '**/merge.worker*', '**/tesseract*', 'pdfjs/**'],
         // The plugin defaults every navigation to the precached index.html
         // (SPA fallback). This app has no client routing, and the language
         // shells are real files: restrict the fallback to the root page only,
@@ -92,7 +113,7 @@ export default defineConfig({
         // on first use so they still work offline afterwards. Hashed
         // filenames make old entries harmless orphans, bounded by maxEntries.
         runtimeCaching: [{
-          urlPattern: /\/(avif_enc|webp_enc|mozjpeg_enc|squoosh_png_bg|imagequant_bg)[^/]*\.(wasm|js)$|\/heic2any[^/]*\.js$|\/pdf\.worker[^/]*\.m?js$|\/assets\/pdf-[^/]*\.js$|\/docx\.worker[^/]*\.js$|\/merge\.worker[^/]*\.js$|\/tesseract[^/]*\.js$|\/pdfjs\/(cmaps|standard_fonts|wasm)\//,
+          urlPattern: /\/(avif_enc|webp_enc|mozjpeg_enc|squoosh_png_bg|imagequant_bg|jxl_enc|jxl_dec)[^/]*\.(wasm|js)$|\/assets\/codec-[^/]*\.js$|\/heic2any[^/]*\.js$|\/pdf\.worker[^/]*\.m?js$|\/assets\/pdf-[^/]*\.js$|\/docx\.worker[^/]*\.js$|\/merge\.worker[^/]*\.js$|\/tesseract[^/]*\.js$|\/pdfjs\/(cmaps|standard_fonts|wasm)\//,
           handler: 'CacheFirst',
           options: {
             cacheName: 'lazy-assets',
@@ -152,5 +173,7 @@ export default defineConfig({
   // need code-splitting, which the default iife worker format forbids.
   worker: {
     format: 'es',
+    // The image worker runs the converter job (and UTIF) too.
+    plugins: () => [utifPakoShim()],
   },
 })

@@ -108,7 +108,7 @@
     <div id="rightPanel" class="cv-right">
       <div v-if="!isMobile" class="card cv-settings-card">
         <h3>{{ p('settingsTitle') }}</h3>
-        <ConvertSettings :settings="settings" :p="p" :start-count="redoable.length" @update="onSettings" @start="convertAgain" />
+        <ConvertSettings :settings="settings" :p="p" :start-count="redoable.length" :show-pages="hasMultiPage" @update="onSettings" @start="convertAgain" />
       </div>
       <div v-if="!isMobile" class="card cv-guide-card">
         <h3>{{ p('guideTitle') }}</h3>
@@ -117,6 +117,7 @@
           <li>{{ p('guidePng') }}</li>
           <li>{{ p('guideWebp') }}</li>
           <li>{{ p('guideAvif') }}</li>
+          <li>{{ p('guideMore') }}</li>
         </ul>
       </div>
     </div>
@@ -149,7 +150,7 @@
     @close="settingsOpen = false"
   >
     <div class="sheet-body">
-      <ConvertSettings :settings="settings" :p="p" :start-count="redoable.length" @update="onSettings" @start="startFromSheet" />
+      <ConvertSettings :settings="settings" :p="p" :start-count="redoable.length" :show-pages="hasMultiPage" @update="onSettings" @start="startFromSheet" />
     </div>
   </BottomSheet>
   <ConvertDetailSheet
@@ -180,16 +181,17 @@ import { filesFromDrop, type DroppedFile } from '../../shared/lib/drop'
 import { shareFilesOr } from '../../shared/lib/share'
 import { downloadUrl, ymd, zipEntries } from '../../shared/lib/zip'
 import { getImagePool } from '../../shared/image/image-pool'
-import { sniffFormat } from '../../shared/image/sniff'
+import { sniffAny } from '../../shared/image/sniff'
 import type { Lang } from '../../shared/i18n'
 import ConvertSettings from './components/ConvertSettings.vue'
 import ConvertDetailSheet from './components/ConvertDetailSheet.vue'
 import { convertT, CONVERT_MESSAGES } from './i18n'
 import type { ConvertItem, ConvertJobPayload, ConvertJobResult, ConvertSettings as Settings, NoteKey, OutFormat } from './types'
 import {
-  countItems, FORMAT_LABEL, formatFromParam, isAnimated, isSameFormat, isSupportedInput, looksLikeImage,
-  OUT_EXT, outputName, pngMayHaveAlpha, predictTarget, requestedFormat, settingsSig, sourceLabel, uniqueOutNames,
+  ACCEPT, countItems, FORMAT_LABEL, formatFromParam, isAnimated, isLossy, isSameFormat, isSupportedInput, looksLikeImage,
+  MAYBE_ALPHA_INPUT, OUT_EXT, outputName, pngMayHaveAlpha, predictTarget, requestedFormat, settingsSig, sourceLabel, uniqueOutNames,
 } from './lib/convert'
+import { canPreview } from './lib/preview'
 import { loadConvertSettings, saveConvertSettings } from './lib/settings-store'
 import './styles/convert.less'
 
@@ -199,7 +201,6 @@ function p(key: string, ...args: (string | number)[]): string {
   return convertT(lang.value, key, ...args)
 }
 
-const ACCEPT = 'image/*,.heic,.heif,.avif,.webp'
 
 // ---- settings ----
 const settings = ref<Settings>(loadConvertSettings())
@@ -211,8 +212,10 @@ function applyParam() {
 }
 applyParam()
 function onSettings(s: Settings) {
+  const pagesChanged = s.tiffPages !== settings.value.tiffPages
   settings.value = s
   saveConvertSettings(s)
+  if (pagesChanged) applyTiffPages()
   touch()
 }
 
@@ -258,7 +261,7 @@ const redoable = computed(() => {
 const summaryText = computed(() => {
   const s = settings.value
   const parts: string[] = []
-  if (s.format !== 'png') parts.push(p('sumQuality', s.quality[s.format === 'auto' ? 'jpeg' : s.format]))
+  if (s.format === 'auto' || isLossy(s.format)) parts.push(p('sumQuality', s.quality[s.format === 'auto' ? 'jpeg' : s.format]))
   if (s.keepExif) parts.push(p('sumExif'))
   return parts.length ? `· ${parts.join(' · ')}` : ''
 })
@@ -271,7 +274,7 @@ function dropPreview(item: ConvertItem) {
   touch()
 }
 function thumbOf(item: ConvertItem): string | null {
-  return item.srcUrl ?? item.outUrl
+  return item.srcUrl ?? (item.outUrl && canPreview(item.target) ? item.outUrl : null)
 }
 function statusText(item: ConvertItem): string {
   if (isStale(item)) return p('stStale')
@@ -292,20 +295,35 @@ function statusClass(item: ConvertItem): string {
   if (item.status === 'converting' || item.status === 'queued') return 'info'
   return 'mute'
 }
-const NOTE_CLASS: Record<NoteKey, string> = { filled: 'warn', firstFrame: 'info', exifKept: 'mute', exifAvif: 'mute', sameFormat: 'mute', p3Kept: 'mute' }
+const NOTE_CLASS: Record<NoteKey, string> = {
+  filled: 'warn', firstFrame: 'info', exifKept: 'mute', exifAvif: 'mute', sameFormat: 'mute', p3Kept: 'mute',
+  rawPreview: 'info', svgRaster: 'mute', icoLargest: 'mute', psdComposite: 'info', psdEmpty: 'warn', gifAlpha: 'warn', gifColors: 'mute', icoSizes: 'mute', tiffPage: 'info',
+}
+function noteText(item: ConvertItem, n: NoteKey): string {
+  switch (n) {
+    case 'filled': return p('noteFilled', item.fill.toUpperCase())
+    case 'firstFrame': return p('noteFirstFrame')
+    case 'exifKept': return p('noteExifKept')
+    case 'exifAvif': return p('noteExifAvif', FORMAT_LABEL[item.target])
+    case 'sameFormat': return p('noteSameFormat', item.quality ?? '')
+    case 'p3Kept': return p('noteP3')
+    case 'rawPreview': return p('noteRawPreview', item.width, item.height)
+    case 'svgRaster': return p('noteSvgRaster', item.width, item.height)
+    case 'icoLargest': return p('noteIcoLargest', item.width, item.height)
+    case 'psdComposite': return p('notePsdComposite')
+    case 'psdEmpty': return p('notePsdEmpty')
+    case 'gifAlpha': return p('noteGifAlpha')
+    case 'gifColors': return p('noteGifColors')
+    case 'icoSizes': return p('noteIcoSizes', item.icoSizes.join('/'))
+    default: return p('noteTiffPage', item.page + 1, item.pages)
+  }
+}
 function noteChips(item: ConvertItem): { text: string; cls: string }[] {
   const out: { text: string; cls: string }[] = []
-  if (item.status === 'converting' && item.target === 'avif') out.push({ text: p('noteAvifSlow'), cls: 'mute' })
+  if (item.pages > 1 && item.status !== 'unsupported') out.push({ text: noteText(item, 'tiffPage'), cls: NOTE_CLASS.tiffPage })
+  if (item.status === 'converting' && (item.target === 'avif' || item.target === 'jxl')) out.push({ text: p('noteAvifSlow', FORMAT_LABEL[item.target]), cls: 'mute' })
   if (item.status !== 'done') return out
-  for (const n of item.notes) {
-    const text = n === 'filled' ? p('noteFilled', item.fill.toUpperCase())
-      : n === 'firstFrame' ? p('noteFirstFrame')
-        : n === 'exifKept' ? p('noteExifKept')
-          : n === 'exifAvif' ? p('noteExifAvif')
-            : n === 'sameFormat' ? p('noteSameFormat', item.quality ?? '')
-              : p('noteP3')
-    out.push({ text, cls: NOTE_CLASS[n] })
-  }
+  for (const n of item.notes) out.push({ text: noteText(item, n), cls: NOTE_CLASS[n] })
   return out
 }
 
@@ -352,19 +370,23 @@ async function addFiles(list: DroppedFile[]) {
     // The header decides (a ".jpg" that is HEIC, a name without extension);
     // 64 KB also covers a PNG's chunks before IDAT for the alpha hint.
     const head = new Uint8Array(await file.slice(0, 65536).arrayBuffer())
-    const src = sniffFormat(head)
+    // TGA has no signature: its 2.0 footer is the only byte-level hint.
+    const tail = file.size > 26 ? new Uint8Array(await file.slice(file.size - 26).arrayBuffer()) : undefined
+    const src = sniffAny(head, file.name, tail)
     if (!looksLikeImage(file, src)) { skipped++; continue }
     const supported = isSupportedInput(src)
+    // A multi-page TIFF becomes one row per page (or just the first).
+    const pages = src === 'tiff' ? await countTiffPages(file) : 1
     const item: ConvertItem = {
       id: `cv-${Date.now().toString(36)}-${seq++}`,
       file,
       dir,
       src,
-      mayHaveAlpha: src === 'png' ? pngMayHaveAlpha(head) : src === 'webp' || src === 'gif',
+      mayHaveAlpha: src === 'png' ? pngMayHaveAlpha(head) : !!src && MAYBE_ALPHA_INPUT.has(src),
       status: supported ? 'queued' : 'unsupported',
       override: null,
       target: 'jpeg',
-      srcUrl: supported && src !== 'heic' ? URL.createObjectURL(file) : null,
+      srcUrl: supported && canPreview(src) ? URL.createObjectURL(file) : null,
       outBlob: null,
       outUrl: null,
       outName: '',
@@ -378,9 +400,13 @@ async function addFiles(list: DroppedFile[]) {
       sig: '',
       gen: 0,
       fill: settings.value.fill,
+      page: 0,
+      pages,
+      icoSizes: [],
     }
     item.target = predictTarget(item, settings.value)
     added.push(item)
+    if (pages > 1 && settings.value.tiffPages === 'all') added.push(...pageRows(item))
   }
   if (skipped) showHint(p('notImage', skipped))
   else if (dups) showHint(p('dupSkipped', dups))
@@ -389,6 +415,59 @@ async function addFiles(list: DroppedFile[]) {
   touch()
   // Auto-start: every supported file converts as soon as it is added.
   for (const it of added) if (it.status === 'queued') void convertOne(it)
+}
+
+// ---- multi-page TIFF ----
+async function countTiffPages(file: File): Promise<number> {
+  try {
+    const { tiffPageCount } = await import('../../shared/image/formats/codec-tiff-ifd')
+    return tiffPageCount(new Uint8Array(await file.arrayBuffer()))
+  } catch {
+    return 1
+  }
+}
+/** Rows for pages 2…n of a multi-page TIFF row (page 0). */
+function pageRows(first: ConvertItem): ConvertItem[] {
+  const out: ConvertItem[] = []
+  for (let page = 1; page < first.pages; page++) {
+    out.push({
+      ...first,
+      id: `cv-${Date.now().toString(36)}-${seq++}`,
+      page,
+      // Each row owns its URLs (revoked on removal); the source preview is not shared.
+      srcUrl: null,
+      outBlob: null,
+      outUrl: null,
+      notes: [],
+      icoSizes: [],
+      gen: 0,
+    })
+  }
+  return out
+}
+const hasMultiPage = computed(() => (void rev.value, items.value.some((i) => i.pages > 1)))
+/** The "every page / first page" switch applies to rows already in the list too. */
+function applyTiffPages() {
+  if (settings.value.tiffPages === 'first') {
+    const drop = items.value.filter((i) => i.page > 0)
+    drop.forEach(release)
+    if (drop.some((i) => i.id === detailId.value)) detailId.value = null
+    items.value = items.value.filter((i) => i.page === 0)
+    return
+  }
+  const next: ConvertItem[] = []
+  const fresh: ConvertItem[] = []
+  for (const it of items.value) {
+    next.push(it)
+    if (it.page === 0 && it.pages > 1 && !items.value.some((o) => o !== it && o.file === it.file && o.dir === it.dir)) {
+      const rows = pageRows(it)
+      for (const r of rows) { r.status = it.status === 'unsupported' ? 'unsupported' : 'queued'; r.sig = '' }
+      next.push(...rows)
+      fresh.push(...rows)
+    }
+  }
+  items.value = next
+  for (const r of fresh) if (r.status === 'queued') void convertOne(r)
 }
 
 // ---- converting (the shared image pool; one cancel group per file) ----
@@ -411,6 +490,8 @@ async function convertOne(item: ConvertItem) {
     quality: { ...s.quality },
     fill: s.fill,
     keepExif: s.keepExif,
+    page: item.page,
+    icoSizes: [...s.icoSizes],
   }
   const sig = settingsSig(item, s)
   const keepName = s.keepName
@@ -429,7 +510,7 @@ async function convertOne(item: ConvertItem) {
     if (item.outUrl) URL.revokeObjectURL(item.outUrl)
     item.outBlob = r.blob
     item.outUrl = URL.createObjectURL(r.blob)
-    item.outName = outputName(item.file.name, r.format, keepName)
+    item.outName = outputName(item.file.name, r.format, keepName, item.page, item.pages)
     item.target = r.format
     item.width = r.width
     item.height = r.height
@@ -442,6 +523,8 @@ async function convertOne(item: ConvertItem) {
     if (r.exif === 'avif') notes.push('exifAvif')
     if (isSameFormat(item.src, r.format) && r.quality !== null) notes.push('sameFormat')
     if (r.p3) notes.push('p3Kept')
+    notes.push(...r.extra)
+    item.icoSizes = r.icoSizes
     item.notes = notes
     item.exif = r.exif
     item.sig = sig

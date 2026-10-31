@@ -1,10 +1,12 @@
-import type { ImageFormat } from '../../shared/image/sniff'
+import type { AnyImageFormat as ImageFormat } from '../../shared/image/sniff'
 
-/** Output formats offered in v1 (no BMP / GIF output). */
-export type OutFormat = 'jpeg' | 'png' | 'webp' | 'avif'
+/** Output formats. */
+export type OutFormat = 'jpeg' | 'png' | 'webp' | 'avif' | 'jxl' | 'gif' | 'bmp' | 'tiff' | 'ico' | 'qoi'
 /** 'auto' = recommended by source until the user picks a format. */
 export type FormatChoice = 'auto' | OutFormat
-export type LossyFormat = 'jpeg' | 'webp' | 'avif'
+export type LossyFormat = 'jpeg' | 'webp' | 'avif' | 'jxl'
+/** Multi-page TIFF: one row per page, or the first page only. */
+export type TiffPages = 'all' | 'first'
 
 export interface ConvertSettings {
   format: FormatChoice
@@ -14,14 +16,18 @@ export interface ConvertSettings {
   fill: string
   keepExif: boolean
   keepName: boolean
+  /** ICO output sizes (px, square). */
+  icoSizes: number[]
+  tiffPages: TiffPages
 }
 
 export type ItemStatus = 'queued' | 'converting' | 'done' | 'error' | 'unsupported' | 'cancelled'
 
 /** Row notes, rendered through the feature dictionary. */
 export type NoteKey = 'filled' | 'firstFrame' | 'exifKept' | 'exifAvif' | 'sameFormat' | 'p3Kept'
+  | 'rawPreview' | 'svgRaster' | 'icoLargest' | 'psdComposite' | 'psdEmpty' | 'gifAlpha' | 'gifColors' | 'icoSizes' | 'tiffPage'
 
-/** EXIF outcome of one conversion. */
+/** EXIF outcome of one conversion ('avif' = the output format cannot carry EXIF). */
 export type ExifOutcome = 'kept' | 'none' | 'off' | 'avif'
 
 export interface ConvertItem {
@@ -51,6 +57,11 @@ export interface ConvertItem {
   /** Error key in the feature dictionary. */
   error: string | null
   retryable: boolean
+  /** Multi-page TIFF: 0-based page of this row, and the file's page count. */
+  page: number
+  pages: number
+  /** ICO output: the sizes written. */
+  icoSizes: number[]
   /** Settings signature the result was made with (stale detection). */
   sig: string
   /** Bumped per run: a late result of an older run is ignored. */
@@ -67,6 +78,9 @@ export interface ConvertJobPayload {
   quality: Record<LossyFormat, number>
   fill: string
   keepExif: boolean
+  /** TIFF page to convert (0-based). */
+  page: number
+  icoSizes: number[]
 }
 
 export interface ConvertJobResult {
@@ -80,4 +94,8 @@ export interface ConvertJobResult {
   animated: boolean
   exif: ExifOutcome
   p3: boolean
+  /** Source/output notes beyond the flags above (RAW preview, SVG raster, …). */
+  extra: NoteKey[]
+  /** ICO output: the sizes written. */
+  icoSizes: number[]
 }

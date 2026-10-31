@@ -116,7 +116,7 @@ let quantReady: Promise<{
   }
   makeImage: (data: Uint8Array, w: number, h: number) => { free: () => void }
 }> | null = null
-export async function encodePngQuantized(img: RgbaImage, quality: number): Promise<ArrayBuffer> {
+export async function encodePngQuantized(img: RgbaImage, quality: number, speed = 10): Promise<ArrayBuffer> {
   if (!quantReady) {
     const p = (async () => {
       const bg = await import('imagequant/imagequant_bg.js')
@@ -150,7 +150,7 @@ export async function encodePngQuantized(img: RgbaImage, quality: number): Promi
     // runs ~15 probes, which used to mean a ~50s silent wait. Speed 10 is
     // ~3x faster with a slightly less optimal palette; flat screenshots
     // (the main quantize use case) are unaffected in practice.
-    liq.set_speed(10)
+    liq.set_speed(speed)
     const image = makeImage(new Uint8Array(img.data.buffer, img.data.byteOffset, img.data.byteLength), img.width, img.height)
     const png = liq.process(image)
     // Note: do not free the image here — this binding's process() already

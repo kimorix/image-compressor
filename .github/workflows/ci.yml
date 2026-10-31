@@ -22,6 +22,12 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Independent decoders the format tests compare against (they are
+      # skipped without them): Pillow, tifffile, imagecodecs (JPEG XL).
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --upgrade pip && python -m pip install numpy Pillow tifffile imagecodecs
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build

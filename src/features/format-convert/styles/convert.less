@@ -339,10 +339,20 @@
   color: var(--accent);
   font-size: 15px;
 }
+.cv-fmt {
+  display: grid;
+  gap: 6px;
+}
 .cv-chips {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
+  &.more {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  &.cv-ico-sizes {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
   button {
     min-width: 0;
     min-height: 40px;
