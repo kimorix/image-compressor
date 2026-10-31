@@ -35,7 +35,7 @@
           </div>
         </template>
       </nav>
-      <div v-if="!rail" class="side-slot"><slot /></div>
+      <div v-if="!rail && showsToolCard(active)" class="side-slot"><slot /></div>
     </div>
   </aside>
 </template>
@@ -45,7 +45,7 @@ import { ref } from 'vue'
 import type { NavKey } from '../composables/useHashRoute'
 import { useSideNav } from '../composables/useSideNav'
 import NavIcon from './NavIcon.vue'
-import { NAV_GROUPS } from './nav'
+import { NAV_GROUPS, showsToolCard } from './nav'
 
 defineProps<{ active: NavKey | ''; t: (key: string, ...args: (string | number)[]) => string }>()
 const emit = defineEmits<{ (e: 'nav', key: NavKey): void }>()

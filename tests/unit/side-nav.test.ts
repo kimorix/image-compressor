@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createSSRApp, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import SideNav from '../../src/shared/components/SideNav.vue'
-import { NAV_GROUPS } from '../../src/shared/components/nav'
+import { NAV_GROUPS, showsToolCard } from '../../src/shared/components/nav'
 import { defaultNavMode, effectiveNavMode, parseNavMode, useSideNav } from '../../src/shared/composables/useSideNav'
 import { MESSAGES, t as tx } from '../../src/shared/i18n'
 import type { NavKey } from '../../src/shared/composables/useHashRoute'
@@ -47,7 +47,19 @@ describe('side nav mode', () => {
   })
 })
 
-describe('side nav rail', () => {
+describe('side nav tool card (route check)', () => {
+  it('shows the tool card on every tool route and never on History', () => {
+    for (const g of NAV_GROUPS) for (const e of g.items) expect(showsToolCard(e.key), e.key).toBe(e.key !== 'history')
+    expect(showsToolCard('')).toBe(false)
+  })
+  it('renders the card on a tool page and drops it on History', async () => {
+    const tool = await render('compress')
+    expect(tool).toContain('class="side-card"')
+    const hist = await render('history')
+    expect(hist).not.toContain('class="side-card"')
+    // Navigation stays on History.
+    expect(hist).toContain('aria-current="page"')
+  })
   it('collapses to an icon rail with labelled, tooltipped buttons and no card', async () => {
     const { toggle, mode } = useSideNav()
     expect(mode.value).toBe('full') // node: 1440px, fine pointer
