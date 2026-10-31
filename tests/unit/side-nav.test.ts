@@ -43,6 +43,7 @@ describe('side nav mode', () => {
     for (const [code, m] of Object.entries(MESSAGES)) {
       expect(m.navCollapse, code).toBeTypeOf('string')
       expect(m.navExpand, code).toBeTypeOf('string')
+      expect(m.clearData, code).toBeTypeOf('string')
     }
   })
 })
@@ -57,8 +58,9 @@ describe('side nav tool card (route check)', () => {
     expect(tool).toContain('class="side-card"')
     const hist = await render('history')
     expect(hist).not.toContain('class="side-card"')
-    // Navigation stays on History.
+    // Navigation and the clear-data entry stay on History.
     expect(hist).toContain('aria-current="page"')
+    expect(hist).toContain(t('clearData'))
   })
   it('collapses to an icon rail with labelled, tooltipped buttons and no card', async () => {
     const { toggle, mode } = useSideNav()
@@ -75,6 +77,7 @@ describe('side nav tool card (route check)', () => {
       }
       expect(html).toContain(`aria-label="${t('navExpand')}"`)
       expect(html).toContain('aria-expanded="false"')
+      expect(html).toContain(`data-tip="${t('clearData')}"`)
     } finally {
       toggle()
     }

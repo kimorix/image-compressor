@@ -7,11 +7,13 @@
   <KeepAlive>
     <component :is="view" :key="route.feature" v-bind="viewProps" />
   </KeepAlive>
+  <ClearDataDialog />
 </template>
 
 <script setup lang="ts">
 import { computed, defineAsyncComponent, type Component } from 'vue'
 import CompressorView from './features/image-compressor/CompressorView.vue'
+import ClearDataDialog from './shared/components/ClearDataDialog.vue'
 import { useHashRoute, type Feature } from './shared/composables/useHashRoute'
 
 const PdfToWordView = defineAsyncComponent(() => import('./features/pdf-to-word/PdfToWordView.vue'))

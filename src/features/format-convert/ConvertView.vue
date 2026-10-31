@@ -168,6 +168,7 @@
 </template>
 
 <script setup lang="ts">
+import { isClearingData } from '../../shared/lib/clear-data'
 import { computed, onActivated, onDeactivated, onMounted, onUnmounted, ref, shallowRef, triggerRef, watch } from 'vue'
 import AppHeader from '../../shared/components/AppHeader.vue'
 import SideNav from '../../shared/components/SideNav.vue'
@@ -744,6 +745,8 @@ function stopListening() {
   window.removeEventListener('resize', onResize)
 }
 function onBeforeUnload(e: BeforeUnloadEvent) {
+  // Clearing all local data reloads on purpose: no "leave page?" prompt.
+  if (isClearingData()) return
   if (items.value.some((i) => i.status === 'converting' || i.status === 'queued')) {
     e.preventDefault()
     e.returnValue = ''

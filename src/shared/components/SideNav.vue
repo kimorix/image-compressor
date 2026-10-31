@@ -36,6 +36,16 @@
         </template>
       </nav>
       <div v-if="!rail && showsToolCard(active)" class="side-slot"><slot /></div>
+      <div class="side-foot">
+        <button
+          type="button"
+          class="danger-ghost side-clear"
+          :aria-label="rail ? t('clearData') : undefined"
+          :data-tip="rail ? t('clearData') : undefined"
+          aria-haspopup="dialog"
+          @click="onClear"
+        ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg><span class="side-text">{{ t('clearData') }}</span></button>
+      </div>
     </div>
   </aside>
 </template>
@@ -44,6 +54,7 @@
 import { ref } from 'vue'
 import type { NavKey } from '../composables/useHashRoute'
 import { useSideNav } from '../composables/useSideNav'
+import { useClearData } from '../composables/useClearData'
 import NavIcon from './NavIcon.vue'
 import { NAV_GROUPS, showsToolCard } from './nav'
 
@@ -51,6 +62,11 @@ defineProps<{ active: NavKey | ''; t: (key: string, ...args: (string | number)[]
 const emit = defineEmits<{ (e: 'nav', key: NavKey): void }>()
 const { rail, overlayOpen, toggle, closeOverlay } = useSideNav()
 const toggleRef = ref<HTMLButtonElement | null>(null)
+const { ask } = useClearData()
+function onClear() {
+  closeOverlay()
+  ask()
+}
 
 function onNav(key: NavKey) {
   closeOverlay()

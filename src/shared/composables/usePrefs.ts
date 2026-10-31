@@ -8,11 +8,12 @@ import { applyTheme, initialTheme, MOON_ICON, SUN_ICON, type Theme } from '../li
 const lang = ref<Lang>(initialLang())
 const theme = ref<Theme>(initialTheme())
 
-function setLang(l: Lang) {
+/** persist=false applies without storing (page load, see applyTheme). */
+function setLang(l: Lang, persist = true) {
   lang.value = l
   document.documentElement.lang = l
   document.documentElement.dataset.lang = l
-  try { localStorage.setItem('ic-lang', l) } catch { /* ignore */ }
+  if (persist) try { localStorage.setItem('ic-lang', l) } catch { /* ignore */ }
 }
 
 function toggleTheme() {

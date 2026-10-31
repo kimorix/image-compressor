@@ -15,9 +15,12 @@ export function initialTheme(): Theme {
   }
 }
 
-export function applyTheme(t: Theme): void {
+/** persist=false applies without storing (page load): only a user choice
+is written, so a fresh visit (or one right after "clear all local data")
+leaves storage empty. */
+export function applyTheme(t: Theme, persist = true): void {
   document.documentElement.dataset.theme = t
-  try { localStorage.setItem('ic-theme', t) } catch { /* ignore */ }
+  if (persist) try { localStorage.setItem('ic-theme', t) } catch { /* ignore */ }
   const meta = document.querySelector('meta[name="theme-color"]')
   if (meta) meta.setAttribute('content', t === 'dark' ? '#010102' : '#eef4ff')
 }

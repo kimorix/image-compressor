@@ -158,6 +158,9 @@
             <span class="hist-date">{{ new Date(r.t).toLocaleDateString() }}</span>
           </li>
         </ul>
+        <div class="hist-data">
+          <button type="button" class="danger-ghost" aria-haspopup="dialog" @click="askClearData"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg>{{ t('clearData') }}</button>
+        </div>
       </div>
     </section>
   </div>
@@ -219,6 +222,8 @@
 </template>
 
 <script setup lang="ts">
+import { CLEAR_EVENT, isClearingData } from '../../shared/lib/clear-data'
+import { useClearData } from '../../shared/composables/useClearData'
 import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue'
 import DropZone from './components/DropZone.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
@@ -986,12 +991,22 @@ const busy = computed(() => activeRuns.value > 0 || zipping.value)
 const busyText = computed(() => doneCount.value < items.value.length
   ? t('processingCount', finishedCount.value, items.value.length)
   : t('processing'))
+const { ask: askClearData } = useClearData()
+// Clearing all local data: stop the encoders and drop this page's results
+// (revoking their object URLs) before storage goes and the page reloads.
+function onClearData() {
+  pendingRecompress = false
+  pool.cancelAll()
+  clearAll()
+}
 function cancelBusy() {
   if (activeRuns.value === 0) return
   pendingRecompress = false
   pool.cancelAll()
 }
 function onBeforeUnload(e: BeforeUnloadEvent) {
+  // Clearing all local data reloads on purpose: no "leave page?" prompt.
+  if (isClearingData()) return
   if (!busy.value) return
   e.preventDefault()
   e.returnValue = ''
@@ -1097,9 +1112,13 @@ function onDocDrop(e: DragEvent) {
 }
 
 onMounted(() => {
-  applyTheme(theme.value)
-  setLang(lang.value)
+  // Apply the stored or detected prefs without writing them: storage only
+  // holds what the user chose.
+  applyTheme(theme.value, false)
+  setPrefLang(lang.value, false)
+  applyDocMeta()
   window.addEventListener('beforeunload', onBeforeUnload)
+  window.addEventListener(CLEAR_EVENT, onClearData)
 })
 // The shell keeps this view alive (KeepAlive) while the PDF feature is
 // shown: page-wide paste/drop only belong to the visible feature, and any
@@ -1141,6 +1160,7 @@ onUnmounted(() => {
   window.removeEventListener('resize', onViewportResize)
   window.removeEventListener('scroll', updateStripStuck)
   window.removeEventListener('beforeunload', onBeforeUnload)
+  window.removeEventListener(CLEAR_EVENT, onClearData)
   if (busyAddTimer) clearTimeout(busyAddTimer)
   removalTimers.forEach((t) => clearTimeout(t))
   removalTimers.clear()
