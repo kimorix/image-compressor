@@ -2,7 +2,8 @@
 // worker (normal path) or on the main thread (the pool's fallback); only
 // the decode and canvas helpers differ between the two.
 //
-//   decode (HEIC via heic2any, EXIF orientation applied by the decoder)
+//   decode (HEIC natively where the engine can — Safari — else via
+//   heic2any; EXIF orientation applied by the decoder)
 //   → pixel cap → geometry (same pure function as the preview)
 //   → high-quality downscale into the output canvas (pad / alpha fill)
 //   → watermark → encode (wasm, canvas fallback) → ICC (P3) → EXIF (JPEG)
@@ -70,14 +71,16 @@ export async function decodeUpright(blob: Blob, keepValues = false): Promise<Dec
 
 export interface SourceInfo {
   format: ImageFormat | null
-  /** Decodable blob (the decoded PNG for HEIC). */
+  /** The source file. HEIC is decoded lazily (see decodeSource). */
   blob: Blob
+  /** HEIC/HEIF: decode natively first, heic2any only as the fallback. */
+  heic: boolean
   orientation: number
   date: string | null
   gifFrames: number
 }
 
-/** Sniff, read EXIF basics and GIF frames, and turn HEIC into a decodable PNG. */
+/** Sniff, read EXIF basics and GIF frames. */
 export async function readSource(file: File): Promise<SourceInfo> {
   const format = await sniffFile(file)
   let orientation = 1
@@ -88,15 +91,31 @@ export async function readSource(file: File): Promise<SourceInfo> {
     date = ex.date
   }
   const gifFrames = format === 'gif' ? gifFrameCount(new Uint8Array(await file.arrayBuffer())) : 0
-  let blob: Blob = file
-  if (format === 'heic' || (!format && /\.hei[cf]$/i.test(file.name))) {
-    try {
-      blob = await decodeHeicToPngBlob(file)
-    } catch {
-      throw jobError('errHeic')
-    }
+  const heic = format === 'heic' || (!format && /\.hei[cf]$/i.test(file.name))
+  return { format, blob: file, heic, orientation, date, gifFrames }
+}
+
+/**
+ * Decode the source upright. HEIC: Safari (iOS 17+ / macOS 14+) decodes it
+ * natively, which is far faster and lighter than heic2any: on iPhone,
+ * libheif decoding several 12–48 MP photos in up to four pool workers at
+ * once (a wasm heap each, plus a full-size PNG encode and re-decode) is
+ * slow enough that rows sit at "Reading…" for a long time and heavy
+ * enough to risk the tab being killed for memory. heic2any stays as the
+ * fallback for engines without a HEIC decoder (Chrome, Firefox).
+ */
+export async function decodeSource(info: SourceInfo, keepValues = false, heicFallback: (b: Blob) => Promise<Blob> = decodeHeicToPngBlob): Promise<Decoded> {
+  if (!info.heic) return decodeUpright(info.blob, keepValues)
+  try {
+    return await decodeUpright(info.blob, keepValues)
+  } catch { /* no native HEIC decoder: fall back to libheif */ }
+  let png: Blob
+  try {
+    png = await heicFallback(info.blob)
+  } catch {
+    throw jobError('errHeic')
   }
-  return { format, blob, orientation, date, gifFrames }
+  return decodeUpright(png, keepValues)
 }
 
 /** Formats whose pixels can carry transparency (alpha scan worth doing). */
@@ -155,7 +174,7 @@ export async function processImage({ file, settings, focus, logo }: ProcessInput
   const srcIcc = await extractIcc(info.blob)
   let useP3 = srcIcc !== null && isDisplayP3(srcIcc)
     && (outType === 'image/jpeg' || outType === 'image/webp' || (outType === 'image/png' && canEmbedPng()))
-  const dec = await decodeUpright(info.blob, useP3)
+  const dec = await decodeSource(info, useP3)
   let logoImg: Decoded | null = null
   try {
     const srcW = dec.w
@@ -271,7 +290,7 @@ export interface ProbeResult {
 /** Decode once for the list: upright size, notes and a small preview image. */
 export async function probeImage(file: File): Promise<ProbeResult> {
   const info = await readSource(file)
-  const dec = await decodeUpright(info.blob)
+  const dec = await decodeSource(info)
   try {
     if (exceedsPixelLimit(dec.w, dec.h)) throw jobError(`errTooLarge:${MAX_PIXELS_MB}`, false)
     const k = Math.min(1, PREVIEW_LONG / Math.max(dec.w, dec.h))
