@@ -52,23 +52,51 @@ function loadDec(): Promise<DecModule> {
   return dec
 }
 
+/**
+ * libjxl's wasm heap is capped at 2 GiB and an effort-7 encode needs about
+ * 100 bytes per pixel: 18 MP peaks near 1.8 GiB, 24 MP aborts. Callers check
+ * this before decoding work is wasted on an encode that cannot finish.
+ */
+export const JXL_MAX_PIXELS = 18_000_000
+/** Above this the encoder instance is dropped afterwards (wasm memory never shrinks). */
+const JXL_RELEASE_PIXELS = 4_000_000
+
+/** Big encodes run one at a time across all workers (a wasm heap each). */
+function serialized<T>(px: number, fn: () => Promise<T>): Promise<T> {
+  const locks = (globalThis as { navigator?: { locks?: { request: (name: string, cb: () => Promise<T>) => Promise<T> } } }).navigator?.locks
+  return px > JXL_RELEASE_PIXELS && locks ? locks.request('ic-jxl-encode', fn) : fn()
+}
+
 /** Quality 1–99 = lossy (VarDCT, effort 7); 100 = mathematically lossless. */
 export async function encodeJxl(img: { data: Uint8Array | Uint8ClampedArray; width: number; height: number }, quality: number): Promise<Uint8Array> {
-  const m = await loadEnc()
-  const lossless = quality >= 100
-  const out = m.encode(img.data, img.width, img.height, {
-    effort: 7,
-    quality: lossless ? 100 : quality,
-    progressive: false,
-    epf: -1,
-    lossyPalette: false,
-    decodingSpeedTier: 0,
-    photonNoiseIso: 0,
-    lossyModular: false,
-    lossless,
+  const px = img.width * img.height
+  if (px > JXL_MAX_PIXELS) throw new Error('JPEG XL: image too large for the wasm encoder')
+  return serialized(px, async () => {
+    const m = await loadEnc()
+    const lossless = quality >= 100
+    let out: Uint8Array | null = null
+    try {
+      out = m.encode(img.data, img.width, img.height, {
+        effort: 7,
+        quality: lossless ? 100 : quality,
+        progressive: false,
+        epf: -1,
+        lossyPalette: false,
+        decodingSpeedTier: 0,
+        photonNoiseIso: 0,
+        lossyModular: false,
+        lossless,
+      })
+    } catch (err) {
+      // An aborted emscripten module stays unusable: start fresh next time.
+      enc = null
+      throw err
+    }
+    // Let a heap grown by a big image be collected instead of pinned.
+    if (px > JXL_RELEASE_PIXELS) enc = null
+    if (!out) throw new Error('JPEG XL encode failed')
+    return out.slice()
   })
-  if (!out) throw new Error('JPEG XL encode failed')
-  return out.slice()
 }
 
 export async function decodeJxl(bytes: Uint8Array): Promise<Rgba> {

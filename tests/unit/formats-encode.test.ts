@@ -10,7 +10,7 @@ import { decodeTiff, encodeTiff } from '../../src/shared/image/formats/codec-tif
 import { decodeQoi, encodeQoi } from '../../src/shared/image/formats/codec-qoi'
 import { assembleIco, decodeIco, encodeIco, fitSquare, icoPlan, readIcoDir, resizeArea } from '../../src/shared/image/formats/codec-ico'
 import { assembleGif, encodeGif, exactPalette, hardenAlpha, indexedFromPng, lzw } from '../../src/shared/image/formats/codec-gif'
-import { decodeJxl, encodeJxl } from '../../src/shared/image/formats/codec-jxl'
+import { decodeJxl, encodeJxl, JXL_MAX_PIXELS } from '../../src/shared/image/formats/codec-jxl'
 import { encodePngLossless } from '../../src/shared/image/png-lossless'
 import { encodePngQuantized } from '../../src/shared/image/wasm-encoders'
 import { gifFrameCount } from '../../src/shared/image/gif'
@@ -257,5 +257,14 @@ describe('JPEG XL writer (libjxl wasm)', () => {
       expect(r.data[(20 * 96) * 4 + 3]).toBe(255)
       expect(meanDiff(r.data, d)).toBeLessThan(10)
     }
+  }, 60000)
+  it('refuses images over the wasm heap budget before touching the encoder, and keeps working after', async () => {
+    // 24 MP needs more than libjxl's 2 GiB wasm heap (it aborts); the cap fails fast instead.
+    expect(JXL_MAX_PIXELS).toBeLessThan(6000 * 4000)
+    expect(JXL_MAX_PIXELS).toBeGreaterThanOrEqual(5184 * 3456)
+    const w = 6000, h = 4000
+    await expect(encodeJxl({ data: new Uint8ClampedArray(4), width: w, height: h }, 80)).rejects.toThrow(/too large/)
+    const ok = await encodeJxl({ data: noisy(32, 16), width: 32, height: 16 }, 80)
+    expect([ok[0], ok[1]]).toEqual([0xff, 0x0a])
   }, 60000)
 })

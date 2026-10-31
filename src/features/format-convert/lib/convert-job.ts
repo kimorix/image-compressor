@@ -28,7 +28,7 @@ import type { ConvertJobPayload, ConvertJobResult, ExifOutcome, NoteKey, OutForm
 import { clampQuality, flattenAlpha, hasAlpha, isAnimated, OUT_MIME, qualityFor, recommendFormat } from './convert'
 
 /** Error keys the job can throw (all present in the feature dictionary). */
-export type ConvertErrorKey = 'errDecode' | 'errAvifDecode' | 'errHeic' | 'errTooLarge' | 'errEncode' | 'errUnsupported' | 'errRawNoPreview' | 'errPsd'
+export type ConvertErrorKey = 'errDecode' | 'errAvifDecode' | 'errHeic' | 'errTooLarge' | 'errEncode' | 'errUnsupported' | 'errRawNoPreview' | 'errPsd' | 'errJxlTooLarge'
 
 /** Sources the browser decodes itself (the original pipeline). */
 const NATIVE_INPUT = new Set(['jpeg', 'png', 'gif', 'webp', 'avif', 'heic', 'bmp'])
@@ -160,7 +160,12 @@ async function encodeOther(fmt: OutFormat, img: ImageData, alpha: boolean, quali
     if (fmt === 'bmp') out = (await import('../../../shared/image/formats/codec-bmp')).encodeBmp(rgba, alpha)
     else if (fmt === 'tiff') out = await (await import('../../../shared/image/formats/codec-tiff')).encodeTiff(rgba, alpha)
     else if (fmt === 'qoi') out = (await import('../../../shared/image/formats/codec-qoi')).encodeQoi(rgba, alpha)
-    else if (fmt === 'jxl') out = await (await import('../../../shared/image/formats/codec-jxl')).encodeJxl(rgba, clampQuality(quality ?? 80))
+    else if (fmt === 'jxl') {
+      const { encodeJxl, JXL_MAX_PIXELS } = await import('../../../shared/image/formats/codec-jxl')
+      // Same answer on every thread: do not rerun it on the main thread.
+      if (rgba.width * rgba.height > JXL_MAX_PIXELS) throw jobError('errJxlTooLarge', false)
+      out = await encodeJxl(rgba, clampQuality(quality ?? 80))
+    }
     else if (fmt === 'ico') {
       const r = await (await import('../../../shared/image/formats/codec-ico')).encodeIco(rgba, icoSizes, (sq) => encodePngLossless(sq, true))
       out = r.bytes
@@ -175,6 +180,7 @@ async function encodeOther(fmt: OutFormat, img: ImageData, alpha: boolean, quali
       if (r.quantized) extra.push('gifColors')
     } else throw new Error(`no writer for ${fmt}`)
   } catch (err) {
+    if ((err as Error)?.message === 'errJxlTooLarge') throw err
     console.warn(`[format-convert] ${fmt} encode failed:`, err)
     throw jobError('errEncode')
   }
