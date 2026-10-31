@@ -105,11 +105,6 @@ onBeforeUnmount(() => { if (timer) clearTimeout(timer) })
 // ---- tool placeholder ("coming soon") ----
 @media (min-width: 720px) {
   .soon-layout .soon-main {
-    grid-column: 1 / -1;
-  }
-}
-@media (min-width: 1080px) {
-  .soon-layout .soon-main {
     grid-column: 2 / -1;
   }
 }
