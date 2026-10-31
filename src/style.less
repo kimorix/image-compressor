@@ -837,6 +837,11 @@ html {
       white-space: nowrap;
       border: 0;
     }
+    // The meta wrapper only groups values for the compact row; the table
+    // keeps every value in its own column.
+    .item .cell-meta {
+      display: contents;
+    }
     .item .orig-size {
       grid-column: 2;
     }
@@ -2231,3 +2236,4 @@ footer {
 
 @import "./styles/nav.less";
 @import "./styles/mobile.less";
+@import "./styles/list-compact.less";

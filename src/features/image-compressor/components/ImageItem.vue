@@ -20,6 +20,11 @@
         <div class="name" :title="item.file.name"><span class="name-stem">{{ nameParts.stem }}</span><span class="name-ext">{{ nameParts.ext }}</span></div>
         <div class="name-tags"><span class="sr-only">{{ t('thFormat') }}</span><span class="fmt-tag">{{ fmtTag }}</span><span v-if="isAlreadyBest" class="best-tag">{{ t('alreadyBest') }}</span><span v-if="showSmallTag" class="best-tag">{{ smallTagText }}</span></div>
       </div>
+      <!-- Sizes + dims share one meta cell. The desktop table (≥1366px)
+      lays it out with `display: contents` so each value keeps its own table
+      column; the compact tablet row (720–1365px) turns it into one wrapping
+      meta line under the name. -->
+      <div class="cell-meta">
       <div class="orig-size"><span class="sr-only">{{ t('thOrig') }}</span>{{ fmtSize(item.file.size) }}</div>
       <div class="comp-size" :class="{ done: item.done && !item.error }">
         <span class="sr-only">{{ t('thComp') }}</span>
@@ -35,7 +40,8 @@
           <span class="dims-arrow">→</span>
           <span class="dims-comp">{{ outW }}×{{ outH }}</span>
         </template>
-        <span v-else class="dims-same">{{ item.origW }}×{{ item.origH }} → {{ outW }}×{{ outH }}</span>
+        <span v-else class="dims-same">{{ item.origW }}×{{ item.origH }}<span class="dims-same-out"> → {{ outW }}×{{ outH }}</span></span>
+      </div>
       </div>
       <!-- Status + actions share a footer. Desktop lays the footer out with
       `display: contents` so both children stay in the table grid; mobile turns
