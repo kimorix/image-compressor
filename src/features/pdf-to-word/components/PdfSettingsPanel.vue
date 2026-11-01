@@ -39,7 +39,7 @@
       </select>
     </label>
     <p class="pdf-note">{{ p('ocrSize', ocrDownloadMB(settings.ocrLang)) }}</p>
-    <button type="button" class="primary pdf-start" :disabled="!canStart || rangeBad" @click="emit('start')">{{ p('start') }}</button>
+    <button type="button" class="primary pdf-start" :disabled="!canStart || rangeBad" @click="emit('start')">{{ startLabel || p('start') }}</button>
   </div>
 </template>
 
@@ -52,6 +52,8 @@ import { OCR_LANGS, ocrDownloadMB } from '../lib/settings'
 const props = defineProps<{
   settings: PdfSettings
   canStart: boolean
+  /** "Convert again" when only changed-settings files are left. */
+  startLabel?: string
   p: (key: string, ...args: (string | number)[]) => string
 }>()
 const emit = defineEmits<{ (e: 'update', s: PdfSettings): void; (e: 'start'): void }>()

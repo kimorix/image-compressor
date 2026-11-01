@@ -85,3 +85,17 @@ export function isPdfFile(f: { name: string; type: string }): boolean {
 export function fileKey(f: File): string {
   return `${f.name}|${f.size}|${f.lastModified}`
 }
+
+/**
+ * The settings that shape the .docx. The OCR language only matters with OCR
+ * on; ocrLangPicked is bookkeeping. A finished file made with other values
+ * is stale ("设置已更改") and can be converted again.
+ */
+export function outputKey(s: PdfSettings): string {
+  return JSON.stringify([s.mode, s.pageRange.replace(/\s+/g, ''), s.keepImages, s.ocr, s.ocr ? s.ocrLang : ''])
+}
+
+/** A file converted with `used` no longer matches the current settings. */
+export function isStaleOutput(used: PdfSettings | null | undefined, now: PdfSettings): boolean {
+  return !!used && outputKey(used) !== outputKey(now)
+}

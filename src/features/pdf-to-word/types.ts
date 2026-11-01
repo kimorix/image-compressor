@@ -104,6 +104,8 @@ export interface PdfItem {
   stats: ConvertStats | null
   /** Mode used for the output. */
   outMode: ConvertMode | null
+  /** Settings the output was made with (stale detection). */
+  outSettings: PdfSettings | null
   error: string | null
   warnings: string[]
 }

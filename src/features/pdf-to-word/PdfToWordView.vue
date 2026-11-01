@@ -39,7 +39,7 @@
           <h3>{{ p('listTitle') }}</h3>
           <div class="pdf-list-actions">
             <button type="button" class="pdf-link-btn" :class="{ danger: clearConfirm }" @click="onClear">{{ clearConfirm ? p('clearConfirm') : p('clear') }}</button>
-            <button type="button" :disabled="!startable.length" @click="startAll">{{ p('start') }}</button>
+            <button type="button" :disabled="!startable.length" @click="startAll">{{ startLabel }}</button>
             <button type="button" class="primary" :disabled="!doneItems.length || zipping" @click="downloadAll">{{ zipping ? p('zipping') : p('downloadAll') }}</button>
           </div>
         </div>
@@ -79,6 +79,7 @@
             </div>
             <!-- Desktop actions -->
             <div class="pdf-actions desk" @click.stop>
+              <button v-if="isStale(item)" type="button" :title="p('reconvertOneHint')" @click="startOne(item)">{{ p('reconvert') }}</button>
               <button v-if="item.status === 'done'" type="button" class="primary" @click="downloadOne(item)">{{ p('downloadDocx') }}</button>
               <button v-else-if="item.status === 'converting' || item.status === 'queued'" type="button" @click="cancel(item)">{{ p('cancel') }}</button>
               <button v-else-if="item.kind === 'scanned' && !settings.ocr && item.status === 'ready'" type="button" @click="enableOcr">{{ p('enableOcr') }}</button>
@@ -101,7 +102,7 @@
     <div id="rightPanel" class="pdf-right">
       <div v-if="!isMobile" class="card pdf-settings-card">
         <h3>{{ p('settingsTitle') }}</h3>
-        <PdfSettingsPanel :settings="settings" :p="p" :can-start="startable.length > 0" @update="onSettings" @start="startAll" />
+        <PdfSettingsPanel :settings="settings" :p="p" :can-start="startable.length > 0" :start-label="startLabel" @update="onSettings" @start="startAll" />
       </div>
       <div v-if="!isMobile" class="card pdf-cap-card">
         <h3>{{ p('capTitle') }}</h3>
@@ -114,7 +115,7 @@
     </div>
   </div>
   <div class="pdf-sticky" v-show="items.length > 0" :inert="sheetOpen ? true : undefined">
-    <button type="button" :disabled="!startable.length" @click="startAll">{{ p('start') }}</button>
+    <button type="button" :disabled="!startable.length" @click="startAll">{{ startLabel }}</button>
     <button type="button" class="primary" :disabled="!doneItems.length || zipping || sharing" @click="saveAllMobile">{{ zipping ? p('zipping') : p('saveAll') }}</button>
   </div>
   <div class="pdf-sticky-spacer" v-show="items.length > 0" aria-hidden="true"></div>
@@ -141,7 +142,7 @@
     @close="settingsOpen = false"
   >
     <div class="sheet-body">
-      <PdfSettingsPanel :settings="settings" :p="p" :can-start="startable.length > 0" @update="onSettings" @start="startFromSheet" />
+      <PdfSettingsPanel :settings="settings" :p="p" :can-start="startable.length > 0" :start-label="startLabel" @update="onSettings" @start="startFromSheet" />
     </div>
   </BottomSheet>
   <PdfDetailSheet
@@ -179,7 +180,7 @@ import PdfSettingsPanel from './components/PdfSettingsPanel.vue'
 import PdfDetailSheet from './components/PdfDetailSheet.vue'
 import { pdfT } from './i18n'
 import { DEFAULT_PDF_SETTINGS, type PdfItem, type PdfSettings } from './types'
-import { defaultOcrLang, loadSettings, saveSettings, isPdfFile, fileKey, pdfConcurrency } from './lib/settings'
+import { defaultOcrLang, loadSettings, saveSettings, isPdfFile, isStaleOutput, fileKey, pdfConcurrency } from './lib/settings'
 import type { PdfDoc } from '../../shared/pdf/pdf-loader'
 import './styles/pdf.less'
 
@@ -232,7 +233,12 @@ function showHint(s: string) {
 }
 
 const doneItems = computed(() => items.value.filter((i) => i.status === 'done' && i.outBlob))
-const startable = computed(() => items.value.filter((i) => i.status === 'ready' || i.status === 'error' || i.status === 'cancelled'))
+function isStale(item: PdfItem): boolean {
+  return item.status === 'done' && isStaleOutput(item.outSettings, settings.value)
+}
+const startable = computed(() => items.value.filter((i) => i.status === 'ready' || i.status === 'error' || i.status === 'cancelled' || isStale(i)))
+// Only finished files whose settings changed are left: say "convert again".
+const startLabel = computed(() => (startable.value.length && startable.value.every(isStale) ? p('reconvert') : p('start')))
 
 function statusTag(item: PdfItem): string {
   switch (item.status) {
@@ -242,13 +248,14 @@ function statusTag(item: PdfItem): string {
       if (item.phase === 'build') return p('stBuilding')
       if (item.phase === 'ocr') return p('stOcr', item.pageNow, item.pageTotal)
       return p('stConverting', item.pageNow || 1, item.pageTotal || item.pages)
-    case 'done': return p('stDone')
+    case 'done': return isStale(item) ? p('stStale') : p('stDone')
     case 'error': return p('stFailed')
     case 'cancelled': return p('stCancelled')
     default: return ''
   }
 }
 function statusClass(item: PdfItem): string {
+  if (isStale(item)) return 'warn'
   if (item.status === 'done') return 'ok'
   if (item.status === 'error') return 'bad'
   if (item.status === 'converting' || item.status === 'queued') return 'info'
@@ -297,6 +304,7 @@ function newItem(file: File): PdfItem {
     outName: '',
     stats: null,
     outMode: null,
+    outSettings: null,
     error: null,
     warnings: [],
   }
@@ -426,6 +434,7 @@ async function convertOne(item: PdfItem) {
       item.outName = r.name
       item.stats = r.stats
       item.outMode = snapshot.mode
+      item.outSettings = snapshot
       item.warnings = r.warnings
       item.status = 'done'
       item.progress = 1
