@@ -229,6 +229,10 @@
   padding: 0;
 }
 .rw-item {
+  // Keyboard focus drawn inside the row (the scrolling list clips outside).
+  &:focus-visible {
+    outline-offset: -2px;
+  }
   display: grid;
   grid-template-columns: 64px minmax(0, 1fr) auto;
   gap: 16px;

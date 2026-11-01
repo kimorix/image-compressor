@@ -54,7 +54,7 @@
           <p>{{ isTouch ? m('dropSubTouch') : m('dropSub') }}</p>
         </div>
         <input ref="fileInput" type="file" accept="application/pdf,.pdf" multiple hidden @change="onPick" />
-        <p v-if="hint" class="pm-hint" role="status">{{ hint }}</p>
+        <LiveHint :text="hint" hint-class="pm-hint" />
 
         <!-- Desktop page grid -->
         <PageGrid
@@ -276,6 +276,7 @@
 import { isClearingData } from '../../shared/lib/clear-data'
 import { computed, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue'
 import AppHeader from '../../shared/components/AppHeader.vue'
+import LiveHint from '../../shared/components/LiveHint.vue'
 import SideNav from '../../shared/components/SideNav.vue'
 import TabBar from '../../shared/components/TabBar.vue'
 import MoreMenu from '../../shared/components/MoreMenu.vue'

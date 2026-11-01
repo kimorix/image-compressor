@@ -810,6 +810,11 @@ html {
   }
 }
 .item {
+  // Keyboard focus (Tab, then Enter/Space picks the preview) drawn inside the
+  // row: the scrolling list would clip an outside ring.
+  &:focus-visible {
+    outline-offset: -2px;
+  }
   display: grid;
   grid-template-columns: 84px minmax(0, 1fr);
   gap: 12px;

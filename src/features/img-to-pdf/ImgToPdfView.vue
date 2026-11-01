@@ -34,7 +34,7 @@
           <button type="button" class="primary i2p-pick" tabindex="-1" @click.stop="openPicker">{{ isMobile ? p('pickShort') : p('pick') }}</button>
           <input ref="fileInput" type="file" accept="image/*,.heic,.heif,.avif,.webp,.bmp,.svg" multiple hidden @change="onPick" />
         </div>
-        <p v-if="hint" class="i2p-hint" role="status">{{ hint }}</p>
+        <LiveHint :text="hint" hint-class="i2p-hint" />
       </div>
 
       <section v-if="items.length" class="card i2p-order" :class="{ sorting: sortMode }">
@@ -211,6 +211,7 @@
 import { isClearingData } from '../../shared/lib/clear-data'
 import { computed, onActivated, onDeactivated, onMounted, onUnmounted, ref, shallowRef, triggerRef, watch } from 'vue'
 import AppHeader from '../../shared/components/AppHeader.vue'
+import LiveHint from '../../shared/components/LiveHint.vue'
 import SideNav from '../../shared/components/SideNav.vue'
 import TabBar from '../../shared/components/TabBar.vue'
 import MoreMenu from '../../shared/components/MoreMenu.vue'

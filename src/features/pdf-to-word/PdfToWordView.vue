@@ -31,7 +31,7 @@
           <p v-if="!items.length || !isMobile">{{ isTouch ? p('dropSubTouch') : p('dropSub') }}</p>
           <input ref="fileInput" id="pdfFileInput" type="file" accept="application/pdf,.pdf" multiple hidden @change="onPick" />
         </div>
-        <p v-if="hint" class="pdf-hint" role="status">{{ hint }}</p>
+        <LiveHint :text="hint" hint-class="pdf-hint" />
       </div>
 
       <div v-if="items.length" class="card pdf-list-card">
@@ -164,6 +164,7 @@
 import { isClearingData } from '../../shared/lib/clear-data'
 import { computed, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, shallowRef, triggerRef, watch } from 'vue'
 import AppHeader from '../../shared/components/AppHeader.vue'
+import LiveHint from '../../shared/components/LiveHint.vue'
 import SideNav from '../../shared/components/SideNav.vue'
 import TabBar from '../../shared/components/TabBar.vue'
 import MoreMenu from '../../shared/components/MoreMenu.vue'

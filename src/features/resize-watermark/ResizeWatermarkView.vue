@@ -29,7 +29,7 @@
           <p v-if="!items.length || isMobile">{{ isTouch ? r('dropSubTouch') : r('dropSub') }}</p>
           <input ref="fileInput" type="file" accept="image/*,.heic,.heif,.avif,.webp" multiple hidden @change="onPick" />
         </div>
-        <p v-if="hint" class="rw-hint" role="status">{{ hint }}</p>
+        <LiveHint :text="hint" hint-class="rw-hint" />
       </div>
 
       <!-- Phone: settings summary chips (each opens its settings tab) -->
@@ -101,7 +101,11 @@
             :key="item.id"
             class="rw-item"
             :class="[`st-${item.status}`, { current: !isMobile && item.id === currentId }]"
+            tabindex="0"
+            :aria-current="!isMobile && item.id === currentId ? 'true' : undefined"
             @click="onRowClick(item)"
+            @keydown.enter.self.prevent="onRowClick(item)"
+            @keydown.space.self.prevent="onRowClick(item)"
           >
             <div class="rw-thumb" :class="{ gif: item.format === 'gif' && !item.thumb }">
               <img v-if="item.thumb" :src="item.thumb" alt="" loading="lazy" />
@@ -259,6 +263,7 @@ import { BatchProgress, positionOf } from '../../shared/lib/batch-progress'
 import { isClearingData } from '../../shared/lib/clear-data'
 import { computed, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, shallowRef, triggerRef, watch } from 'vue'
 import AppHeader from '../../shared/components/AppHeader.vue'
+import LiveHint from '../../shared/components/LiveHint.vue'
 import SideNav from '../../shared/components/SideNav.vue'
 import TabBar from '../../shared/components/TabBar.vue'
 import MoreMenu from '../../shared/components/MoreMenu.vue'

@@ -12,7 +12,7 @@
     <main :class="{ 'no-result': items.length === 0 }" v-show="view === 'tool'">
     <div class="card" id="uploadCard" :class="{ 'has-items': items.length > 0, 'show-hint': !!fileHint }">
       <DropZone ref="dropzoneRef" :t="t" :compact="items.length > 0" @files="addFiles" />
-      <p v-if="fileHint" class="file-hint">{{ fileHint }}</p>
+      <LiveHint :text="fileHint" hint-class="file-hint" />
     </div>
 
       <div v-if="items.length > 0" class="thumb-strip" ref="thumbStripRef" :class="{ stuck: stripStuck }">
@@ -231,6 +231,7 @@ import MobileCard from './components/MobileCard.vue'
 import MobileDetailSheet from './components/MobileDetailSheet.vue'
 import BottomSheet from '../../shared/components/BottomSheet.vue'
 import AppHeader from '../../shared/components/AppHeader.vue'
+import LiveHint from '../../shared/components/LiveHint.vue'
 import SideNav from '../../shared/components/SideNav.vue'
 import TabBar from '../../shared/components/TabBar.vue'
 import MoreMenu from '../../shared/components/MoreMenu.vue'

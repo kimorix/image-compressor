@@ -35,7 +35,7 @@
         <div v-if="!isTouch && !isMobile" class="cv-drop-extra">
           <button type="button" class="cv-link-btn" @click="openFolder">{{ p('pickFolder') }}</button>
         </div>
-        <p v-if="hint" class="cv-hint" role="status">{{ hint }}</p>
+        <LiveHint :text="hint" hint-class="cv-hint" />
       </div>
 
       <button v-if="items.length && isMobile" type="button" class="cv-summary" @click="toggleSettings">
@@ -181,6 +181,7 @@ import { BatchProgress, positionOf } from '../../shared/lib/batch-progress'
 import { isClearingData } from '../../shared/lib/clear-data'
 import { computed, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, shallowRef, triggerRef, watch } from 'vue'
 import AppHeader from '../../shared/components/AppHeader.vue'
+import LiveHint from '../../shared/components/LiveHint.vue'
 import SideNav from '../../shared/components/SideNav.vue'
 import TabBar from '../../shared/components/TabBar.vue'
 import MoreMenu from '../../shared/components/MoreMenu.vue'

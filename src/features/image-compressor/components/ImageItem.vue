@@ -5,7 +5,17 @@
   line 2, a thin bar while it encodes | right-aligned actions. The meta
   values keep fixed widths with tabular figures on wide lists, so columns
   line up across rows and nothing jumps as statuses change. -->
-  <div class="item" :class="{ current, running: running && processing }" :title="item.file.name" :data-id="item.id" @click="$emit('select', item)">
+  <div
+    class="item"
+    :class="{ current, running: running && processing }"
+    :title="item.file.name"
+    :data-id="item.id"
+    tabindex="0"
+    :aria-current="current ? 'true' : undefined"
+    @click="$emit('select', item)"
+    @keydown.enter.self.prevent="$emit('select', item)"
+    @keydown.space.self.prevent="$emit('select', item)"
+  >
     <div
       class="thumb"
       :class="{ clickable: item.done }"
