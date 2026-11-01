@@ -513,6 +513,9 @@ async function zipAll() {
   try {
     const blob = await zipEntries(done.map((i) => ({ name: i.outName, blob: i.outBlob! })))
     downloadUrl(blob, `pdf-to-word-${ymd()}.zip`)
+  } catch (err) {
+    console.error('[pdf-to-word] zip failed', err)
+    showHint(t('zipFailed'))
   } finally {
     zipping.value = false
   }

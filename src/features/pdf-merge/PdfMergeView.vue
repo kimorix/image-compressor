@@ -765,6 +765,9 @@ async function zipAll() {
   try {
     const blob = await zipEntries(r.files.map((f) => ({ name: f.path, blob: f.blob })))
     downloadUrl(blob, `pdf-${r.kind}-${ymd()}.zip`)
+  } catch (err) {
+    console.error('[pdf-merge] zip failed', err)
+    showHint(t('zipFailed'))
   } finally {
     zipping.value = false
   }

@@ -819,6 +819,9 @@ async function zipAll() {
     zipProgress.value = { done: 0, total: done.length }
     const blob = await zipEntries(done.map((i) => ({ name: i.outName, blob: i.outBlob! })), (i, n) => { zipProgress.value = { done: i, total: n } })
     downloadUrl(blob, `resized-${ymd()}.zip`)
+  } catch (err) {
+    console.error('[resize] zip failed', err)
+    showHint(t('zipFailed'))
   } finally {
     zipping.value = false
     zipProgress.value = { done: 0, total: 0 }

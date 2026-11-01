@@ -612,6 +612,11 @@ function applyDocMeta() {
 
 // Transient note for files skipped by the addFiles funnel (non-images).
 const fileHint = ref<string | null>(null)
+function showFileHint(msg: string) {
+  fileHint.value = msg
+  if (hintTimer) clearTimeout(hintTimer)
+  hintTimer = setTimeout(() => { fileHint.value = null }, 5000)
+}
 let hintTimer: ReturnType<typeof setTimeout> | null = null
 
 const busyAddBlocked = ref(false)
@@ -663,11 +668,7 @@ function addFiles(files: File[], dirs?: string[]) {
   if (filtered > 0) hints.push(t('filteredNote', filtered))
   if (oversize > 0) hints.push(t('oversizeNote', oversize))
   if (duplicates > 0) hints.push(t('duplicateNote', duplicates))
-  if (hints.length) {
-    fileHint.value = hints.join(' ')
-    if (hintTimer) clearTimeout(hintTimer)
-    hintTimer = setTimeout(() => { fileHint.value = null }, 5000)
-  }
+  if (hints.length) showFileHint(hints.join(' '))
   if (!fresh.length) return
   for (const file of fresh) items.value.push(newItem(file, dirOf.get(file) ?? ''))
   refresh()
@@ -1062,6 +1063,9 @@ async function downloadAllZip() {
       url: item.outUrl!,
     })), (i, n) => { zipProgress.value = { done: i, total: n } })
     downloadUrl(zipped, `images-compressed-${ymd()}-${done.length}.zip`)
+  } catch (err) {
+    console.error('[compress] zip failed', err)
+    showFileHint(t('zipFailed'))
   } finally {
     zipping.value = false
     zipProgress.value = { done: 0, total: 0 }
