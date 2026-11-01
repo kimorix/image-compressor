@@ -89,7 +89,13 @@
           </div>
         </div>
         <BatchStatus :text="batchText" :done="batchShown.done" :total="batchShown.total" />
-        <ul class="rw-list">
+        <!-- A note every finished image shares ("source smaller, not
+        upscaled" on a batch of small photos) is said once here on
+        desktop/iPad instead of on every row of a long list. -->
+        <div v-if="commonNotes.length" class="rw-common-notes">
+          <span v-for="n in commonNotes" :key="n" class="rw-tag mute">{{ n }}</span>
+        </div>
+        <ul class="rw-list list-scroll">
           <li
             v-for="item in items"
             :key="item.id"
@@ -105,18 +111,33 @@
             <div class="rw-info">
               <strong class="rw-name" :title="item.file.name">{{ item.file.name }}</strong>
               <div class="rw-meta">
-                <span>{{ metaLine(item) }}</span>
+                <!-- Desktop/iPad: separate nowrap pieces (fixed widths on wide
+                lists) so "151.5 KB" never breaks across lines and the
+                columns line up from row to row. -->
+                <template v-if="!isMobile && item.w">
+                  <span class="rw-m dim">{{ item.w }}×{{ item.h }}</span>
+                  <span class="rw-m size src">{{ fmtSize(item.file.size) }}</span>
+                  <template v-if="item.status === 'done' && item.outBlob">
+                    <span class="rw-m out">→ {{ item.outW }}×{{ item.outH }}</span>
+                    <span class="rw-m size">{{ fmtSize(item.outBlob.size) }}</span>
+                  </template>
+                  <span v-else-if="item.gifFrames > 1" class="rw-m">{{ r('frames', item.gifFrames) }}</span>
+                </template>
+                <span v-else>{{ metaLine(item) }}</span>
                 <span class="rw-tags">
-                  <span v-if="statusTag(item)" class="rw-tag" :class="statusClass(item)">{{ statusTag(item) }}</span>
+                  <span v-if="statusTag(item)" class="rw-tag" :class="statusClass(item)" :title="isMobile ? undefined : rowNotes(item).join(' · ') || undefined">{{ statusTag(item) }}</span>
                   <span v-for="n in shortNotes(item)" :key="n" class="rw-tag warn">{{ n }}</span>
+                  <template v-if="!isMobile">
+                    <span v-for="n in rowNotes(item)" :key="`l${n}`" class="rw-tag rw-note" :title="n">{{ n }}</span>
+                  </template>
                 </span>
               </div>
               <div v-if="item.status === 'processing' || item.status === 'queued'" class="rw-progress" :class="{ run: item.status === 'processing' }" role="progressbar" :aria-label="statusTag(item)"><span></span></div>
               <p v-if="item.status === 'error' && item.error" class="rw-sub bad">{{ item.error }}</p>
-              <p v-else-if="!isMobile && longNotes(item).length" class="rw-sub">{{ longNotes(item).join(' · ') }}</p>
+
             </div>
             <div class="rw-actions desk" @click.stop>
-              <button v-if="item.status === 'done'" type="button" @click="downloadOne(item)">{{ r('download') }}</button>
+              <button v-if="item.status === 'done' || ((item.status === 'ready' || item.status === 'stale') && item.w)" type="button" class="rw-dl-btn" :title="item.status === 'done' ? undefined : r('saveOneHint')" @click="saveOne(item)">{{ r('download') }}</button>
               <button v-else-if="item.status === 'processing' || item.status === 'queued'" type="button" @click="cancel(item)">{{ r('cancel') }}</button>
               <button v-else-if="item.status === 'error' && item.file" type="button" @click="enqueue([item])">{{ r('retry') }}</button>
               <button v-if="item.status !== 'processing' && item.status !== 'queued'" type="button" class="rw-icon-btn" :title="r('remove')" :aria-label="r('remove')" @click="removeItem(item)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg></button>
@@ -328,6 +349,18 @@ function showHint(s: string) {
 }
 
 const doneItems = computed(() => (void rev.value, items.value.filter((i) => i.status === 'done' && i.outBlob)))
+// Long notes shared by every finished row (≥2) move to one line above the
+// list on desktop/iPad; rows keep only their own (see rowNotes).
+const commonNotes = computed<string[]>(() => {
+  const done = doneItems.value
+  if (isMobile.value || done.length < 2) return []
+  const [first, ...rest] = done.map((i) => longNotes(i))
+  return first.filter((n) => rest.every((r) => r.includes(n)))
+})
+function rowNotes(it: RwItem): string[] {
+  const common = commonNotes.value
+  return longNotes(it).filter((n) => !common.includes(n))
+}
 const pending = computed(() => (void rev.value, items.value.filter((i) => i.status === 'ready' || i.status === 'stale' || i.status === 'error')))
 const busyAll = computed(() => (void rev.value, items.value.some((i) => i.status === 'processing' || i.status === 'queued')))
 
@@ -644,6 +677,17 @@ function enqueue(list: RwItem[]) {
     void runOne(it)
   }
   touch()
+}
+// One image, current settings: process it if needed, then download it.
+async function saveOne(item: RwItem) {
+  if (item.status !== 'done') {
+    if (item.status !== 'ready' && item.status !== 'stale') return
+    item.status = 'queued'
+    item.error = null
+    touch()
+    await runOne(item)
+  }
+  if (item.status === 'done') downloadOne(item)
 }
 function processAll() {
   enqueue(pending.value)

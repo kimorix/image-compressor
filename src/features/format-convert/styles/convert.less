@@ -305,66 +305,224 @@
   width: 18px;
   height: 18px;
 }
-// Tablet and desktop list (≥720px): one compact row whatever the column
-// width. Long names truncate on one line (full name in the title) instead of
-// wrapping letter by letter in a ~100px column, and on narrow lists (iPad
-// portrait beside the settings panel) the row tightens and the download
-// button becomes an icon so the info column keeps usable width.
+// Tablet and desktop list (≥720px), matching the design mockups: 56px
+// rounded thumb | bold one-line name (ellipsis, full name in the title) over
+// a calm meta line (format pills, dims · size → new size, small status and
+// note tags) | right-aligned outlined download + icon delete. Hairline
+// dividers, consistent row height, and fixed-width dims / size columns with
+// tabular figures so long lists line up and nothing shifts as statuses
+// change. The list scrolls inside its card (.list-scroll). Narrow lists
+// (iPad portrait beside the settings panel) shrink the thumb and turn the
+// download button into an icon so the info column keeps usable width.
 @media (min-width: 720px) {
+  .cv-list-card {
+    padding: 16px 20px 10px;
+  }
+  .cv-strip {
+    margin-bottom: 4px;
+  }
   .cv-list {
     container: cvlist / inline-size;
+    margin: 0 -10px;
+  }
+  .cv-item {
+    grid-template-columns: 56px minmax(0, 1fr) auto;
+    gap: 14px;
+    min-height: 81px;
+    padding: 12px 10px;
+    border-bottom: 0;
+    border-top: 1px solid var(--border);
+    &:first-child {
+      border-top-color: transparent;
+    }
+    &:last-child {
+      border-bottom: 0;
+    }
+  }
+  .cv-thumb {
+    width: 56px;
+    height: 56px;
+    border-radius: 10px;
+  }
+  .cv-thumb-bad {
+    font-size: 20px;
+  }
+  .cv-thumb-label {
+    font-size: 11px;
   }
   .cv-name {
+    font-size: 14px;
+    line-height: 1.45;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     overflow-wrap: normal;
   }
+  .cv-meta {
+    flex-wrap: wrap;
+    gap: 2px 8px;
+    margin-top: 3px;
+    font-size: 12.5px;
+    line-height: 20px;
+    font-variant-numeric: tabular-nums;
+  }
+  .cv-dim,
+  .cv-size {
+    white-space: nowrap;
+  }
+  .cv-pill {
+    font-size: 11px;
+    line-height: 18px;
+    padding: 0 6px;
+    border-radius: 5px;
+  }
+  .cv-arrow {
+    font-size: 12px;
+    margin: 0 -2px;
+  }
+  .cv-tag {
+    font-size: 11.5px;
+    font-weight: 600;
+    line-height: 18px;
+    padding: 0 7px;
+    border-radius: 5px;
+    white-space: nowrap;
+  }
+  .cv-tag.cv-rownote {
+    font-weight: 500;
+    white-space: normal;
+  }
+  .cv-progress {
+    height: 4px;
+    margin-top: 6px;
+    max-width: 360px;
+    border-radius: 2px;
+  }
+  .cv-sub {
+    margin-top: 4px;
+    font-size: 12.5px;
+  }
+  .cv-actions.desk {
+    gap: 6px;
+    button {
+      min-height: 36px;
+      height: 36px;
+      padding: 0 12px;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+  }
+  .cv-actions.desk .cv-icon-btn {
+    width: 36px;
+    padding: 0;
+    background: var(--card);
+    color: var(--muted);
+  }
+  .cv-strip {
+    align-items: center;
+  }
+  .cv-strip-note {
+    align-self: center;
+  }
+  // Outlined download (the mock's calm per-row action; the filled primary
+  // stays for "download all" in the card head).
+  .cv-dl-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: var(--card);
+    color: var(--accent);
+    font-weight: 600;
+    &:hover:not(:disabled) {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+  }
+  .cv-dl-icon {
+    display: block;
+    width: 16px;
+    height: 16px;
+  }
+  // Wide lists: dims and sizes in fixed columns so rows line up.
+  @container cvlist (min-width: 600px) {
+    .cv-dim {
+      display: inline-block;
+      min-width: 76px;
+    }
+    .cv-size {
+      display: inline-block;
+      min-width: 136px;
+    }
+    // One meta line per row on wide lists: a row's own notes shrink and
+    // truncate at its end (full text on hover) instead of adding a line, so
+    // every row keeps the same height.
+    .cv-meta {
+      flex-wrap: nowrap;
+      min-width: 0;
+      > * {
+        flex: none;
+      }
+      > .cv-tag {
+        display: block;
+        align-self: center;
+        flex: 0 1 auto;
+        min-width: 24px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      > .cv-tag:not(.cv-rownote) {
+        flex: none;
+      }
+      > .cv-tag.cv-rownote {
+        min-width: 48px;
+      }
+    }
+  }
+  // Below a 720px list the per-row download is an icon (label kept for
+  // screen readers), leaving the meta line room for its tags.
+  @container cvlist (max-width: 719px) {
+    .cv-dl-btn {
+      width: 36px;
+      padding: 0 !important;
+    }
+    .cv-dl-text {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+    }
+  }
   @container cvlist (max-width: 559px) {
     .cv-item {
       grid-template-columns: 48px minmax(0, 1fr) auto;
       gap: 12px;
-      padding: 12px 0;
+      min-height: 0;
+      padding: 10px 10px;
     }
     .cv-thumb {
       width: 48px;
       height: 48px;
       border-radius: 8px;
     }
-    .cv-name {
-      font-size: 14px;
-    }
     .cv-meta {
-      margin-top: 4px;
       gap: 2px 6px;
       font-size: 12px;
     }
-    .cv-pill,
-    .cv-tag {
-      font-size: 11px;
-      padding: 0 6px;
-    }
-    .cv-notes {
-      margin-top: 6px;
+    // Narrow list: the per-row notes would add a third line to every row;
+    // they stay readable on the status tag's tooltip and in the zip names.
+    .cv-meta .cv-tag.cv-rownote {
+      display: none;
     }
     .cv-actions.desk {
-      gap: 6px;
-      button {
-        min-height: 40px;
-      }
-    }
-    .cv-icon-btn {
-      width: 40px;
+      gap: 4px;
     }
     .cv-dl-btn {
-      width: 40px;
-      padding: 0;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .cv-dl-icon {
-      display: block;
+      width: 36px;
+      padding: 0 !important;
     }
     .cv-dl-text {
       position: absolute;

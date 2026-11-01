@@ -384,6 +384,205 @@
   }
 }
 
+// Tablet and desktop list (≥720px), matching the design mockups: 56px
+// rounded thumb | bold one-line name over a calm meta line (dims · size →
+// out dims · size, small status / note tags) and a thin bar while it runs |
+// right-aligned outlined download + icon delete. Hairline dividers, the
+// current (previewed) row as a soft rounded accent tile, consistent row
+// height, and fixed-width meta pieces with tabular figures so long lists
+// line up. The list scrolls inside its card (.list-scroll) instead of
+// stretching the page under the preview.
+@media (min-width: 720px) {
+  .rw-list-card {
+    padding: 16px 20px 10px;
+  }
+  .rw-list {
+    container: rwlist / inline-size;
+    margin: 4px -10px 0;
+  }
+  .rw-item {
+    grid-template-columns: 56px minmax(0, 1fr) auto;
+    gap: 14px;
+    min-height: 81px;
+    padding: 12px 10px;
+    margin: 0;
+    border-bottom: 0;
+    border-top: 1px solid var(--border);
+    border-radius: 0;
+    transition: background-color 0.15s var(--ease);
+    &:first-child {
+      border-top-color: transparent;
+    }
+    &:hover {
+      background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+    }
+    &.current {
+      background: var(--accent-soft);
+      border-radius: 10px;
+      border-top-color: transparent;
+    }
+    &.current + .rw-item {
+      border-top-color: transparent;
+    }
+  }
+  .rw-thumb {
+    width: 56px;
+    height: 56px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+  .rw-name {
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .rw-meta {
+    gap: 2px 8px;
+    margin-top: 3px;
+    font-size: 12.5px;
+    line-height: 20px;
+  }
+  .rw-m {
+    white-space: nowrap;
+  }
+  .rw-m.size::before {
+    content: '· ';
+    color: var(--subtle);
+  }
+  .rw-m.out {
+    color: var(--text);
+  }
+  .rw-m.out + .rw-m.size {
+    color: var(--text);
+  }
+  .rw-tags {
+    gap: 4px;
+    min-width: 0;
+    flex-wrap: nowrap;
+    max-width: 100%;
+  }
+  .rw-tags > .rw-tag:not(.rw-note) {
+    flex: none;
+  }
+  .rw-tag.rw-note {
+    display: block;
+    align-self: center;
+    line-height: 18px;
+    min-width: 24px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 500;
+    flex: 0 1 auto;
+  }
+  .rw-common-notes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 10px 0 2px;
+  }
+  .rw-tag {
+    font-size: 11.5px;
+    font-weight: 600;
+    line-height: 18px;
+    padding: 0 7px;
+    border-radius: 5px;
+  }
+  .rw-tag.warn {
+    font-weight: 500;
+  }
+  .rw-progress {
+    height: 4px;
+    margin-top: 6px;
+    max-width: 360px;
+    border-radius: 2px;
+  }
+  .rw-sub {
+    margin-top: 4px;
+    font-size: 12.5px;
+  }
+  .rw-actions.desk {
+    gap: 6px;
+    button {
+      min-height: 36px;
+      height: 36px;
+      padding: 0 12px;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+  }
+  .rw-actions.desk .rw-icon-btn {
+    width: 36px;
+    min-width: 36px;
+    padding: 0;
+    background: var(--card);
+    color: var(--muted);
+  }
+  .rw-dl-btn {
+    background: var(--card);
+    color: var(--accent);
+    font-weight: 600;
+    &:hover:not(:disabled) {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+  }
+  @container rwlist (min-width: 600px) {
+    // One meta line: the tags shrink (notes truncate, full text on hover).
+    .rw-meta {
+      flex-wrap: nowrap;
+      min-width: 0;
+      > .rw-m {
+        flex: none;
+      }
+    }
+    .rw-tags {
+      flex: 0 1 auto;
+      align-items: center;
+    }
+    // Fixed columns carry the separation; no floating "·".
+    .rw-m.size::before {
+      content: none;
+    }
+    .rw-m.dim {
+      min-width: 76px;
+    }
+    .rw-m.size {
+      min-width: 70px;
+    }
+    .rw-m.out {
+      min-width: 92px;
+    }
+  }
+  @container rwlist (max-width: 559px) {
+    // Narrow list: the source size and the row's own notes step aside (the
+    // notes stay on the status tag's tooltip) so a row is two short lines.
+    .rw-m.size.src,
+    .rw-tag.rw-note {
+      display: none;
+    }
+    .rw-item {
+      grid-template-columns: 48px minmax(0, 1fr) auto;
+      gap: 12px;
+      min-height: 0;
+      padding: 10px 10px;
+    }
+    .rw-thumb {
+      width: 48px;
+      height: 48px;
+      border-radius: 8px;
+    }
+    .rw-meta {
+      gap: 0 6px;
+      font-size: 12px;
+    }
+    .rw-actions.desk {
+      gap: 4px;
+      button {
+        padding: 0 10px;
+      }
+    }
+  }
+}
+
 // ---- settings ----
 .rw-settings-card {
   padding: 18px 20px;

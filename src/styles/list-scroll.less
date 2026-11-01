@@ -1,0 +1,46 @@
+// Long lists on desktop and iPad (≥720px): the compressor results, the
+// convert list and the resize list scroll inside their card once they are
+// taller than the window allows, so 15+ images never stretch the page next to
+// a short preview or settings column. The card head (title, count, clear /
+// download-all) and the stats strip sit outside the scroller and stay in
+// view. Soft edge shadows show there is more above / below; they only appear
+// while the list actually scrolls (background-attachment local/scroll trick).
+// Phones (<720px) keep the page scroll and their card layouts.
+@media (min-width: 720px) {
+  .list-scroll {
+    --list-max-h: max(360px, calc(100vh - 230px));
+    max-height: var(--list-max-h);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+    background:
+      linear-gradient(var(--card) 30%, transparent) center top / 100% 28px no-repeat local,
+      linear-gradient(transparent, var(--card) 70%) center bottom / 100% 28px no-repeat local,
+      radial-gradient(farthest-side at 50% 0, var(--list-edge), transparent) center top / 100% 10px no-repeat scroll,
+      radial-gradient(farthest-side at 50% 100%, var(--list-edge), transparent) center bottom / 100% 10px no-repeat scroll;
+    background-color: var(--card);
+    --list-edge: rgba(0, 0, 0, 0.7);
+    &::-webkit-scrollbar {
+      width: 8px;
+    }
+    &::-webkit-scrollbar-thumb {
+      border-radius: 4px;
+      background: var(--border-strong);
+    }
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+  }
+  :root[data-theme='light'] .list-scroll {
+    --list-edge: rgba(15, 23, 42, 0.12);
+  }
+}
+@supports (height: 100dvh) {
+  @media (min-width: 720px) {
+    .list-scroll {
+      --list-max-h: max(360px, calc(100dvh - 230px));
+    }
+  }
+}

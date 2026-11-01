@@ -59,10 +59,11 @@
           <span v-if="counts.running">{{ p('stripRunning') }} <b>{{ counts.running }}</b></span>
           <span v-if="counts.failed">{{ p('stripFailed') }} <b>{{ counts.failed }}</b></span>
           <span v-if="counts.unsupported">{{ p('stripUnsupported') }} <b>{{ counts.unsupported }}</b></span>
+          <span v-for="(n, i) in commonNotes" :key="`cn${i}`" class="cv-tag cv-rownote cv-strip-note" :class="n.cls">{{ n.text }}</span>
           <span v-if="counts.done" class="cv-strip-total">{{ p('stripTotal', fmtSize(counts.inBytes), '') }}<b>{{ fmtSize(counts.outBytes) }}</b></span>
         </div>
         <BatchStatus :text="batchText" :done="batchShown.done" :total="batchShown.total" />
-        <ul class="cv-list">
+        <ul class="cv-list list-scroll">
           <li v-for="item in items" :key="item.id" class="cv-item" :class="[`st-${item.status}`, { clickable: isMobile && item.status !== 'unsupported' }]" @click="onCardClick(item)">
             <div class="cv-thumb" :class="{ checker: item.status === 'done' || !!thumbOf(item), plain: !thumbOf(item) }">
               <img v-if="thumbOf(item)" :src="thumbOf(item)!" alt="" loading="lazy" @error="dropPreview(item)" />
@@ -79,10 +80,15 @@
                 </template>
                 <span v-if="item.width && !isMobile" class="cv-dim">{{ item.width }}×{{ item.height }}</span>
                 <span class="cv-size">{{ isMobile ? fmtSizeShort(item.file.size) : fmtSize(item.file.size) }}<template v-if="item.outBlob && item.status === 'done'"> → {{ isMobile ? fmtSizeShort(item.outBlob.size) : fmtSize(item.outBlob.size) }}</template></span>
-                <span v-if="!isMobile || item.status !== 'converting'" class="cv-tag" :class="statusClass(item)">{{ statusText(item) }}</span>
+                <span v-if="!isMobile || item.status !== 'converting'" class="cv-tag" :class="statusClass(item)" :title="isMobile ? undefined : noteChips(item).map((n) => n.text).join(' · ') || undefined">{{ statusText(item) }}</span>
+                <!-- Desktop/iPad: notes ride on the meta line as small tags,
+                so a long list keeps one calm two-line row per image. -->
+                <template v-if="!isMobile">
+                  <span v-for="(n, i) in rowNotes(item)" :key="i" class="cv-tag cv-rownote" :class="n.cls" :title="n.text">{{ n.text }}</span>
+                </template>
               </div>
               <div v-if="item.status === 'converting' || item.status === 'queued'" class="cv-progress" :class="{ running: item.status === 'converting' }" role="progressbar" :aria-label="statusText(item)"><span></span></div>
-              <div v-if="noteChips(item).length" class="cv-notes">
+              <div v-if="isMobile && noteChips(item).length" class="cv-notes">
                 <span v-for="(n, i) in noteChips(item)" :key="i" class="cv-tag" :class="n.cls">{{ n.text }}</span>
               </div>
               <p v-if="item.status === 'error' && item.error" class="cv-sub bad">{{ item.error }}</p>
@@ -90,7 +96,8 @@
             </div>
             <!-- Desktop actions -->
             <div class="cv-actions desk" @click.stop>
-              <button v-if="item.status === 'done'" type="button" class="primary cv-dl-btn" :title="p('download', OUT_EXT[item.target])" :aria-label="p('download', OUT_EXT[item.target])" @click="downloadOne(item)"><svg class="cv-dl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0l-4-4m4 4l4-4" /><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg><span class="cv-dl-text">{{ p('download', OUT_EXT[item.target]) }}</span></button>
+              <button v-if="isStale(item)" type="button" :title="p('reconvertOneHint')" @click="startOne(item)">{{ p('reconvertOne') }}</button>
+              <button v-else-if="item.status === 'done'" type="button" class="cv-dl-btn" :title="p('download', OUT_EXT[item.target])" :aria-label="p('download', OUT_EXT[item.target])" @click="downloadOne(item)"><svg class="cv-dl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0l-4-4m4 4l4-4" /><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg><span class="cv-dl-text">{{ p('download', OUT_EXT[item.target]) }}</span></button>
               <button v-else-if="item.status === 'converting' || item.status === 'queued'" type="button" @click="cancel(item)">{{ p('cancel') }}</button>
               <button v-else-if="item.status === 'error' || item.status === 'cancelled'" type="button" @click="startOne(item)">{{ p('retry') }}</button>
               <button v-if="item.status !== 'converting' && item.status !== 'queued'" type="button" class="cv-icon-btn" :title="p('remove')" :aria-label="p('remove')" @click="removeItem(item)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg></button>
@@ -254,6 +261,19 @@ function showHint(s: string) {
 
 const counts = computed(() => (void rev.value, countItems(items.value)))
 const doneItems = computed(() => (void rev.value, items.value.filter((i) => i.status === 'done' && i.outBlob)))
+// A note every finished image shares ("same format, re-encoded at q85" on a
+// batch of JPEGs) is said once in the strip on desktop/iPad instead of
+// repeating on every row of a long list; rows keep only what is their own.
+const commonNotes = computed<{ text: string; cls: string }[]>(() => {
+  const done = doneItems.value
+  if (isMobile.value || done.length < 2) return []
+  const [first, ...rest] = done.map((i) => noteChips(i))
+  return first.filter((n) => rest.every((r) => r.some((x) => x.text === n.text)))
+})
+function rowNotes(item: ConvertItem): { text: string; cls: string }[] {
+  const common = commonNotes.value
+  return common.length ? noteChips(item).filter((n) => !common.some((c) => c.text === n.text)) : noteChips(item)
+}
 /** Done items whose output no longer matches the settings ("convert again"). */
 function isStale(item: ConvertItem): boolean {
   return item.status === 'done' && item.sig !== settingsSig(item, settings.value)

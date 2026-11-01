@@ -1,5 +1,11 @@
 <template>
-  <div class="item" :title="item.file.name">
+  <!-- One mock-style row on every list width (≥720px; phones use the
+  masonry cards): thumbnail | name + format tag on line 1, a calm meta line
+  (sizes → new size, saving, dims or the "same size" tag, status pill) on
+  line 2, a thin bar while it encodes | right-aligned actions. The meta
+  values keep fixed widths with tabular figures on wide lists, so columns
+  line up across rows and nothing jumps as statuses change. -->
+  <div class="item" :class="{ current, running: running && processing }" :title="item.file.name" :data-id="item.id" @click="$emit('select', item)">
     <div
       class="thumb"
       :class="{ clickable: item.done }"
@@ -7,7 +13,7 @@
       :role="item.done ? 'button' : undefined"
       :tabindex="item.done ? 0 : undefined"
       :aria-label="item.done ? t('thumbTitle') : undefined"
-      @click="onThumbClick"
+      @click.stop="onThumbClick"
       @keydown.enter="onThumbClick"
       @keydown.space.prevent="onThumbClick"
     >
@@ -20,43 +26,37 @@
         <div class="name" :title="item.file.name"><span class="name-stem">{{ nameParts.stem }}</span><span class="name-ext">{{ nameParts.ext }}</span></div>
         <div class="name-tags"><span class="sr-only">{{ t('thFormat') }}</span><span class="fmt-tag">{{ fmtTag }}</span><span v-if="isAlreadyBest" class="best-tag">{{ t('alreadyBest') }}</span><span v-if="showSmallTag" class="best-tag">{{ smallTagText }}</span></div>
       </div>
-      <!-- Sizes + dims share one meta cell. The desktop table (≥1366px)
-      lays it out with `display: contents` so each value keeps its own table
-      column; the compact tablet row (720–1365px) turns it into one wrapping
-      meta line under the name. -->
       <div class="cell-meta">
-      <div class="orig-size"><span class="sr-only">{{ t('thOrig') }}</span>{{ fmtSize(item.file.size) }}</div>
-      <div class="comp-size" :class="{ done: item.done && !item.error }">
-        <span class="sr-only">{{ t('thComp') }}</span>
-        <span v-if="item.error" class="error" :class="{ cancelled: item.cancelled }">{{ item.error }}</span>
-        <span v-else-if="item.done">{{ fmtSize(item.outSize) }}</span>
-        <span v-else>{{ t('processing') }}</span>
-      </div>
-      <div class="save-cell"><span v-if="item.done && !isAlreadyBest && savedPct > 0" class="save-pct"><span class="sr-only">{{ t('thSave') }}</span> −{{ savedPct }}%</span></div>
-      <div v-if="dimsShown" class="dims" :class="{ 'dims-unchanged': !dimsChanged }" :title="dimsChanged ? `${item.origW}×${item.origH} → ${outW}×${outH}` : `${item.origW}×${item.origH}`">
-        <span class="sr-only">{{ t('thDims') }}</span>
-        <template v-if="dimsChanged">
-          <span class="dims-orig">{{ item.origW }}×{{ item.origH }}</span>
-          <span class="dims-arrow">→</span>
-          <span class="dims-comp">{{ outW }}×{{ outH }}</span>
-        </template>
-        <span v-else class="best-tag dims-same-tag">{{ t('dimsSameTag') }}</span>
-      </div>
-      </div>
-      <!-- Status + actions share a footer. Desktop lays the footer out with
-      `display: contents` so both children stay in the table grid; mobile turns
-      it into one flex row, which is what keeps the compact row short. -->
-      <div class="row-bottom">
-        <div class="cell-status"><span class="sr-only">{{ t('thStatus') }}</span><span :class="['status-pill', pillClass]">{{ pillText }}</span></div>
-        <div class="item-actions">
-          <button v-if="item.error && item.retryable !== false" type="button" class="retry-icon" :title="t('retryBtn')" :aria-label="t('retryBtn')" @click="$emit('retry', item)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 3v6h-6" /></svg></button>
-          <button v-if="item.done && item.outUrl" class="copy-btn" :title="copyOk ? t('copied') : t('copyBtn')" :aria-label="t('copyBtn')" @click="onCopy"><span v-if="copyOk" class="copy-ok">✓</span><svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15V5a2 2 0 012-2h10" /></svg></button>
-          <button v-if="shareable" class="share-btn" :title="t('shareBtn')" :aria-label="t('shareBtn')" @click="onShare"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4m0 0L8 8m4-4l4 4" /><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" /></svg></button>
-          <a v-else-if="item.done && item.outUrl" class="dl-icon" :href="item.outUrl" :download="item.outName ?? undefined" :title="t('btnDownload')" :aria-label="t('btnDownload')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></a>
-          <button class="remove-btn" :title="t('btnRemove')" :aria-label="t('btnRemove')" @click="$emit('remove', item)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 7V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2m-7 0l1 13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-13"/></svg></button>
+        <div class="orig-size"><span class="sr-only">{{ t('thOrig') }}</span>{{ fmtSize(item.file.size) }}</div>
+        <div class="comp-size" :class="{ done: item.done && !item.error }">
+          <span class="sr-only">{{ t('thComp') }}</span>
+          <span v-if="item.error" class="error" :class="{ cancelled: item.cancelled }">{{ item.error }}</span>
+          <span v-else-if="item.done">{{ fmtSize(item.outSize) }}</span>
+          <span v-else class="comp-wait">…</span>
         </div>
+        <div class="save-cell"><span v-if="item.done && !isAlreadyBest && savedPct > 0" class="save-pct"><span class="sr-only">{{ t('thSave') }}</span> −{{ savedPct }}%</span></div>
+        <div class="dims" :class="{ 'dims-unchanged': dimsShown && !dimsChanged, 'dims-empty': !dimsShown }" :title="dimsShown ? (dimsChanged ? `${item.origW}×${item.origH} → ${outW}×${outH}` : `${item.origW}×${item.origH}`) : undefined">
+          <template v-if="dimsShown">
+            <span class="sr-only">{{ t('thDims') }}</span>
+            <template v-if="dimsChanged">
+              <span class="dims-orig">{{ item.origW }}×{{ item.origH }}</span>
+              <span class="dims-arrow">→</span>
+              <span class="dims-comp">{{ outW }}×{{ outH }}</span>
+            </template>
+            <span v-else class="best-tag dims-same-tag">{{ t('dimsSameTag') }}</span>
+          </template>
+        </div>
+        <div class="cell-status"><span class="sr-only">{{ t('thStatus') }}</span><span :class="['status-pill', pillClass]">{{ pillText }}</span></div>
       </div>
-      <div v-if="item.isAnimatedGif || showAlphaNote || copyFailed" class="note-row">
+      <div v-if="running && processing" class="row-progress" role="progressbar" :aria-label="pillText"><span></span></div>
+      <div class="item-actions" @click.stop>
+        <button v-if="item.error && item.retryable !== false" type="button" class="retry-icon" :title="t('retryBtn')" :aria-label="t('retryBtn')" @click="$emit('retry', item)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 3v6h-6" /></svg></button>
+        <button v-if="item.done && item.outUrl" class="copy-btn" :title="copyOk ? t('copied') : t('copyBtn')" :aria-label="t('copyBtn')" @click="onCopy"><span v-if="copyOk" class="copy-ok">✓</span><svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15V5a2 2 0 012-2h10" /></svg></button>
+        <button v-if="shareable" class="share-btn dl-btn" :title="t('shareBtn')" :aria-label="t('shareBtn')" @click="onShare"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4m0 0L8 8m4-4l4 4" /><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" /></svg><span class="dl-text">{{ t('btnDownload') }}</span></button>
+        <a v-else-if="item.done && item.outUrl" class="dl-icon dl-btn" :href="item.outUrl" :download="item.outName ?? undefined" :title="t('btnDownload')" :aria-label="t('btnDownload')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg><span class="dl-text">{{ t('btnDownload') }}</span></a>
+        <button class="remove-btn" :title="t('btnRemove')" :aria-label="t('btnRemove')" @click="$emit('remove', item)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 7V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2m-7 0l1 13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-13"/></svg></button>
+      </div>
+      <div v-if="item.isAnimatedGif || showAlphaNote || copyFailed" class="note-row" @click.stop>
         <div v-if="item.isAnimatedGif" class="gif-tag">{{ t('gifFirstFrame') }}</div>
         <div v-if="showAlphaNote" class="alpha-note">{{ t('alphaJpegNote') }} <button type="button" class="link-btn" @click="$emit('use-webp', item)">{{ t('useWebpBtn') }}</button></div>
         <div v-if="copyFailed" class="error">{{ t('copyFailed') }}</div>
@@ -80,6 +80,8 @@ const props = defineProps<{
   processing?: boolean
   pos?: number
   count?: number
+  /** The row shown in the preview card (soft accent background). */
+  current?: boolean
 }>()
 const emit = defineEmits<{
   (e: 'remove', item: CompressItem): void
@@ -87,6 +89,7 @@ const emit = defineEmits<{
   (e: 'view-change', item: CompressItem, view: 'orig' | 'comp'): void
   (e: 'use-webp', item: CompressItem): void
   (e: 'retry', item: CompressItem): void
+  (e: 'select', item: CompressItem): void
 }>()
 
 // Name cell: the stem truncates with CSS (fills whatever width the column
