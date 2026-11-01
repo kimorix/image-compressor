@@ -268,7 +268,7 @@ import { lastPdfTool, useHashRoute, type NavKey } from '../../shared/composables
 import { fmtSize } from '../../shared/lib/format'
 import { filesFromDrop } from '../../shared/lib/drop'
 import { shareFilesOr } from '../../shared/lib/share'
-import { downloadUrl, ymd, zipEntries } from '../../shared/lib/zip'
+import { downloadUrl, ymd, zipEntries, zipPath } from '../../shared/lib/zip'
 import { getImagePool } from '../../shared/image/image-pool'
 import type { Lang } from '../../shared/i18n'
 import PreviewStage from './components/PreviewStage.vue'
@@ -585,19 +585,20 @@ const dragover = ref(false)
 function onZoneDrop(e: DragEvent) {
   dragover.value = false
   pageDragging.value = false
-  void filesFromDrop(e.dataTransfer).then((d) => addFiles(d.map((x) => x.file)))
+  void filesFromDrop(e.dataTransfer).then((d) => addFiles(d.map((x) => x.file), d.map((x) => x.dir)))
 }
 const IMG_EXT = /\.(jpe?g|jfif|png|gif|webp|avif|heic|heif|bmp|svg|ico|tiff?)$/i
 function isImageFile(f: File): boolean {
   return /^image\//.test(f.type) || IMG_EXT.test(f.name)
 }
-const fileKey = (f: File) => `${f.name}|${f.size}|${f.lastModified}`
+const fileKey = (f: File, dir = '') => `${dir}/${f.name}|${f.size}|${f.lastModified}`
 
 let seq = 0
-function newItem(file: File): RwItem {
+function newItem(file: File, dir = ''): RwItem {
   return {
     id: `rw-${Date.now().toString(36)}-${seq++}`,
     file,
+    dir,
     status: 'probing',
     w: 0,
     h: 0,
@@ -618,12 +619,14 @@ function newItem(file: File): RwItem {
   }
 }
 
-function addFiles(files: File[]) {
+// dirs[i]: folder of files[i] when a folder was dropped, kept inside the ZIP.
+function addFiles(files: File[], dirs: string[] = []) {
+  const dirOf = new Map(files.map((f, i) => [f, dirs[i] ?? '']))
   const imgs = files.filter(isImageFile)
   const skipped = files.length - imgs.length
-  const have = new Set(items.value.map((i) => fileKey(i.file)))
+  const have = new Set(items.value.map((i) => fileKey(i.file, i.dir)))
   const fresh = imgs.filter((f) => {
-    const k = fileKey(f)
+    const k = fileKey(f, dirOf.get(f))
     if (have.has(k)) return false
     have.add(k)
     return true
@@ -631,7 +634,7 @@ function addFiles(files: File[]) {
   if (skipped) showHint(r('notImage', skipped))
   else if (fresh.length < imgs.length) showHint(r('dupSkipped', imgs.length - fresh.length))
   if (!fresh.length) return
-  const added = fresh.map(newItem)
+  const added = fresh.map((f) => newItem(f, dirOf.get(f)))
   items.value = [...items.value, ...added]
   if (!currentId.value) currentId.value = added[0].id
   for (const it of added) void probe(it)
@@ -817,7 +820,7 @@ async function zipAll() {
   zipping.value = true
   try {
     zipProgress.value = { done: 0, total: done.length }
-    const blob = await zipEntries(done.map((i) => ({ name: i.outName, blob: i.outBlob! })), (i, n) => { zipProgress.value = { done: i, total: n } })
+    const blob = await zipEntries(done.map((i) => ({ name: zipPath(i.dir, i.outName), blob: i.outBlob! })), (i, n) => { zipProgress.value = { done: i, total: n } })
     downloadUrl(blob, `resized-${ymd()}.zip`)
   } catch (err) {
     console.error('[resize] zip failed', err)
@@ -983,7 +986,7 @@ function onDocDrop(e: DragEvent) {
   pageDragging.value = false
   if (!hasFiles(e)) return
   e.preventDefault()
-  void filesFromDrop(e.dataTransfer).then((d) => addFiles(d.map((x) => x.file)))
+  void filesFromDrop(e.dataTransfer).then((d) => addFiles(d.map((x) => x.file), d.map((x) => x.dir)))
 }
 let listening = false
 function startListening() {

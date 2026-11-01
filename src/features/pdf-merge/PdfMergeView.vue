@@ -289,7 +289,7 @@ import { useHashRoute, type NavKey } from '../../shared/composables/useHashRoute
 import { fmtSize } from '../../shared/lib/format'
 import { filesFromDrop } from '../../shared/lib/drop'
 import { shareFilesOr } from '../../shared/lib/share'
-import { downloadUrl, ymd, zipEntries } from '../../shared/lib/zip'
+import { downloadUrl, ymd, zipEntries, zipPath } from '../../shared/lib/zip'
 import type { Lang } from '../../shared/i18n'
 import FileChips, { type Chip } from './components/FileChips.vue'
 import SelectionBar from './components/SelectionBar.vue'
@@ -449,20 +449,22 @@ const dragover = ref(false)
 function onZoneDrop(e: DragEvent) {
   dragover.value = false
   pageDragging.value = false
-  void filesFromDrop(e.dataTransfer).then((d) => addFiles(d.map((x) => x.file)))
+  void filesFromDrop(e.dataTransfer).then((d) => addFiles(d.map((x) => x.file), d.map((x) => x.dir)))
 }
 
 const isPdf = (f: File) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name)
-const fileKey = (f: File) => `${f.name}|${f.size}|${f.lastModified}`
+const fileKey = (f: File, dir = '') => `${dir}/${f.name}|${f.size}|${f.lastModified}`
 let seq = 0
 let colorSeq = 0
 
-function addFiles(list: File[]) {
+// dirs[i]: folder of list[i] when a folder was dropped; split outputs keep it inside the ZIP.
+function addFiles(list: File[], dirs: string[] = []) {
+  const dirOf = new Map(list.map((f, i) => [f, dirs[i] ?? '']))
   const pdfs = list.filter(isPdf)
   const skipped = list.length - pdfs.length
-  const have = new Set(files.value.map((f) => fileKey(f.file)))
+  const have = new Set(files.value.map((f) => fileKey(f.file, f.dir)))
   const fresh = pdfs.filter((f) => {
-    const k = fileKey(f)
+    const k = fileKey(f, dirOf.get(f))
     if (have.has(k)) return false
     have.add(k)
     return true
@@ -471,7 +473,7 @@ function addFiles(list: File[]) {
   else if (fresh.length < pdfs.length) showHint(m('dupSkipped', pdfs.length - fresh.length))
   if (!fresh.length) return
   const added: SrcFile[] = fresh.map((file) => ({
-    id: `f${(seq++).toString(36)}`, file, name: file.name, pages: 0, color: colorSeq++, status: 'probing',
+    id: `f${(seq++).toString(36)}`, file, dir: dirOf.get(file) ?? '', name: file.name, pages: 0, color: colorSeq++, status: 'probing',
     ownerLocked: false, hasForm: false, xfa: false, hasOutline: false, aspect: 1 / 1.414,
   }))
   files.value = [...files.value, ...added]
@@ -730,7 +732,7 @@ async function runSplitNow() {
     plan.groups.forEach((g, i) => {
       const name = splitName(settings.value.split.template, { name: plan.src.name, range: groupLabel(g), n: i + 1, total: plan.groups.length })
       parts.push({ name, pages: g.map((pos) => spec(plan.live[pos - 1])) })
-      meta.push({ color: multi ? plan.src.color : i, path: multi ? `${sanitize(stem(plan.src.name))}/${name}` : name })
+      meta.push({ color: multi ? plan.src.color : i, path: zipPath(plan.src.dir, multi ? `${sanitize(stem(plan.src.name))}/${name}` : name) })
     })
   }
   await execute({ kind: 'split', sources, parts, bookmarks: settings.value.merge.bookmarks, keepForms: settings.value.merge.keepForms }, 'split', meta)
@@ -852,7 +854,7 @@ function onDocDrop(e: DragEvent) {
   pageDragging.value = false
   if (!hasFiles(e)) return
   e.preventDefault()
-  void filesFromDrop(e.dataTransfer).then((d) => addFiles(d.map((x) => x.file)))
+  void filesFromDrop(e.dataTransfer).then((d) => addFiles(d.map((x) => x.file), d.map((x) => x.dir)))
 }
 function onKeyDown(e: KeyboardEvent) {
   const target = e.target as HTMLElement | null

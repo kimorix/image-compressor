@@ -8,6 +8,8 @@ export type SrcStatus = 'probing' | 'ready' | 'locked' | 'error'
 export interface SrcFile {
   id: string
   file: File
+  /** Folder it was dropped from ('' for loose files); split outputs keep it in the ZIP. */
+  dir: string
   name: string
   /** Page count (0 until probed). */
   pages: number

@@ -78,6 +78,8 @@ export type RwStatus = 'probing' | 'ready' | 'queued' | 'processing' | 'done' | 
 export interface RwItem {
   id: string
   file: File
+  /** Folder it was dropped from ('' for loose files); kept inside the ZIP. */
+  dir: string
   status: RwStatus
   /** Upright (EXIF-corrected) size; 0 until probed. */
   w: number

@@ -174,7 +174,7 @@ import { useHashRoute, type NavKey } from '../../shared/composables/useHashRoute
 import { fmtSize } from '../../shared/lib/format'
 import { filesFromDrop } from '../../shared/lib/drop'
 import { shareFilesOr } from '../../shared/lib/share'
-import { downloadUrl, ymd, zipEntries } from '../../shared/lib/zip'
+import { downloadUrl, ymd, zipEntries, zipPath } from '../../shared/lib/zip'
 import type { Lang } from '../../shared/i18n'
 import PdfSettingsPanel from './components/PdfSettingsPanel.vue'
 import PdfDetailSheet from './components/PdfDetailSheet.vue'
@@ -281,14 +281,15 @@ const dragover = ref(false)
 function onZoneDrop(e: DragEvent) {
   dragover.value = false
   pageDragging.value = false
-  void filesFromDrop(e.dataTransfer).then((d) => addFiles(d.map((x) => x.file)))
+  void filesFromDrop(e.dataTransfer).then((d) => addFiles(d.map((x) => x.file), d.map((x) => x.dir)))
 }
 
 let seq = 0
-function newItem(file: File): PdfItem {
+function newItem(file: File, dir = ''): PdfItem {
   return {
     id: `pdf-${Date.now().toString(36)}-${seq++}`,
     file,
+    dir,
     status: 'probing',
     pages: 0,
     kind: 'unknown',
@@ -310,12 +311,15 @@ function newItem(file: File): PdfItem {
   }
 }
 
-function addFiles(files: File[]) {
+// dirs[i]: folder of files[i] when a folder was dropped, kept inside the ZIP.
+function addFiles(files: File[], dirs: string[] = []) {
+  const dirOf = new Map(files.map((f, i) => [f, dirs[i] ?? '']))
+  const keyOf = (f: File, dir = '') => `${dir}/${fileKey(f)}`
   const pdfs = files.filter(isPdfFile)
   const skipped = files.length - pdfs.length
-  const have = new Set(items.value.map((i) => fileKey(i.file)))
+  const have = new Set(items.value.map((i) => keyOf(i.file, i.dir)))
   const fresh = pdfs.filter((f) => {
-    const k = fileKey(f)
+    const k = keyOf(f, dirOf.get(f))
     if (have.has(k)) return false
     have.add(k)
     return true
@@ -323,7 +327,7 @@ function addFiles(files: File[]) {
   if (skipped) showHint(p('notPdf', skipped))
   else if (fresh.length < pdfs.length) showHint(p('dupSkipped', pdfs.length - fresh.length))
   if (!fresh.length) return
-  const added = fresh.map(newItem)
+  const added = fresh.map((f) => newItem(f, dirOf.get(f)))
   items.value = [...items.value, ...added]
   for (const it of added) void probe(it)
 }
@@ -520,7 +524,7 @@ async function zipAll() {
   if (done.length === 1) { downloadOne(done[0]); return }
   zipping.value = true
   try {
-    const blob = await zipEntries(done.map((i) => ({ name: i.outName, blob: i.outBlob! })))
+    const blob = await zipEntries(done.map((i) => ({ name: zipPath(i.dir, i.outName), blob: i.outBlob! })))
     downloadUrl(blob, `pdf-to-word-${ymd()}.zip`)
   } catch (err) {
     console.error('[pdf-to-word] zip failed', err)
@@ -680,7 +684,7 @@ function onDocDrop(e: DragEvent) {
   pageDragging.value = false
   if (!hasFiles(e)) return
   e.preventDefault()
-  void filesFromDrop(e.dataTransfer).then((d) => addFiles(d.map((x) => x.file)))
+  void filesFromDrop(e.dataTransfer).then((d) => addFiles(d.map((x) => x.file), d.map((x) => x.dir)))
 }
 let listening = false
 function startListening() {
