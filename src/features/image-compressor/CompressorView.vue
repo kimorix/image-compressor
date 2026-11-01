@@ -929,10 +929,6 @@ async function goPage(delta: number) {
   if (listRef.value) listRef.value.scrollTop = 0
   document.getElementById('resultCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
-if (typeof window !== 'undefined') {
-  window.addEventListener('resize', onViewportResize)
-  window.addEventListener('scroll', updateStripStuck, { passive: true })
-}
 
 // Shared with the mobile detail sheet: the slider mechanics live in one
 // composable, while both surfaces keep the same .pv-* markup.
@@ -1166,6 +1162,12 @@ onActivated(() => {
   if (busy.value || sheetOpen.value) document.body.style.overflow = 'hidden'
   if (listening) return
   listening = true
+  // Viewport listeners too: while another tool is shown, the detached strip
+  // reads top 0 (stuck) and every resize would re-lay the masonry for nothing.
+  window.addEventListener('resize', onViewportResize)
+  window.addEventListener('scroll', updateStripStuck, { passive: true })
+  // The viewport may have changed while this view was hidden.
+  onViewportResize()
   document.addEventListener('paste', onPaste)
   document.addEventListener('dragenter', onDocDragEnter)
   document.addEventListener('dragleave', onDocDragLeave)
@@ -1176,6 +1178,8 @@ onActivated(() => {
 function stopPageListeners() {
   if (!listening) return
   listening = false
+  window.removeEventListener('resize', onViewportResize)
+  window.removeEventListener('scroll', updateStripStuck)
   document.removeEventListener('paste', onPaste)
   document.removeEventListener('dragenter', onDocDragEnter)
   document.removeEventListener('dragleave', onDocDragLeave)
@@ -1194,8 +1198,6 @@ onDeactivated(() => {
 })
 onUnmounted(() => {
   stopPageListeners()
-  window.removeEventListener('resize', onViewportResize)
-  window.removeEventListener('scroll', updateStripStuck)
   window.removeEventListener('beforeunload', onBeforeUnload)
   window.removeEventListener(CLEAR_EVENT, onClearData)
   if (busyAddTimer) clearTimeout(busyAddTimer)
