@@ -2,22 +2,22 @@
 
 <img src=".github/assets/icon.png" width="88" alt="" />
 
-# 图片压缩 Image Compressor
+# Pixdoc
 
-**在浏览器里压缩、转换、改尺寸、生成 PDF —— 全部在本地完成。**
+**完全在浏览器里运行的图片与 PDF 工具箱，私密、离线可用。**
 不上传任何文件，断网可用，免费开源。
 
 [English](README.md) · **简体中文**
 
-[![CI](https://github.com/kimorix/image-compressor/actions/workflows/ci.yml/badge.svg)](https://github.com/kimorix/image-compressor/actions/workflows/ci.yml)
+[![CI](https://github.com/kimorix/pixdoc/actions/workflows/ci.yml/badge.svg)](https://github.com/kimorix/pixdoc/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![在线使用](https://img.shields.io/badge/demo-online-brightgreen.svg)](https://kimorix.github.io/image-compressor/)
+[![在线使用](https://img.shields.io/badge/demo-online-brightgreen.svg)](https://kimorix.github.io/pixdoc/)
 ![PWA](https://img.shields.io/badge/PWA-离线可用-5a0fc8.svg)
 ![Languages](https://img.shields.io/badge/i18n-6%20种语言-orange.svg)
 
-### [立即使用 →](https://kimorix.github.io/image-compressor/)
+### [立即使用 →](https://kimorix.github.io/pixdoc/)
 
-<img src=".github/assets/desktop.png" alt="桌面端界面" width="860" />
+<img src=".github/assets/resize-watermark.jpg" alt="Pixdoc 尺寸与水印" width="860" />
 
 </div>
 
@@ -52,9 +52,19 @@
 
 ## 截图
 
-| 电脑 | iPad | 手机 |
-| :---: | :---: | :---: |
-| <img src=".github/assets/desktop.png" width="360" alt="电脑" /> | <img src=".github/assets/ipad.png" width="240" alt="iPad" /> | <img src=".github/assets/phone.png" width="150" alt="手机" /> |
+<table>
+<tr>
+<td width="50%"><img src=".github/assets/convert.jpg" alt="格式转换" /><p align="center">格式转换</p></td>
+<td width="50%"><img src=".github/assets/pdf-merge.jpg" alt="PDF 合并拆分" /><p align="center">PDF 合并拆分</p></td>
+</tr>
+<tr>
+<td width="50%"><img src=".github/assets/pdf-to-word.jpg" alt="PDF 转 Word" /><p align="center">PDF 转 Word</p></td>
+<td width="50%"><img src=".github/assets/images-to-pdf.jpg" alt="图片转 PDF" /><p align="center">图片转 PDF</p></td>
+</tr>
+<tr>
+<td colspan="2"><img src=".github/assets/mobile.jpg" alt="手机端" /><p align="center">手机端</p></td>
+</tr>
+</table>
 
 ## 支持的格式
 

@@ -1,9 +1,11 @@
-# AGENTS.md — notes for coding agents and contributors
+# AGENTS.md — notes for coding agents and contributors (Pixdoc)
 
 This file is for agents (and humans) working on the code. The user-facing description is in README.md / README.zh-CN.md; keep those free of implementation details and tech stack.
 
 ## Ground rules
 
+- Project name is **Pixdoc** (formerly image-compressor; repo kimorix/pixdoc, site https://kimorix.github.io/pixdoc/). `src/features/image-compressor/` is just the compressor tool and keeps its name; localStorage keys keep their `ic-` prefix for compatibility.
+- README images in `.github/assets/` are the design mockups, not live screenshots.
 - Everything runs client-side. Never add a server upload, analytics on file contents, or a network dependency to the core image paths.
 - `docs/` is the GitHub Pages output and is committed. Always commit source first, then run `npm run build` and commit the full `docs/` (language folders, `sw.js`, workbox files) as the last commit. CI fails if `docs/` differs from a fresh build: check with `git add -N docs && git diff --exit-code -- docs`.
 - Six UI languages (zh, en, ja, ko, fr, de). Every new string needs all six; use interpolation (e.g. `{i}/{n}`) rather than concatenation.
