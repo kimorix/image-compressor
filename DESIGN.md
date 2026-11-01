@@ -326,15 +326,16 @@ components:
     rounded: "{rounded.md}"
   result-row:
     backgroundColor: transparent
+    currentBackground: "{colors.accent-soft}"
     textColor: "{colors.ink}"
     borderTop: 1px solid "{colors.hairline}"
-    padding: 12px 0
+    padding: 12px 10px
   result-thumb:
     backgroundColor: "{colors.surface-2}"
-    rounded: "{rounded.md}"
-    size: 48px
-  result-thumb-stacked:
-    size: 84px
+    rounded: 10px
+    size: 56px
+  result-thumb-narrow:
+    size: 44-48px
   masonry-card:
     rounded: 12px
     padding: 8px
@@ -557,9 +558,10 @@ crossfade), and the only large color area is the image being compared.
   Already-optimal files are grey. Errors are red. Upscaled dimensions are amber.
 - The result summary is a **flat four-cell bar**, not a hero metric: labels
   12px, values 14px, and the saved value in softened green (`{colors.success-text}`).
-- Dense data, calm chrome: a 48px-thumbnail table on wide screens, an 84px
-  stacked row on tablets (720–1365px), and a two-column image-first masonry on
-  phones. Phone cards show a clamped-aspect thumbnail, filename, one meta line
+- Dense data, calm chrome: one two-line list row (56px thumbnail, bold name,
+  calm meta line with small pill tags, right-aligned actions) on desktop and
+  iPad, the same in the compressor, convert and resize lists; long lists scroll
+  inside their card. Phones get a two-column image-first masonry. Phone cards show a clamped-aspect thumbnail, filename, one meta line
   and a 28px download/share action; dimensions and full notes move into a
   bottom detail sheet.
 - System fonts only. No webfont request, no font swap, no layout shift.
@@ -612,9 +614,9 @@ stat strip, preview rail and mobile shell are specified here.
    marketing cards and changelog rows, not a compression result table. The
    result table, stat strip, preview card, mobile tab bar and sticky action bar
    are specified here in the same token language.
-4. **Density is higher than the marketing reference.** Table rows are 12px
-   vertical padding, 48px thumbnails, 36px row icons on pointer devices, and
-   44px icons on touch. Marketing-sized 24px padding is reserved for cards.
+4. **Density is higher than the marketing reference.** List rows are 12px
+   vertical padding, 56px thumbnails (44–48px on narrow lists) and 36px row
+   buttons. Marketing-sized 24px padding is reserved for cards.
 
 ## Colors
 
@@ -733,7 +735,7 @@ Base unit 4px. Tokens: `{spacing.xxs}` 4 · `{spacing.xs}` 8 · `{spacing.sm}` 1
 - Card padding: 24px (16px on mobile).
 - Header: 36px top, 16px sides, 4px bottom (24px top on mobile).
 - Settings grid: 14px row gap, 16px column gap.
-- Result row: 12px vertical padding on the table and stacked tablet row;
+- Result row: 12px vertical padding (10px on narrow lists);
   phone masonry cards use 8px internal padding and 8px gaps.
 - Page bottom: 48px.
 
@@ -745,9 +747,6 @@ Base unit 4px. Tokens: `{spacing.xxs}` 4 · `{spacing.xs}` 8 · `{spacing.sm}` 1
   scroll. The middle column stacks upload then results.
 - **≥ 1080px**: three tracks — `220px minmax(0, 1fr) 340px`. The left sidebar is
   sticky at 20px. History spans all columns.
-- **≥ 1366px**: the middle column is wide enough for the fixed-column result
-  table (48px thumb + 8px gap + 626px of columns, 682px row minimum). Below
-  1366px, rows stack instead of scrolling sideways.
 - **≥ 1600px**: the right rail grows to 400px; the middle column keeps the
   remaining space. Header/footer right padding grows to 436px.
 - **< 720px**: single column. Empty state shows upload; once results exist the
@@ -929,8 +928,9 @@ Order inside the card:
    `{typography.stat-value}` in `{colors.success-text}` only when saved > 0; at
    0% it is `{colors.ink-subtle}` and reads `0%`, never `−0%`. The bar is a
    single 10px-radius surface-2 container, never nested cards.
-4. **Rows** — table with a header row at ≥1366px; a stacked 84px-thumb row from
-   720–1365px; a two-column masonry below 720px. Stats, thumbnail strip and
+4. **Rows** — the list row below from 720px up, inside a scroll area capped at
+   `max(360px, 100dvh − 230px)` so a long batch never stretches the page; a
+   two-column masonry below 720px. Stats, thumbnail strip and
    downloads are global. Mobile has no pager, so adding a file never replaces
    the visible page or scrolls back to the top.
 5. **Pager** — desktop only, 20 rows per page, previous/label/next, only when
@@ -939,53 +939,50 @@ Order inside the card:
 6. If every item is already optimal, a 13px note: "N images uncompressed,
    originals will be kept."
 
-### Result row — table (≥1366px)
+### Result row — list (≥720px)
 
-Grid: `48px minmax(0, 1fr)` with 10px/8px gaps, 12px vertical padding, 698px
-row minimum (48px thumb + 8px gap + 642px of columns), hairline top border
-(none on the first row). The meta grid inside is:
+One row design at every desktop / iPad width, shared with the convert and
+resize lists and sized by the list's own width (container query), not the
+viewport:
 
 ```
-48px  minmax(96px, 1fr) 68px 68px 46px 144px 80px 116px
-image format            orig  comp  save  dims   status  actions
+56px thumb | name … .ext  [WebP] [verdict]                    | [copy] [↓ 下载] [🗑]
+           | 1.07 MB  → 365 KB  −67%  1080×1350 → 1080×1080  [已完成]
+           | ▬▬▬ (4px sweep bar while this row encodes)
 ```
 
-A visual header row appears above the table at ≥1366px: a quiet
-`{colors.surface-2}` band with an 8px radius, 11px/600 `{colors.ink-muted}`
-labels and 0.02em tracking, sharing the same rows template: Image / Format /
-Original / Compressed / Saved / Dimensions / Status / Actions. Format and
-Dimensions labels and their cells are centered; the other value columns stay
-left-aligned. It is hidden below 1366px where rows stack.
-
-- Format: the existing format tag (11px, 1px hairline, 4px radius) occupies
-  the first column and is centered there. The filename is deliberately omitted from the desktop
-  table: it was truncated in a 118px column and the thumbnail strip already
-  names the file. The full name remains on the row's `title`, in the strip, and
-  in the stacked mobile row. The already-best and small-saving verdict tags
-  sit beside the format tag in the same `name-tags` row.
-- Original / compressed: 13px; compressed is the primary value, original is
-  `{colors.ink-subtle}`.
-- Save: 13px/500 `{colors.success-text}`, `−NN%`; absent at 0%.
-- Dimensions: 12px, centered in the column. Always show both values: when
-  unchanged they sit on one line as `original → output` (same numbers); a real
-  resize stacks vertically (original above, a down arrow, output below); amber
-  if the output was upscaled.
-- Status: 11px/500 text pill — done (transparent, green-text), processing
-  (accent-soft), failed (red outline), cancelled (neutral outline). The pill
-  wraps for long translations instead of overflowing its 80px column.
-- Actions: copy, download (or share on touch devices with file sharing), remove;
-  an error row adds a retry icon before remove. 36px square, 8px radius,
-  hairline border, 4px gap. Remove turns red on hover.
+- Thumb 56px, 10px radius, hairline border; the thumbnail opens the lightbox.
+- Line 1: name 14/600, the stem truncates with an ellipsis and the extension
+  stays; then the format tag and the already-best / small-saving verdict tags
+  (11px, 5px radius, surface-2 fill, no border).
+- Line 2: 12.5px `{colors.ink-subtle}`, tabular figures. Original size, `→`
+  compressed (ink), saving in `{colors.success-text}` 600, dimensions
+  (`A → B` when resized, the grey "same size" tag when not), then the status
+  pill: done (green-soft fill), processing (accent-soft), failed (red tint),
+  cancelled (surface-2). On lists ≥600px the values keep fixed widths (64 /
+  80 / 40 / 148px) so they form columns across rows and nothing shifts while
+  statuses change; narrower lists let the line wrap.
+- Actions: right-aligned, 36px high, 8px radius, hairline border, card fill:
+  copy icon, an outlined accent download button ("下载" label on lists ≥720px,
+  icon below; share on touch devices with file sharing), remove icon; an error
+  row adds retry before remove.
+- Hairline dividers between rows. Clicking a row selects it for the preview;
+  the selected row is a soft `{colors.accent-soft}` tile with 10px radius and
+  the hairlines on both sides hidden. Selecting from the strip scrolls the row
+  into view inside the list (never the page).
+- Narrow lists (<560px, iPad portrait beside the settings panel): 44px thumb,
+  actions share line 1 with the name, the meta line takes the full width.
 
 No per-row settings gear. No third action beyond copy/share, download, remove.
 
-### Result row — stacked (720–1365px)
+### Long lists (all image tools)
 
-`84px minmax(0, 1fr)` with 12px gap, 18px vertical padding. The meta column
-wraps: name + format tag on their own line, then original → compressed → save,
-then dimensions (stacked with a rotated arrow when changed, one line when
-unchanged), status, then actions. Touch row icons are 44px. The arrow is a `→`
-rotated 90°.
+On desktop and iPad the compressor, convert and resize lists scroll inside
+their card (`.list-scroll`, `src/styles/list-scroll.less`): max height
+`max(360px, 100dvh − 230px)`, thin scrollbar, overscroll contained, soft top /
+bottom edge shadows that only appear while there is more to scroll. The card
+head (title, count, clear / download all) and the stats strip stay outside the
+scroller. Phones keep the page scroll.
 
 ### Mobile masonry (<720px)
 
@@ -1251,8 +1248,9 @@ scroll locked):
   bar, and menus.
 - Keep the global loading layer blocking: scrim + inert page + locked scroll,
   with `pointer-events: none` only on the status pill itself.
-- Keep rows dense: 12px vertical padding, 48px thumbs, 36px icons on pointer
-  devices, 44px on touch. Show the visual table header only at ≥1366px.
+- Keep rows dense and even: 12px vertical padding, 56px thumbs, 36px row
+  buttons, fixed-width meta values on wide lists; long lists scroll inside
+  their card on desktop and iPad.
 - Keep the compare divider keyboard-operable and the 44px grab strip invisible
   but real.
 - Keep every string in all six languages, and every color/radius/font size in
@@ -1286,9 +1284,8 @@ scroll locked):
 | Width | Name | Key changes |
 |---|---|---|
 | ≥1600px | Wide desktop | Right rail 400px; header/footer right padding 436px |
-| 1366–1599px | Desktop table | Result table with fixed columns; rail 340px |
-| 1080–1365px | Desktop sidebar | Sidebar 220px; results stack (table minimum not met) |
-| 720–1079px | Tablet | No sidebar; fixed 340px rail; stacked result rows; desktop preview card |
+| 1080–1599px | Desktop sidebar | Sidebar 220px; list rows with fixed-width meta columns; rail 340px |
+| 720–1079px | Tablet | No sidebar; fixed 340px rail; list rows (narrow form below a 560px list); desktop preview card |
 | 601–719px | Small tablet | Single column, two-column masonry, bottom detail sheet, sticky 3-button bar + tab bar; 16px/12px page padding; header still desktop-style |
 | ≤600px | Mobile compact | 16px cards, 28px dropzone, 26px title, stacked header; masonry cards; actions wrap to a right-aligned row when the translated title is long |
 | ≤480px | Small phone | Masonry thumbnails capped at 166px; stat labels 10px, values 13px |
@@ -1398,8 +1395,8 @@ switches at runtime.
 4. Add a state by reusing an existing signal first: `{colors.success}` for a
    real saving, grey for already-best, amber for upscaling, red for errors,
    opacity fades for loading.
-5. Verify at 390, 768, 1024, 1440 and 1600px. Check the table breakpoint at
-   1366px, the mobile header at 380px, and the sticky bar above the tab bar.
+5. Verify at 390, 768, 1024, 1440 and 1600px. Check a 15+ image list at
+   1440, 1180×820 and 820×1180 (internal scroll, even rows), the mobile header at 380px, and the sticky bar above the tab bar.
 6. Run `pnpm typecheck && pnpm test && pnpm build`; commit `docs/` with `src/`.
 7. If the Google DESIGN.md toolchain is available, run
    `npx @google/design.md lint DESIGN.md` after edits.
@@ -1419,5 +1416,5 @@ switches at runtime.
   accent changes.
 - Mobile screenshot verification uses Chrome's minimum window width (500px) as
   a quirk; use device emulation at 390px for a true narrow-phone check.
-- The table's fixed columns assume the 340px right rail; if the rail width
-  changes, recompute the 1366px breakpoint (row minimum 698px).
+- The list's fixed meta widths switch on at a 600px list width (container
+  query), so they follow the list column, not the rail width.
