@@ -96,16 +96,14 @@
           <span v-for="n in commonNotes" :key="n" class="rw-tag mute">{{ n }}</span>
         </div>
         <ul class="rw-list list-scroll">
-          <li
+          <ResultRow
             v-for="item in items"
             :key="item.id"
             class="rw-item"
             :class="[`st-${item.status}`, { current: !isMobile && item.id === currentId }]"
-            tabindex="0"
-            :aria-current="!isMobile && item.id === currentId ? 'true' : undefined"
-            @click="onRowClick(item)"
-            @keydown.enter.self.prevent="onRowClick(item)"
-            @keydown.space.self.prevent="onRowClick(item)"
+            selectable
+            :current="!isMobile && item.id === currentId"
+            @select="onRowClick(item)"
           >
             <div class="rw-thumb" :class="{ gif: item.format === 'gif' && !item.thumb }">
               <img v-if="item.thumb" :src="item.thumb" alt="" loading="lazy" />
@@ -152,7 +150,7 @@
               <button v-else-if="item.status === 'error'" type="button" class="rw-round text" @click="enqueue([item])">{{ r('retry') }}</button>
               <button v-else type="button" class="rw-round" :title="r('remove')" :aria-label="r('remove')" @click="removeItem(item)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg></button>
             </div>
-          </li>
+          </ResultRow>
         </ul>
       </div>
     </main>
@@ -264,6 +262,7 @@ import { isClearingData } from '../../shared/lib/clear-data'
 import { computed, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, shallowRef, triggerRef, watch } from 'vue'
 import AppHeader from '../../shared/components/AppHeader.vue'
 import LiveHint from '../../shared/components/LiveHint.vue'
+import ResultRow from '../../shared/components/ResultRow.vue'
 import SideNav from '../../shared/components/SideNav.vue'
 import TabBar from '../../shared/components/TabBar.vue'
 import MoreMenu from '../../shared/components/MoreMenu.vue'

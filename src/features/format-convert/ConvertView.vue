@@ -64,7 +64,7 @@
         </div>
         <BatchStatus :text="batchText" :done="batchShown.done" :total="batchShown.total" />
         <ul class="cv-list list-scroll">
-          <li v-for="item in items" :key="item.id" class="cv-item" :class="[`st-${item.status}`, { clickable: isMobile && item.status !== 'unsupported' }]" @click="onCardClick(item)">
+          <ResultRow v-for="item in items" :key="item.id" class="cv-item" :class="[`st-${item.status}`, { clickable: isMobile && item.status !== 'unsupported' }]" :selectable="isMobile && item.status !== 'unsupported'" @select="onCardClick(item)">
             <div class="cv-thumb" :class="{ checker: item.status === 'done' || !!thumbOf(item), plain: !thumbOf(item) }">
               <img v-if="thumbOf(item)" :src="thumbOf(item)!" alt="" loading="lazy" @error="dropPreview(item)" />
               <span v-else-if="item.status === 'error'" class="cv-thumb-bad" aria-hidden="true">!</span>
@@ -109,7 +109,7 @@
               <button v-else-if="item.status === 'error' || item.status === 'cancelled'" type="button" class="cv-round accent text" @click="startOne(item)">{{ p('retry') }}</button>
               <button v-else type="button" class="cv-round" :title="p('remove')" :aria-label="p('remove')" @click="removeItem(item)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg></button>
             </div>
-          </li>
+          </ResultRow>
         </ul>
       </div>
     </main>
@@ -182,6 +182,7 @@ import { isClearingData } from '../../shared/lib/clear-data'
 import { computed, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, shallowRef, triggerRef, watch } from 'vue'
 import AppHeader from '../../shared/components/AppHeader.vue'
 import LiveHint from '../../shared/components/LiveHint.vue'
+import ResultRow from '../../shared/components/ResultRow.vue'
 import SideNav from '../../shared/components/SideNav.vue'
 import TabBar from '../../shared/components/TabBar.vue'
 import MoreMenu from '../../shared/components/MoreMenu.vue'
