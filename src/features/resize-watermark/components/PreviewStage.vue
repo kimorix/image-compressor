@@ -75,15 +75,46 @@ function schedule() {
     draw()
   })
 }
+// Width of the stage box. clientWidth can read 0 for a frame while a
+// sheet is mounting/animating; fall back to the layout box and the parent.
+function measureWidth(): number {
+  const el = wrap.value
+  if (!el) return 0
+  return el.clientWidth || Math.round(el.getBoundingClientRect().width) || el.parentElement?.clientWidth || 0
+}
+// Retry budget for a stage that has a picture but no width yet: draw()
+// used to bail and wait for a ResizeObserver callback that may never come
+// (the box already had its final size), leaving the canvas blank.
+let zeroWidthRetries = 0
 function draw() {
   const c = cv.value
   const bmp = props.bmp
+  if (c && bmp && !width.value) {
+    const w = measureWidth()
+    if (w > 0) width.value = w
+    else if (zeroWidthRetries++ < 120) {
+      raf = requestAnimationFrame(() => { raf = 0; draw() })
+      return
+    }
+  }
+  if (width.value) zeroWidthRetries = 0
   if (!c || !bmp || !width.value || !props.srcW || !props.srcH) {
     L = null
     boxH.value = 0
     emit('layout', null)
     return
   }
+  try {
+    paint(c, bmp)
+  } catch (err) {
+    // A failed paint (closed bitmap, canvas over the engine's limits) must
+    // not leave stale pointer geometry behind; the next change retries.
+    console.warn('[resize] preview paint failed', err)
+    L = null
+    emit('layout', null)
+  }
+}
+function paint(c: HTMLCanvasElement, bmp: Img) {
   const maxW = width.value
   const maxH = Math.max(120, props.maxH)
   const dpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1
@@ -114,19 +145,34 @@ function draw() {
 watch(() => [props.bmp, props.srcW, props.srcH, props.settings, props.focus, props.outType, props.text, props.logo, props.view, props.context, props.maxH, width.value], schedule)
 
 let ro: ResizeObserver | null = null
+function remeasure() {
+  const w = measureWidth()
+  if (w > 0 && Math.abs(w - width.value) > 0.5) width.value = w
+}
+// iOS Safari may drop canvas backing stores while the page is in the
+// background (memory pressure); repaint when it comes back.
+function onVisible() {
+  if (document.visibilityState !== 'hidden') { remeasure(); schedule() }
+}
 onMounted(() => {
   const el = wrap.value!
-  width.value = el.clientWidth
+  width.value = measureWidth()
   if (typeof ResizeObserver !== 'undefined') {
-    ro = new ResizeObserver(() => {
-      if (wrap.value && Math.abs(wrap.value.clientWidth - width.value) > 0.5) width.value = wrap.value.clientWidth
-    })
+    ro = new ResizeObserver(remeasure)
     ro.observe(el)
   }
+  window.addEventListener('resize', remeasure)
+  window.addEventListener('pageshow', onVisible)
+  document.addEventListener('visibilitychange', onVisible)
+  cv.value?.addEventListener('contextrestored', schedule)
   schedule()
 })
 onBeforeUnmount(() => {
   ro?.disconnect()
+  window.removeEventListener('resize', remeasure)
+  window.removeEventListener('pageshow', onVisible)
+  document.removeEventListener('visibilitychange', onVisible)
+  cv.value?.removeEventListener('contextrestored', schedule)
   if (raf) cancelAnimationFrame(raf)
 })
 

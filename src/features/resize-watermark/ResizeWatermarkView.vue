@@ -256,6 +256,7 @@ import { computeGeometry, effectiveResize } from './lib/geometry'
 import { findPreset } from './lib/presets'
 import { expandText, textVars } from './lib/watermark'
 import { estimateSize, stageLayout } from './lib/preview'
+import { loadPreviewImage, type LoadedPreview, type PreviewImage } from './lib/preview-bitmap'
 import { clearLogo, loadLogo, prepareLogo, saveLogo } from './lib/logo-store'
 import type { RwJobResult, RwPayload } from './lib/rw-job'
 import './styles/rw.less'
@@ -338,8 +339,8 @@ const currentId = ref<string | null>(null)
 const current = computed(() => (void rev.value, items.value.find((i) => i.id === currentId.value) ?? null))
 const currentIndex = computed(() => Math.max(0, items.value.findIndex((i) => i.id === currentId.value)))
 const view = ref<'effect' | 'original'>('effect')
-const currentBmp = shallowRef<ImageBitmap | null>(null)
-const bmpCache = new Map<string, ImageBitmap>()
+const currentBmp = shallowRef<PreviewImage | null>(null)
+const bmpCache = new Map<string, LoadedPreview>()
 const BMP_CACHE = 4
 let bmpToken = 0
 async function loadBmp(id: string | null) {
@@ -349,23 +350,24 @@ async function loadBmp(id: string | null) {
   if (hit) {
     bmpCache.delete(id)
     bmpCache.set(id, hit)
-    currentBmp.value = hit
+    currentBmp.value = hit.img
     return
   }
   const blob = previews.get(id)
   if (!blob) { currentBmp.value = null; return }
   try {
-    const bmp = await createImageBitmap(blob)
-    if (token !== bmpToken) { bmp.close(); return }
-    bmpCache.set(id, bmp)
+    const loaded = await loadPreviewImage(blob)
+    if (token !== bmpToken) { loaded.close(); return }
+    bmpCache.set(id, loaded)
     while (bmpCache.size > BMP_CACHE) {
-      const [k, v] = bmpCache.entries().next().value as [string, ImageBitmap]
-      if (v === currentBmp.value) break
+      const [k, v] = bmpCache.entries().next().value as [string, LoadedPreview]
+      if (v.img === currentBmp.value) break
       bmpCache.delete(k)
       v.close()
     }
-    currentBmp.value = bmp
-  } catch {
+    currentBmp.value = loaded.img
+  } catch (err) {
+    console.warn('[resize] preview decode failed', err)
     if (token === bmpToken) currentBmp.value = null
   }
 }
@@ -684,7 +686,7 @@ function release(item: RwItem) {
   const b = bmpCache.get(item.id)
   if (b) {
     bmpCache.delete(item.id)
-    if (b !== currentBmp.value) b.close()
+    if (b.img !== currentBmp.value) b.close()
   }
 }
 function removeItem(item: RwItem) {
@@ -800,7 +802,9 @@ function onLogoRemove() {
 // ---- phone surfaces ----
 function onRowClick(it: RwItem) {
   if (isMobile.value) {
-    if (it.status === 'probing' || !it.w) return
+    // Open even while the row is still reading (the sheet shows "Reading…"
+    // and draws as soon as the probe lands) or failed (it shows why): a
+    // tap that silently did nothing read as "preview doesn't work".
     moreOpen.value = false
     settingsOpen.value = false
     currentId.value = it.id
