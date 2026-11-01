@@ -33,14 +33,14 @@
         <span v-else>{{ t('processing') }}</span>
       </div>
       <div class="save-cell"><span v-if="item.done && !isAlreadyBest && savedPct > 0" class="save-pct"><span class="sr-only">{{ t('thSave') }}</span> −{{ savedPct }}%</span></div>
-      <div v-if="dimsShown" class="dims" :title="`${item.origW}×${item.origH} → ${outW}×${outH}`">
+      <div v-if="dimsShown" class="dims" :class="{ 'dims-unchanged': !dimsChanged }" :title="dimsChanged ? `${item.origW}×${item.origH} → ${outW}×${outH}` : `${item.origW}×${item.origH}`">
         <span class="sr-only">{{ t('thDims') }}</span>
         <template v-if="dimsChanged">
           <span class="dims-orig">{{ item.origW }}×{{ item.origH }}</span>
           <span class="dims-arrow">→</span>
           <span class="dims-comp">{{ outW }}×{{ outH }}</span>
         </template>
-        <span v-else class="dims-same">{{ item.origW }}×{{ item.origH }}<span class="dims-same-out"> → {{ outW }}×{{ outH }}</span></span>
+        <span v-else class="best-tag dims-same-tag">{{ t('dimsSameTag') }}</span>
       </div>
       </div>
       <!-- Status + actions share a footer. Desktop lays the footer out with
