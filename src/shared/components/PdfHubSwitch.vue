@@ -3,7 +3,7 @@
   pushes the tool's hash, so Back returns to the previous tool. Hidden on
   desktop, where the side nav lists the PDF tools. -->
   <div class="pdf-hub">
-    <SegmentedControl :model-value="active" :options="options" :aria-label="t('hubTitle')" @update:model-value="go" />
+    <SegmentedControl :model-value="current" :options="options" :aria-label="t('hubTitle')" @update:model-value="go" />
   </div>
 </template>
 
@@ -11,10 +11,13 @@
 import { computed } from 'vue'
 import SegmentedControl from './SegmentedControl.vue'
 import { PDF_HUB } from './nav'
-import { useHashRoute, type PdfFeature } from '../composables/useHashRoute'
+import { isPdfFeature, useHashRoute, type PdfFeature } from '../composables/useHashRoute'
+import { pendingFeature } from '../composables/useViewSwitch'
 
 const props = defineProps<{ active: PdfFeature; t: (key: string, ...args: (string | number)[]) => string }>()
 const { navigate } = useHashRoute()
+// While the next PDF tool's chunk loads, its segment is selected right away.
+const current = computed<PdfFeature>(() => (pendingFeature.value && isPdfFeature(pendingFeature.value) ? pendingFeature.value : props.active))
 const options = computed(() => PDF_HUB.map((h) => ({ value: h.key, label: props.t(h.label) })))
 function go(f: PdfFeature) {
   navigate(f)

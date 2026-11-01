@@ -54,6 +54,15 @@
 * {
   box-sizing: border-box;
 }
+// iOS paints a grey flash over a tapped control; on the navigation that
+// switches tools it reads as the page blinking. Those controls show their
+// own active state instead.
+.tab-bar button,
+.more-menu button,
+.seg-track-btn,
+#sideNav button {
+  -webkit-tap-highlight-color: transparent;
+}
 body {
   margin: 0;
   font-family:
@@ -83,6 +92,13 @@ header {
     color: var(--subtle);
     margin: 8px 0 0;
     font-size: 14px;
+  }
+}
+// Tools other than the compressor show the badge on phones only (so every
+// phone header has the same height and switching tools does not jump).
+@media (min-width: 720px) {
+  .badge.badge-phone {
+    display: none;
   }
 }
 .badge {

@@ -1,6 +1,6 @@
 <template>
-  <AppHeader :sub="t('headerSub')" :inert="busy || sheetOpen ? true : undefined" @lang="setLang">
-    <template #title><span>{{ t('appTitle') }}</span><span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3z" /><path d="M9 12l2 2 4-4" /></svg><span class="badge-text"><span class="badge-main">{{ t('badgeLocal') }}</span><span class="badge-sub">{{ t('badgeSub') }}</span></span></span></template>
+  <AppHeader :sub="t('headerSub')" badge :inert="busy || sheetOpen ? true : undefined" @lang="setLang">
+    <template #title><span>{{ t('appTitle') }}</span></template>
   </AppHeader>
   <div class="layout" :inert="busy || sheetOpen ? true : undefined">
     <SideNav :t="t" :active="view === 'history' ? 'history' : 'compress'" @nav="onNav">
