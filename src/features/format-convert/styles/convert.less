@@ -388,7 +388,7 @@
     border-radius: 5px;
     white-space: nowrap;
   }
-  .cv-tag.cv-note {
+  .cv-tag.cv-rownote {
     font-weight: 500;
     white-space: normal;
   }
@@ -472,10 +472,10 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      > .cv-tag:not(.cv-note) {
+      > .cv-tag:not(.cv-rownote) {
         flex: none;
       }
-      > .cv-tag.cv-note {
+      > .cv-tag.cv-rownote {
         min-width: 48px;
       }
     }
@@ -514,7 +514,7 @@
     }
     // Narrow list: the per-row notes would add a third line to every row;
     // they stay readable on the status tag's tooltip and in the zip names.
-    .cv-meta .cv-tag.cv-note {
+    .cv-meta .cv-tag.cv-rownote {
       display: none;
     }
     .cv-actions.desk {

@@ -59,7 +59,7 @@
           <span v-if="counts.running">{{ p('stripRunning') }} <b>{{ counts.running }}</b></span>
           <span v-if="counts.failed">{{ p('stripFailed') }} <b>{{ counts.failed }}</b></span>
           <span v-if="counts.unsupported">{{ p('stripUnsupported') }} <b>{{ counts.unsupported }}</b></span>
-          <span v-for="(n, i) in commonNotes" :key="`cn${i}`" class="cv-tag cv-note cv-strip-note" :class="n.cls">{{ n.text }}</span>
+          <span v-for="(n, i) in commonNotes" :key="`cn${i}`" class="cv-tag cv-rownote cv-strip-note" :class="n.cls">{{ n.text }}</span>
           <span v-if="counts.done" class="cv-strip-total">{{ p('stripTotal', fmtSize(counts.inBytes), '') }}<b>{{ fmtSize(counts.outBytes) }}</b></span>
         </div>
         <BatchStatus :text="batchText" :done="batchShown.done" :total="batchShown.total" />
@@ -84,7 +84,7 @@
                 <!-- Desktop/iPad: notes ride on the meta line as small tags,
                 so a long list keeps one calm two-line row per image. -->
                 <template v-if="!isMobile">
-                  <span v-for="(n, i) in rowNotes(item)" :key="i" class="cv-tag cv-note" :class="n.cls" :title="n.text">{{ n.text }}</span>
+                  <span v-for="(n, i) in rowNotes(item)" :key="i" class="cv-tag cv-rownote" :class="n.cls" :title="n.text">{{ n.text }}</span>
                 </template>
               </div>
               <div v-if="item.status === 'converting' || item.status === 'queued'" class="cv-progress" :class="{ running: item.status === 'converting' }" role="progressbar" :aria-label="statusText(item)"><span></span></div>
