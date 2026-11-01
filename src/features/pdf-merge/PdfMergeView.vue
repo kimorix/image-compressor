@@ -286,11 +286,16 @@ import SegmentedControl from '../../shared/components/SegmentedControl.vue'
 import PageGrid, { type PageGridMessages } from '../../shared/components/PageGrid.vue'
 import type { PageAction, PageGridItem } from '../../shared/components/page-grid'
 import { usePrefs } from '../../shared/composables/usePrefs'
+import { useIsMobile } from '../../shared/composables/useIsMobile'
+import { useHint } from '../../shared/composables/useHint'
+import { useArmedConfirm } from '../../shared/composables/useArmedConfirm'
+import { useBatchExport } from '../../shared/composables/useBatchExport'
+import { useFileIntake } from '../../shared/composables/useFileIntake'
 import { useHashRoute, type NavKey } from '../../shared/composables/useHashRoute'
 import { fmtSize } from '../../shared/lib/format'
 import { filesFromDrop } from '../../shared/lib/drop'
 import { shareFilesOr } from '../../shared/lib/share'
-import { downloadUrl, ymd, zipEntries, zipPath } from '../../shared/lib/zip'
+import { downloadUrl, ymd, zipPath } from '../../shared/lib/zip'
 import type { Lang } from '../../shared/i18n'
 import FileChips, { type Chip } from './components/FileChips.vue'
 import SelectionBar from './components/SelectionBar.vue'
@@ -333,10 +338,7 @@ function setMode(mode: Mode) {
 
 // ---- viewport ----
 const isTouch = typeof window !== 'undefined' && (window.matchMedia?.('(pointer: coarse)').matches || 'ontouchstart' in window)
-const isMobile = ref(typeof window !== 'undefined' ? window.innerWidth < 720 : false)
-function onResize() {
-  isMobile.value = window.innerWidth < 720
-}
+const isMobile = useIsMobile()
 
 // ---- state ----
 // shallowRef: File objects must never be wrapped in reactive proxies.
@@ -428,13 +430,7 @@ const selectionAllDeleted = computed(() => {
 })
 
 // ---- hint toast ----
-const hint = ref<string | null>(null)
-let hintTimer: ReturnType<typeof setTimeout> | null = null
-function showHint(s: string, ms = 3500) {
-  hint.value = s
-  if (hintTimer) clearTimeout(hintTimer)
-  hintTimer = setTimeout(() => { hint.value = null }, ms)
-}
+const { hint, showHint } = useHint(3500)
 
 // ---- adding files ----
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -449,7 +445,7 @@ function onPick(e: Event) {
 const dragover = ref(false)
 function onZoneDrop(e: DragEvent) {
   dragover.value = false
-  pageDragging.value = false
+  intake.reset()
   void filesFromDrop(e.dataTransfer).then((d) => addFiles(d.map((x) => x.file), d.map((x) => x.dir)))
 }
 
@@ -561,16 +557,9 @@ function removeFile(id: string) {
   pruneSelection()
   result.value = null
 }
-const clearConfirm = ref(false)
-let clearTimer: ReturnType<typeof setTimeout> | null = null
+const { armed: clearConfirm, confirm: confirmClear } = useArmedConfirm()
 function onClear() {
-  if (!clearConfirm.value) {
-    clearConfirm.value = true
-    if (clearTimer) clearTimeout(clearTimer)
-    clearTimer = setTimeout(() => { clearConfirm.value = false }, 3000)
-    return
-  }
-  clearConfirm.value = false
+  if (!confirmClear()) return
   thumbSvc.dispose()
   files.value = []
   pages.value = []
@@ -744,7 +733,6 @@ function cancelRun() {
 }
 
 // ---- results ----
-const zipping = ref(false)
 function releaseResult() {
   result.value?.files.forEach((f) => URL.revokeObjectURL(f.url))
 }
@@ -760,21 +748,14 @@ const asFile = (f: OutFile) => new File([f.blob], f.name, { type: 'application/p
 async function shareOne(f: OutFile) {
   await shareFilesOr(typeof navigator !== 'undefined' ? navigator : undefined, [asFile(f)], () => downloadOne(f))
 }
-async function zipAll() {
-  const r = result.value
-  if (!r) return
-  if (r.files.length === 1) { downloadOne(r.files[0]); return }
-  zipping.value = true
-  try {
-    const blob = await zipEntries(r.files.map((f) => ({ name: f.path, blob: f.blob })))
-    downloadUrl(blob, `pdf-${r.kind}-${ymd()}.zip`)
-  } catch (err) {
-    console.error('[pdf-merge] zip failed', err)
-    showHint(t('zipFailed'))
-  } finally {
-    zipping.value = false
-  }
-}
+// Split results come as one zip (a folder per source file).
+const { zipping, zipAll } = useBatchExport<OutFile>({
+  done: () => result.value?.files ?? [],
+  entries: (list) => list.map((f) => ({ name: f.path, blob: f.blob })),
+  downloadOne,
+  zipName: () => `pdf-${result.value?.kind ?? 'merge'}-${ymd()}.zip`,
+  onError: (err) => { console.error('[pdf-merge] zip failed', err); showHint(t('zipFailed')) },
+})
 async function shareAll() {
   const r = result.value
   if (!r) return
@@ -834,29 +815,8 @@ watch(() => route.value.params.mode, (mode) => {
 }, { immediate: true })
 
 // ---- page-wide drop + keyboard ----
-const pageDragging = ref(false)
-let dragDepth = 0
-const hasFiles = (e: DragEvent) => !!e.dataTransfer?.types?.includes('Files')
-function onDocDragEnter(e: DragEvent) {
-  if (!hasFiles(e)) return
-  dragDepth++
-  pageDragging.value = true
-}
-function onDocDragLeave(e: DragEvent) {
-  if (!hasFiles(e)) return
-  dragDepth = Math.max(0, dragDepth - 1)
-  if (!dragDepth) pageDragging.value = false
-}
-function onDocDragOver(e: DragEvent) {
-  if (hasFiles(e)) e.preventDefault()
-}
-function onDocDrop(e: DragEvent) {
-  dragDepth = 0
-  pageDragging.value = false
-  if (!hasFiles(e)) return
-  e.preventDefault()
-  void filesFromDrop(e.dataTransfer).then((d) => addFiles(d.map((x) => x.file), d.map((x) => x.dir)))
-}
+const intake = useFileIntake({ onFiles: (d) => addFiles(d.map((x) => x.file), d.map((x) => x.dir)) })
+const { pageDragging } = intake
 function onKeyDown(e: KeyboardEvent) {
   const target = e.target as HTMLElement | null
   if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
@@ -876,22 +836,12 @@ let listening = false
 function startListening() {
   if (listening) return
   listening = true
-  document.addEventListener('dragenter', onDocDragEnter)
-  document.addEventListener('dragleave', onDocDragLeave)
-  document.addEventListener('dragover', onDocDragOver)
-  document.addEventListener('drop', onDocDrop)
   document.addEventListener('keydown', onKeyDown)
-  window.addEventListener('resize', onResize)
 }
 function stopListening() {
   if (!listening) return
   listening = false
-  document.removeEventListener('dragenter', onDocDragEnter)
-  document.removeEventListener('dragleave', onDocDragLeave)
-  document.removeEventListener('dragover', onDocDragOver)
-  document.removeEventListener('drop', onDocDrop)
   document.removeEventListener('keydown', onKeyDown)
-  window.removeEventListener('resize', onResize)
 }
 function onBeforeUnload(e: BeforeUnloadEvent) {
   // Clearing all local data reloads on purpose: no "leave page?" prompt.
@@ -918,7 +868,6 @@ onMounted(() => {
 })
 onActivated(() => {
   applyDocMeta()
-  onResize()
   startListening()
   if (overlayOpen.value) document.body.style.overflow = 'hidden'
 })
@@ -927,7 +876,6 @@ onDeactivated(() => {
   settingsOpen.value = false
   moreOpen.value = false
   editorOpen.value = false
-  pageDragging.value = false
   document.body.style.overflow = ''
 })
 onUnmounted(() => {
@@ -936,8 +884,6 @@ onUnmounted(() => {
   ctrl?.abort()
   thumbSvc.dispose()
   releaseResult()
-  if (hintTimer) clearTimeout(hintTimer)
-  if (clearTimer) clearTimeout(clearTimer)
   document.body.style.overflow = ''
 })
 </script>
