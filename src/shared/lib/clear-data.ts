@@ -60,6 +60,18 @@ function deleteDatabase(idb: NonNullable<ClearEnv['indexedDB']>, name: string): 
   })
 }
 
+/** A browser API that never settles (WebKit: a database or cache still in
+use, a service worker mid-install on a first visit) must not freeze the
+dialog: each step gives up after this long and counts as failed. */
+export const STEP_TIMEOUT_MS = 4000
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const id = setTimeout(() => reject(new Error('timeout')), ms)
+    p.then((v) => { clearTimeout(id); resolve(v) }, (e) => { clearTimeout(id); reject(e) })
+  })
+}
+
 export function defaultEnv(): ClearEnv {
   const w = typeof window !== 'undefined' ? window : undefined
   const safe = <T>(f: () => T): T | null => { try { return f() } catch { return null } }
@@ -72,23 +84,24 @@ export function defaultEnv(): ClearEnv {
   }
 }
 
-export async function clearAllLocalData(env: ClearEnv = defaultEnv()): Promise<ClearReport> {
+export async function clearAllLocalData(env: ClearEnv = defaultEnv(), stepMs = STEP_TIMEOUT_MS): Promise<ClearReport> {
+  const t = <T>(p: Promise<T>) => withTimeout(p, stepMs)
   clearing = true
   const report: ClearReport = { failed: [], databases: [], caches: [], serviceWorkers: 0 }
 
   if (env.serviceWorker) {
     try {
-      const regs = await env.serviceWorker.getRegistrations()
+      const regs = await t(env.serviceWorker.getRegistrations())
       for (const r of regs) {
-        try { if (await r.unregister()) report.serviceWorkers++ } catch { report.failed.push('serviceWorker') }
+        try { if (await t(r.unregister())) report.serviceWorkers++ } catch { report.failed.push('serviceWorker') }
       }
     } catch { report.failed.push('serviceWorker') }
   }
 
   if (env.caches) {
     try {
-      for (const key of await env.caches.keys()) {
-        try { await env.caches.delete(key); report.caches.push(key) } catch { report.failed.push(`cache:${key}`) }
+      for (const key of await t(env.caches.keys())) {
+        try { await t(env.caches.delete(key)); report.caches.push(key) } catch { report.failed.push(`cache:${key}`) }
       }
     } catch { report.failed.push('caches') }
   }
@@ -97,11 +110,11 @@ export async function clearAllLocalData(env: ClearEnv = defaultEnv()): Promise<C
     const names = new Set(KNOWN_DATABASES)
     if (typeof env.indexedDB.databases === 'function') {
       try {
-        for (const d of await env.indexedDB.databases()) if (d.name) names.add(d.name)
+        for (const d of await t(env.indexedDB.databases())) if (d.name) names.add(d.name)
       } catch { /* fall back to the known names */ }
     }
     for (const name of names) {
-      try { await deleteDatabase(env.indexedDB, name); report.databases.push(name) } catch { report.failed.push(`indexedDB:${name}`) }
+      try { await t(deleteDatabase(env.indexedDB, name)); report.databases.push(name) } catch { report.failed.push(`indexedDB:${name}`) }
     }
   }
 

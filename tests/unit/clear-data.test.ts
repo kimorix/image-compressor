@@ -114,3 +114,22 @@ describe('clear all local data', () => {
     }
   })
 })
+
+describe('clearAllLocalData never hangs', () => {
+  it('gives up on a step that never settles and still clears storage', async () => {
+    const { clearAllLocalData } = await import('../../src/shared/lib/clear-data')
+    const never = () => new Promise<never>(() => {})
+    let cleared = 0
+    const report = await clearAllLocalData({
+      localStorage: { clear: () => { cleared++ } },
+      sessionStorage: { clear: () => { cleared++ } },
+      caches: { keys: never, delete: never } as never,
+      serviceWorker: { getRegistrations: never },
+      indexedDB: { deleteDatabase: () => ({}) as IDBOpenDBRequest, databases: never } as never,
+    }, 20)
+    expect(cleared).toBe(2)
+    expect(report.failed).toContain('caches')
+    expect(report.failed).toContain('serviceWorker')
+    expect(report.failed.some((f) => f.startsWith('indexedDB:'))).toBe(true)
+  })
+})
