@@ -110,10 +110,9 @@
     content: '·';
     color: var(--subtle);
   }
-  // Unchanged dims read once ("1080×1350"), not "A → A": the compact
-  // meta line has no room for a no-op arrow.
-  #list .item .dims-same-out {
-    display: none;
+  // Unchanged dims are a small "same size" tag, never "A → A".
+  #list .item .dims-same-tag {
+    align-self: center;
   }
   #list .item .dims-arrow {
     transform: none;

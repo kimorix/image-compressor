@@ -2,22 +2,22 @@
 
 <img src=".github/assets/icon.png" width="88" alt="" />
 
-# Image Compressor
+# Pixdoc
 
-**Compress, convert, resize and turn images into PDFs — entirely in your browser.**
+**A private image & PDF toolkit that runs entirely in your browser.**
 Nothing is uploaded. Works offline. Free and open source.
 
 **English** · [简体中文](README.zh-CN.md)
 
-[![CI](https://github.com/kimorix/image-compressor/actions/workflows/ci.yml/badge.svg)](https://github.com/kimorix/image-compressor/actions/workflows/ci.yml)
+[![CI](https://github.com/kimorix/pixdoc/actions/workflows/ci.yml/badge.svg)](https://github.com/kimorix/pixdoc/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Live demo](https://img.shields.io/badge/demo-online-brightgreen.svg)](https://kimorix.github.io/image-compressor/)
+[![Live demo](https://img.shields.io/badge/demo-online-brightgreen.svg)](https://kimorix.github.io/pixdoc/)
 ![PWA](https://img.shields.io/badge/PWA-offline%20ready-5a0fc8.svg)
 ![Languages](https://img.shields.io/badge/i18n-6%20languages-orange.svg)
 
-### [Open the app →](https://kimorix.github.io/image-compressor/)
+### [Open the app →](https://kimorix.github.io/pixdoc/)
 
-<img src=".github/assets/desktop.png" alt="Image Compressor on desktop" width="860" />
+<img src=".github/assets/resize-watermark.jpg" alt="Pixdoc — resize and watermark" width="860" />
 
 </div>
 
@@ -52,9 +52,19 @@ Most online image tools upload your photos to someone else's server. This one do
 
 ## Screenshots
 
-| Desktop | iPad | Phone |
-| :---: | :---: | :---: |
-| <img src=".github/assets/desktop.png" width="360" alt="Desktop" /> | <img src=".github/assets/ipad.png" width="240" alt="iPad" /> | <img src=".github/assets/phone.png" width="150" alt="Phone" /> |
+<table>
+<tr>
+<td width="50%"><img src=".github/assets/convert.jpg" alt="Convert formats" /><p align="center">Convert formats</p></td>
+<td width="50%"><img src=".github/assets/pdf-merge.jpg" alt="Merge and split PDFs" /><p align="center">Merge &amp; split PDFs</p></td>
+</tr>
+<tr>
+<td width="50%"><img src=".github/assets/pdf-to-word.jpg" alt="PDF to Word" /><p align="center">PDF to Word</p></td>
+<td width="50%"><img src=".github/assets/images-to-pdf.jpg" alt="Images to PDF" /><p align="center">Images to PDF</p></td>
+</tr>
+<tr>
+<td colspan="2"><img src=".github/assets/mobile.jpg" alt="Phone layout" /><p align="center">On your phone</p></td>
+</tr>
+</table>
 
 ## Supported formats
 

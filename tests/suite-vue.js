@@ -482,7 +482,7 @@ async function toQualityEmpty(page) {
   const rcOrder = await page.evaluate(() => [...document.querySelector('#resultCard').children].map((c) => c.id || c.className));
   check('结果标题与操作在汇总上方', JSON.stringify(rcOrder) === JSON.stringify(['progress', 'result-head', 'summary', 'list']), rcOrder.join(','));
   // 38. GitHub 按钮只显示 GitHub；39. 页脚无开源项目行
-  const ghText = await page.$eval('a[href="https://github.com/kimorix/image-compressor"]', (el) => el.textContent);
+  const ghText = await page.$eval('a[href="https://github.com/kimorix/pixdoc"]', (el) => el.textContent);
   check('GitHub 按钮只显示 GitHub', ghText === 'GitHub ↗', ghText);
   const footerText = await page.$eval('footer', (el) => el.textContent);
   check('页脚已删开源项目一行', !footerText.includes('开源项目') && !footerText.includes('github.com/kimorix'), footerText.slice(0, 40));
@@ -1928,7 +1928,7 @@ async function toQualityEmpty(page) {
     const lang = await p.evaluate(() => document.documentElement.lang);
     const title = await p.title();
     const stored = await p.evaluate(() => localStorage.getItem('ic-lang'));
-    check('SEO /en/：SW 接管下仍是英文壳', lang === 'en' && title.includes('Image Compressor') && stored === 'en', `${lang} | ${title} | ${stored}`);
+    check('SEO /en/：SW 接管下仍是英文壳', lang === 'en' && title.includes('Pixdoc') && stored === 'en', `${lang} | ${title} | ${stored}`);
     await ctxS.close();
   }
 

@@ -339,7 +339,7 @@ export async function extractIcc(blob: Blob): Promise<ArrayBuffer | null> {
     if (head.length >= 8 && head[0] === 0x89 && ascii(head, 1, 3) === 'PNG') return await extractIccPng(head)
     if (head.length >= 12 && ascii(head, 0, 4) === 'RIFF' && ascii(head, 8, 4) === 'WEBP') return extractIccWebp(head)
   } catch (err) {
-    console.warn('[image-compressor] ICC extract failed, keeping sRGB path:', err)
+    console.warn('[pixdoc] ICC extract failed, keeping sRGB path:', err)
   }
   return null
 }
@@ -404,7 +404,7 @@ export async function embedIcc(input: Uint8Array, type: string, icc: ArrayBuffer
     if (type === 'image/webp') return embedIccWebp(input, icc)
     if (type === 'image/png') return await embedIccPng(input, icc)
   } catch (err) {
-    console.warn('[image-compressor] ICC embed failed, keeping untagged output:', err)
+    console.warn('[pixdoc] ICC embed failed, keeping untagged output:', err)
   }
   return input
 }

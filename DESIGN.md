@@ -1,6 +1,6 @@
 ---
 version: "2.1"
-name: image-compressor-design
+name: pixdoc-design
 description: "A dark-first, single-purpose image compression workbench. Linear's near-black canvas, hairline surface ladder, and single-accent discipline, adapted for a local-first utility: a dense result table, a fixed settings and preview rail, a light inverse theme, and green reserved strictly for measured savings. The interface is a quiet workbench; the product output — the compressed image — is the protagonist."
 
 colors:

@@ -198,7 +198,7 @@ function buildEditable(pages: EditablePage[], size: { width: number; height: num
   const hSize = (lvl: number) => halfPoints(Math.max(body + 1, avg(headingSizes[lvl], body * [1.8, 1.45, 1.2][lvl])))
   return new Document({
     title: opts.title,
-    creator: 'image-compressor PDF to Word',
+    creator: 'Pixdoc PDF to Word',
     styles: {
       default: {
         document: { run: { size: halfPoints(body) }, paragraph: { spacing: { after: Math.round(body * 0.5 * TWIP), line: 276 } } },
@@ -282,7 +282,7 @@ function layoutSection(p: PageModel, opts: BuildOptions, stats: ConvertStats): I
 function buildLayout(sections: ISectionOptions[], opts: BuildOptions) {
   return new Document({
     title: opts.title,
-    creator: 'image-compressor PDF to Word',
+    creator: 'Pixdoc PDF to Word',
     sections: sections.length ? sections : [{ children: [new Paragraph({ children: [] })] }],
   })
 }

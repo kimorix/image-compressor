@@ -53,7 +53,7 @@ function utifPakoShim(): Plugin {
 }
 
 // GitHub Pages serves the /docs folder of main, so the build output goes there.
-// base './' keeps asset paths relative, so the site works under /image-compressor/.
+// base './' keeps asset paths relative, so the site works under /pixdoc/.
 export default defineConfig({
   plugins: [
     vue(),
@@ -104,9 +104,9 @@ export default defineConfig({
         // or /en/ etc. would be served the root shell (whose relative asset
         // paths 404 under /en/) whenever the worker is in control.
         // Matches both local (http://localhost:8901/) and Pages
-        // (https://kimorix.github.io/image-compressor/) roots, whether the
+        // (https://kimorix.github.io/pixdoc/) roots, whether the
         // check runs against the full URL or just the pathname.
-        navigateFallbackAllowlist: [/^(https?:\/\/[^/]+)?(\/image-compressor)?\/$/],
+        navigateFallbackAllowlist: [/^(https?:\/\/[^/]+)?(\/pixdoc)?\/$/],
         // Language shells (docs/en/ etc.) are generated after the build, so
         // they are not precached; cache them on first visit for offline use.
         // Lazy heavy assets excluded from the precache above: cache them
@@ -126,9 +126,9 @@ export default defineConfig({
         }],
       },
       manifest: {
-        name: '图片压缩',
-        short_name: '图片压缩',
-        description: '免费开源的图片压缩工具，所有处理均在浏览器本地完成，图片不会上传到任何服务器。',
+        name: 'Pixdoc',
+        short_name: 'Pixdoc',
+        description: '免费开源的本地图片与 PDF 工具箱：压缩、格式转换、改尺寸加水印、PDF 转 Word、合并拆分、图片转 PDF，全部在浏览器里完成，文件不会上传。',
         lang: 'zh',
         start_url: './',
         scope: './',
