@@ -42,19 +42,10 @@
         </div>
       </div>
       <div id="summary" v-html="summaryHtml"></div>
-      <div v-if="items.length" class="list-head" aria-hidden="true">
-        <span class="lh-thumb">{{ t('thImage') }}</span>
-        <div class="lh-main">
-          <span class="lh-format">{{ t('thFormat') }}</span>
-          <span class="lh-orig">{{ t('thOrig') }}</span>
-          <span class="lh-comp">{{ t('thComp') }}</span>
-          <span class="lh-save">{{ t('thSave') }}</span>
-          <span class="lh-dims">{{ t('thDims') }}</span>
-          <span class="lh-status">{{ t('thStatus') }}</span>
-          <span class="lh-actions">{{ t('thActions') }}</span>
-        </div>
-      </div>
-      <div v-if="!isMobile" id="list">
+      <!-- Desktop/iPad: the list scrolls inside its card once it is taller
+      than the viewport allows (see styles/list-compact.less), so a long
+      batch never stretches the page; head, stats and pager stay put. -->
+      <div v-if="!isMobile" id="list" ref="listRef" class="list-scroll">
         <ImageItem
           v-for="item in pagedItems"
           :key="item.id"
@@ -64,7 +55,9 @@
           :processing="processingIds.has(item.id)"
           :pos="posOf(item)"
           :count="items.length"
+          :current="items.length > 1 && previewItem?.id === item.id"
           @remove="removeItem"
+          @select="selectPreview"
           @preview="selectPreview($event); lightboxId = $event.id"
           @use-webp="onUseWebp"
           @retry="retryItem"
@@ -844,6 +837,20 @@ function selectPreview(item: CompressItem) {
   // the list there too, or the highlighted row is nowhere visible.
   const idx = items.value.findIndex((i) => i.id === item.id)
   if (idx >= 0) page.value = Math.floor(idx / PAGE_SIZE) + 1
+  void nextTick(() => revealRow(item.id))
+}
+// The desktop list scrolls inside its card: bring the selected row into the
+// list's own viewport (never the page's, which scrollIntoView would also
+// move), e.g. after picking a tile in the strip.
+const listRef = ref<HTMLElement | null>(null)
+function revealRow(id: string | number) {
+  const list = listRef.value
+  if (!list || list.scrollHeight <= list.clientHeight + 1) return
+  const row = list.querySelector<HTMLElement>(`.item[data-id="${String(id)}"]`)
+  if (!row) return
+  const top = row.offsetTop - list.offsetTop
+  if (top < list.scrollTop) list.scrollTop = top
+  else if (top + row.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = top + row.offsetHeight - list.clientHeight
 }
 function downloadPreview() {
   const it = previewItem.value
@@ -918,6 +925,7 @@ watch(pageCount, () => { if (page.value > pageCount.value) page.value = pageCoun
 async function goPage(delta: number) {
   page.value = Math.min(pageCount.value, Math.max(1, page.value + delta))
   await nextTick()
+  if (listRef.value) listRef.value.scrollTop = 0
   document.getElementById('resultCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 if (typeof window !== 'undefined') {

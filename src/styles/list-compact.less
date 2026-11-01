@@ -1,134 +1,223 @@
-// Compressor result rows between the phone masonry (<720px) and the
-// desktop table (≥1366px): tablets (iPad portrait and landscape) and
-// narrow desktop windows. The middle column there ranges from ~300px
-// (iPad mini portrait, rail nav + settings panel) to ~700px, so the row is
-// sized by the list's own width (container queries), not by the viewport:
+// Compressor result rows on every list width from 720px up (phones render
+// the masonry cards instead). One row design, matching the convert / resize
+// lists and the design mockups:
 //
-//   wide list   thumb | name … ext [fmt]          | status | actions
-//                     | 1.07 MB → 365 KB −67% · 1080×1350
-//   narrow list thumb | name … ext [fmt]
-//                     | 1.07 MB → 365 KB −67% · 1080×1350
-//                     | status                  actions
+//   thumb | name … .ext [fmt] [verdict]                     | actions
+//         | 1.07 MB  → 365 KB  −67%  1080×1350 → 1080×1080  [已完成]
+//         | ▬▬▬▬▬▬ (thin bar while this row encodes)
 //
-// The old stacked row (84px thumb, every value on its own line, the three
-// buttons on a row of their own) made each row ~200px tall and, with the
-// photo's resized dims, broke into a narrow column on iPad.
-// ID selectors on purpose: the base `.item` rules in style.less and the
-// table rules share class specificity, and the table block already relies
-// on `#list` to win.
-@media (min-width: 720px) and (max-width: 1365px) {
+// The row is sized by the list's own width (container queries), not the
+// viewport: the list column runs from ~380px (iPad portrait with the rail and
+// settings panel) to ~760px (1440 desktop). Meta values keep fixed widths and
+// tabular figures on wide lists so they line up in columns across rows and
+// nothing shifts when a status or size changes; narrow lists let the meta
+// line wrap instead. ID selectors on purpose: the base `.item` rules in
+// style.less share class specificity and come later in the cascade.
+@media (min-width: 720px) {
   #list {
     container: iclist / inline-size;
+    margin: 4px -10px 0;
+    padding: 0 0 4px;
   }
   #list .item {
-    grid-template-columns: 48px minmax(0, 1fr);
-    gap: 0 12px;
+    position: relative;
+    grid-template-columns: 56px minmax(0, 1fr);
+    gap: 0 14px;
     align-items: center;
-    padding: 12px 0;
+    padding: 12px 10px;
+    border-top: 1px solid var(--border);
+    border-radius: 0;
+    cursor: pointer;
+    transition: background-color 0.15s var(--ease);
+    &:first-child {
+      border-top-color: transparent;
+    }
+    &:hover {
+      background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+    }
+    // The row shown in the preview: soft accent wash, rounded, and the
+    // hairlines on both sides step aside so it reads as one tile.
+    &.current {
+      background: var(--accent-soft);
+      border-radius: 10px;
+      border-top-color: transparent;
+    }
+    &.current + .item {
+      border-top-color: transparent;
+    }
   }
   #list .item .thumb {
-    width: 48px;
-    height: 48px;
-    border-radius: 8px;
+    width: 56px;
+    height: 56px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
   }
   #list .item .row-main {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
-      'name status actions'
-      'meta status actions'
-      'note note note';
-    column-gap: 12px;
-    row-gap: 2px;
+      'name actions'
+      'meta actions'
+      'prog actions'
+      'note note';
+    column-gap: 16px;
+    row-gap: 0;
     align-items: center;
+    min-width: 0;
   }
+  // Line 1: bold name (stem truncates, extension stays) + small tags.
   #list .item .cell-name {
     grid-area: name;
     flex-direction: row;
     flex-basis: auto;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     min-width: 0;
   }
   #list .item .name {
     flex: 0 1 auto;
     min-width: 0;
     font-size: 14px;
-    line-height: 1.4;
+    font-weight: 600;
+    line-height: 1.45;
+    color: var(--text);
   }
   #list .item .name-tags {
     flex: none;
     flex-wrap: nowrap;
     max-width: none;
+    gap: 4px;
   }
+  #list .item .fmt-tag,
+  #list .item .best-tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 18px;
+    padding: 0 6px;
+    border: 0;
+    border-radius: 5px;
+    background: var(--surface-2);
+    color: var(--subtle);
+    white-space: nowrap;
+  }
+  #list .item .best-tag {
+    font-weight: 500;
+  }
+  // Line 2: calm meta line, fixed-width values with tabular figures.
   #list .item .cell-meta {
     grid-area: meta;
     display: flex;
     flex-wrap: wrap;
-    align-items: baseline;
-    column-gap: 6px;
-    row-gap: 0;
+    align-items: center;
+    column-gap: 10px;
+    row-gap: 2px;
+    margin-top: 3px;
     min-width: 0;
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: 12.5px;
+    line-height: 20px;
+    color: var(--subtle);
+    font-variant-numeric: tabular-nums;
   }
   #list .item .orig-size,
   #list .item .comp-size,
   #list .item .save-pct {
-    font-size: 12px;
+    font-size: 12.5px;
   }
   #list .item .orig-size,
-  #list .item .save-cell {
+  #list .item .comp-size,
+  #list .item .save-cell,
+  #list .item .dims {
+    flex: none;
     white-space: nowrap;
+  }
+  #list .item .comp-size {
+    color: var(--text);
+    min-width: 0;
+  }
+  #list .item .comp-size::before {
+    content: '→ ';
+    color: var(--subtle);
+  }
+  #list .item .comp-size:has(.error)::before {
+    content: none;
+  }
+  #list .item .comp-wait {
+    color: var(--subtle);
+  }
+  #list .item .comp-size .error {
+    display: inline;
+    font-size: 12.5px;
+    margin-top: 0;
+    white-space: normal;
+  }
+  #list .item .save-pct {
+    font-weight: 600;
   }
   #list .item .save-cell:empty {
     display: none;
   }
-  #list .item .comp-size {
-    min-width: 0;
-  }
-  #list .item .comp-size.done {
-    white-space: nowrap;
-  }
-  #list .item .comp-size.done::before {
-    content: '→ ';
-    color: var(--subtle);
-  }
-  #list .item .comp-size .error {
-    font-size: 12px;
-    margin-top: 0;
-  }
   #list .item .dims {
-    flex-basis: auto;
     flex-direction: row;
-    align-items: baseline;
+    align-items: center;
     gap: 4px;
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: 12.5px;
+    line-height: 20px;
   }
-  #list .item .dims::before {
-    content: '·';
-    color: var(--subtle);
-  }
-  // Unchanged dims are a small "same size" tag, never "A → A".
-  #list .item .dims-same-tag {
-    align-self: center;
+  #list .item .dims-empty {
+    display: none;
   }
   #list .item .dims-arrow {
     transform: none;
     font-size: 12px;
     line-height: inherit;
   }
-  #list .item .row-bottom {
-    display: contents;
-  }
   #list .item .cell-status {
-    grid-area: status;
     flex: none;
+    display: inline-flex;
   }
   #list .item .status-pill {
+    display: inline-block;
+    font-size: 11.5px;
+    font-weight: 600;
+    line-height: 18px;
+    padding: 0 7px;
+    border: 0;
+    border-radius: 5px;
     white-space: nowrap;
   }
+  #list .item .status-pill.done {
+    background: var(--green-soft);
+    color: var(--green-text);
+  }
+  #list .item .status-pill.fail {
+    background: color-mix(in srgb, var(--red) 12%, transparent);
+    color: var(--red);
+  }
+  #list .item .status-pill.cancelled {
+    background: var(--surface-2);
+    color: var(--subtle);
+  }
+  // Thin bar under the row while it encodes (no progress events: a sweep).
+  #list .item .row-progress {
+    grid-area: prog;
+    position: relative;
+    height: 4px;
+    max-width: 360px;
+    margin-top: 6px;
+    border-radius: 2px;
+    background: var(--accent-soft);
+    overflow: hidden;
+    span {
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 40%;
+      border-radius: 2px;
+      background: var(--accent);
+      animation: ic-row-sweep 1.2s ease-in-out infinite;
+    }
+  }
+  // Actions: right-aligned, never wrapping; outlined download, icon buttons.
   #list .item .item-actions {
     grid-area: actions;
     flex-basis: auto;
@@ -138,47 +227,139 @@
   }
   #list .item .item-actions button,
   #list .item .item-actions a.dl-icon {
-    min-width: 40px;
-    min-height: 40px;
+    min-width: 36px;
+    min-height: 36px;
+    height: 36px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--muted);
   }
   #list .item .item-actions svg {
-    width: 18px;
-    height: 18px;
+    width: 17px;
+    height: 17px;
+  }
+  #list .item .item-actions .dl-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 0;
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    text-decoration: none;
+  }
+  #list .item .item-actions .dl-btn:hover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  #list .item .item-actions .dl-text {
+    display: none;
   }
   #list .item .note-row {
     grid-area: note;
     flex-basis: auto;
     min-width: 0;
+    margin-top: 4px;
     font-size: 12px;
   }
   #list .item .note-row .alpha-note,
   #list .item .note-row .error {
     font-size: 12px;
+    margin-top: 0;
   }
-  // Narrow list (iPad portrait with the settings panel beside it): the
-  // name and meta get the full width, status + buttons share the last line.
-  @container iclist (max-width: 479px) {
-    #list .item .row-main {
-      grid-template-columns: minmax(0, 1fr) auto;
-      grid-template-areas:
-        'name name'
-        'meta meta'
-        'status actions'
-        'note note';
-      row-gap: 2px;
+  #list .item .note-row .gif-tag {
+    margin-top: 0;
+  }
+
+  // Wide lists: values in fixed columns; the download button gets its label.
+  @container iclist (min-width: 600px) {
+    #list .item .orig-size {
+      min-width: 64px;
     }
+    #list .item .comp-size {
+      min-width: 80px;
+    }
+    #list .item .save-cell,
+    #list .item .save-cell:empty {
+      display: block;
+      min-width: 40px;
+    }
+    #list .item .dims,
+    #list .item .dims-empty {
+      display: inline-flex;
+      min-width: 148px;
+    }
+  }
+  @container iclist (min-width: 720px) {
+    #list .item .item-actions .dl-btn {
+      padding: 0 12px;
+    }
+    #list .item .item-actions .dl-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+    #list .item .item-actions .dl-text {
+      display: inline;
+    }
+  }
+
+  // Narrow list (iPad portrait beside the settings panel): smaller thumb,
+  // the buttons share line 1 with the name, the meta line takes the full
+  // width below and may wrap.
+  @container iclist (max-width: 559px) {
     #list .item {
-      align-items: start;
+      grid-template-columns: 44px minmax(0, 1fr);
+      gap: 0 10px;
+      padding: 10px 8px;
     }
-    #list .item .cell-status {
-      justify-self: start;
+    #list .item .thumb {
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
     }
-    // Dims get their own line here instead of wrapping after a separator.
+    #list .item .row-main {
+      grid-template-areas:
+        'name actions'
+        'meta meta'
+        'prog prog'
+        'note note';
+      column-gap: 8px;
+    }
+    #list .item .cell-name {
+      gap: 6px;
+    }
+    #list .item .cell-meta {
+      column-gap: 6px;
+      margin-top: 2px;
+      font-size: 12px;
+    }
+    #list .item .orig-size,
+    #list .item .comp-size,
+    #list .item .save-pct,
     #list .item .dims {
-      flex-basis: 100%;
+      font-size: 12px;
     }
-    #list .item .dims::before {
-      content: none;
+    #list .item .item-actions {
+      gap: 4px;
     }
+    #list .item .item-actions button,
+    #list .item .item-actions a.dl-icon {
+      min-width: 36px;
+      width: 36px;
+    }
+  }
+}
+@keyframes ic-row-sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #list .item .row-progress span {
+    animation: none;
+    width: 100%;
+    opacity: 0.5;
   }
 }
