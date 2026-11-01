@@ -988,10 +988,26 @@ function onDocDrop(e: DragEvent) {
   e.preventDefault()
   void filesFromDrop(e.dataTransfer).then((d) => addFiles(d.map((x) => x.file), d.map((x) => x.dir)))
 }
+// Ctrl+V / ⌘V anywhere on the page (not while typing in a field).
+function onPaste(e: ClipboardEvent) {
+  const target = e.target as HTMLElement | null
+  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+  const files = [...(e.clipboardData?.files ?? [])]
+  if (!files.length) {
+    if (e.clipboardData?.types?.includes('Files')) showHint(r('pasteEmpty'))
+    return
+  }
+  e.preventDefault()
+  // Pasted screenshots are all called "image.png": stamp them apart.
+  addFiles(files.map((file, i) => (file.name === 'image.png'
+    ? new File([file], `paste-${Date.now()}-${i}.png`, { type: file.type, lastModified: Date.now() })
+    : file)))
+}
 let listening = false
 function startListening() {
   if (listening) return
   listening = true
+  document.addEventListener('paste', onPaste)
   document.addEventListener('dragenter', onDocDragEnter)
   document.addEventListener('dragleave', onDocDragLeave)
   document.addEventListener('dragover', onDocDragOver)
@@ -1001,6 +1017,7 @@ function startListening() {
 function stopListening() {
   if (!listening) return
   listening = false
+  document.removeEventListener('paste', onPaste)
   document.removeEventListener('dragenter', onDocDragEnter)
   document.removeEventListener('dragleave', onDocDragLeave)
   document.removeEventListener('dragover', onDocDragOver)
