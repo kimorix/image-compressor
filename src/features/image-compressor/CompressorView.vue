@@ -33,7 +33,7 @@
       </div>
 
     <div class="card" id="resultCard" v-show="items.length > 0">
-      <ProgressBar :finished="finishedCount" :total="items.length" :t="t" />
+      <ProgressBar :finished="batch.done" :total="batch.total" :t="t" />
       <div class="result-head">
         <h3>{{ t('resultTitle') }}</h3>
         <div class="actions">
@@ -60,6 +60,10 @@
           :key="item.id"
           :item="item"
           :t="t"
+          :active="activeIds.has(item.id)"
+          :processing="processingIds.has(item.id)"
+          :pos="posOf(item)"
+          :count="items.length"
           @remove="removeItem"
           @preview="selectPreview($event); lightboxId = $event.id"
           @use-webp="onUseWebp"
@@ -83,6 +87,8 @@
             :active="activeIds.has(item.id)"
             :processing="processingIds.has(item.id)"
             :leaving="removingIds.has(item.id)"
+            :pos="posOf(item)"
+            :count="items.length"
             @open="openDetail"
             @retry="retryItem"
           />
@@ -237,6 +243,7 @@ import TabBar from '../../shared/components/TabBar.vue'
 import MoreMenu from '../../shared/components/MoreMenu.vue'
 import Lightbox from './components/Lightbox.vue'
 import ProgressBar from './components/ProgressBar.vue'
+import { BatchProgress } from '../../shared/lib/batch-progress'
 import { t as tx, type Lang } from '../../shared/i18n'
 import { applyTheme } from '../../shared/lib/theme'
 import { usePrefs } from '../../shared/composables/usePrefs'
@@ -535,7 +542,14 @@ const pool = new CompressPool()
 // at once, only the last one's results kept). It just marks a trailing run,
 // which fires once with the latest settings when the active run drains.
 let pendingRecompress = false
+// "Image i of n" for the busy pill and the progress bar (see batch-progress).
+const batch = reactive(new BatchProgress())
+const itemPos = computed(() => new Map(items.value.map((it, i) => [it.id, i + 1])))
+function posOf(item: CompressItem): number {
+  return itemPos.value.get(item.id) ?? 0
+}
 async function runCompress(list: CompressItem[], g: number, snap: Settings) {
+  for (const it of list) batch.start(it.id)
   activeRuns.value++
   activeIds.value = new Set([...activeIds.value, ...list.map((i) => i.id)])
   try {
@@ -574,6 +588,7 @@ async function runCompress(list: CompressItem[], g: number, snap: Settings) {
           saveHistory({ n: item.file.name, o: item.file.size, c: res.outSize, p: Math.max(0, Math.round((1 - res.outSize / item.file.size) * 100)), f: fmtMap[res.outType] ?? ext, t: Date.now() })
         }
       } finally {
+        batch.settle(item.id)
         const nextActive = new Set(activeIds.value)
         nextActive.delete(item.id)
         activeIds.value = nextActive
@@ -764,6 +779,7 @@ function commitRemove(item: CompressItem) {
 }
 
 function removeItem(item: CompressItem) {
+  batch.remove(item.id)
   if (detailId.value === item.id) detailId.value = null
   const nextActive = new Set(activeIds.value)
   nextActive.delete(item.id)
@@ -988,9 +1004,15 @@ const zipping = ref(false)
 const busy = computed(() => activeRuns.value > 0 || zipping.value)
 // Fresh batches can show finished/total; a recompress keeps all items done,
 // so a count would be misleading there and the generic label is used.
-const busyText = computed(() => doneCount.value < items.value.length
-  ? t('processingCount', finishedCount.value, items.value.length)
-  : t('processing'))
+// Every busy state names the image it is on: packing the ZIP
+// ("打包中 12/19") or the run ("正在压缩 第 3/19 张"; a recompress counts the
+// images it re-encodes).
+const zipProgress = ref({ done: 0, total: 0 })
+const busyText = computed(() => {
+  if (zipping.value && zipProgress.value.total > 0) return t('progZip', zipProgress.value.done, zipProgress.value.total)
+  if (batch.total > 0) return t('progCompress', batch.index, batch.total)
+  return t('processing')
+})
 const { ask: askClearData } = useClearData()
 // Clearing all local data: stop the encoders and drop this page's results
 // (revoking their object URLs) before storage goes and the page reloads.
@@ -1026,17 +1048,20 @@ async function downloadAllZip() {
   zipping.value = true
   try {
     // Dropped folders keep their structure inside the zip.
+    zipProgress.value = { done: 0, total: done.length }
     const zipped = await zipEntries(done.map((item) => ({
       name: (item.relDir ? item.relDir + '/' : '') + (item.outName ?? item.file.name),
       url: item.outUrl!,
-    })))
+    })), (i, n) => { zipProgress.value = { done: i, total: n } })
     downloadUrl(zipped, `images-compressed-${ymd()}-${done.length}.zip`)
   } finally {
     zipping.value = false
+    zipProgress.value = { done: 0, total: 0 }
   }
 }
 
 function clearAll() {
+  batch.reset()
   removalTimers.forEach((t) => clearTimeout(t))
   removalTimers.clear()
   removingIds.value = new Set()

@@ -85,9 +85,10 @@
           <div class="rw-list-actions">
             <button type="button" class="rw-link-btn" :class="{ danger: clearConfirm }" @click="onClear">{{ clearConfirm ? r('clearConfirm') : r('clear') }}</button>
             <button type="button" @click="openPicker">{{ r('addMore') }}</button>
-            <button type="button" class="primary" :disabled="!doneItems.length || zipping" @click="downloadAll">{{ zipping ? r('zipping') : r('downloadZip') }}</button>
+            <button type="button" class="primary" :disabled="!doneItems.length || zipping" @click="downloadAll">{{ zipping ? zipLabel : r('downloadZip') }}</button>
           </div>
         </div>
+        <BatchStatus :text="batchText" :done="batchShown.done" :total="batchShown.total" />
         <ul class="rw-list">
           <li
             v-for="item in items"
@@ -153,7 +154,7 @@
   </div>
   <div class="rw-sticky" v-show="items.length > 0" :inert="sheetOpen ? true : undefined">
     <button type="button" class="rw-sticky-set" @click="openSettings('size')">⚙︎ {{ r('settings') }}</button>
-    <button type="button" class="primary" :disabled="busyAll || zipping || sharing || (!pending.length && !doneItems.length)" @click="processAndSave">{{ pending.length ? r('processSaveN', pending.length) : zipping ? r('zipping') : r('saveAll') }}</button>
+    <button type="button" class="primary" :disabled="busyAll || zipping || sharing || (!pending.length && !doneItems.length)" @click="processAndSave">{{ busyAll && batch.total ? batchText : pending.length ? r('processSaveN', pending.length) : zipping ? zipLabel : r('saveAll') }}</button>
   </div>
   <div class="rw-sticky-spacer" v-show="items.length > 0" aria-hidden="true"></div>
   <TabBar
@@ -232,8 +233,10 @@
 </template>
 
 <script setup lang="ts">
+import BatchStatus from '../../shared/components/BatchStatus.vue'
+import { BatchProgress, positionOf } from '../../shared/lib/batch-progress'
 import { isClearingData } from '../../shared/lib/clear-data'
-import { computed, onActivated, onDeactivated, onMounted, onUnmounted, ref, shallowRef, triggerRef, watch } from 'vue'
+import { computed, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, shallowRef, triggerRef, watch } from 'vue'
 import AppHeader from '../../shared/components/AppHeader.vue'
 import SideNav from '../../shared/components/SideNav.vue'
 import TabBar from '../../shared/components/TabBar.vue'
@@ -507,9 +510,9 @@ function metaLine(it: RwItem): string {
 }
 function statusTag(it: RwItem): string {
   switch (it.status) {
-    case 'probing': return r('stProbing')
-    case 'queued': return r('stQueued')
-    case 'processing': return r('stProcessing')
+    case 'probing': return t('rowRead', positionOf(items.value, it), items.value.length)
+    case 'queued': return t('rowQueued', positionOf(items.value, it), items.value.length)
+    case 'processing': return t('rowProcess', positionOf(items.value, it), items.value.length)
     case 'done': return r('stDone')
     case 'stale': return r('stStale')
     case 'error': return r('stFailed')
@@ -600,6 +603,15 @@ function addFiles(files: File[]) {
 }
 
 async function probe(item: RwItem) {
+  reading.start(item.id)
+  try {
+    await probeRun(item)
+  } finally {
+    if (items.value.includes(item)) reading.settle(item.id)
+    else reading.remove(item.id)
+  }
+}
+async function probeRun(item: RwItem) {
   const res = await getImagePool().run<RwJobResult>('resize', { op: 'probe', file: item.file } satisfies RwPayload, { group: `${GROUP}:probe` })
   if (!items.value.includes(item)) return
   if (res.ok && res.result.op === 'probe') {
@@ -636,6 +648,15 @@ function processAll() {
 }
 
 async function runOne(item: RwItem) {
+  batch.start(item.id)
+  try {
+    await processRun(item)
+  } finally {
+    if (items.value.includes(item)) batch.settle(item.id)
+    else batch.remove(item.id)
+  }
+}
+async function processRun(item: RwItem) {
   const myGen = gen
   const myFocus = item.focusRev
   const payload: RwPayload = {
@@ -689,6 +710,8 @@ function release(item: RwItem) {
   }
 }
 function removeItem(item: RwItem) {
+  batch.remove(item.id)
+  reading.remove(item.id)
   const idx = items.value.indexOf(item)
   release(item)
   items.value = items.value.filter((i) => i !== item)
@@ -708,9 +731,29 @@ function onClear() {
   clearConfirm.value = false
   items.value.forEach(release)
   items.value = []
+  batch.reset()
+  reading.reset()
   currentId.value = null
   sheetId.value = null
 }
+
+// ---- batch progress: reading ("读取中 3/19"), processing ("正在处理 第
+// 3/19 张") and packing ("打包中 12/19") ----
+const batch = reactive(new BatchProgress())
+const reading = reactive(new BatchProgress())
+const zipProgress = ref({ done: 0, total: 0 })
+const batchShown = computed(() => {
+  if (zipping.value && zipProgress.value.total) return zipProgress.value
+  if (batch.total) return { done: batch.done, total: batch.total }
+  return { done: reading.done, total: reading.total }
+})
+const batchText = computed(() => {
+  if (zipping.value && zipProgress.value.total) return t('progZip', zipProgress.value.done, zipProgress.value.total)
+  if (batch.total) return t('progProcess', batch.index, batch.total)
+  if (reading.total) return t('progRead', reading.index, reading.total)
+  return ''
+})
+const zipLabel = computed(() => (zipProgress.value.total ? t('progZip', zipProgress.value.done, zipProgress.value.total) : r('zipping')))
 
 // ---- downloading / sharing ----
 const zipping = ref(false)
@@ -727,10 +770,12 @@ async function zipAll() {
   if (done.length === 1) { downloadOne(done[0]); return }
   zipping.value = true
   try {
-    const blob = await zipEntries(done.map((i) => ({ name: i.outName, blob: i.outBlob! })))
+    zipProgress.value = { done: 0, total: done.length }
+    const blob = await zipEntries(done.map((i) => ({ name: i.outName, blob: i.outBlob! })), (i, n) => { zipProgress.value = { done: i, total: n } })
     downloadUrl(blob, `resized-${ymd()}.zip`)
   } finally {
     zipping.value = false
+    zipProgress.value = { done: 0, total: 0 }
   }
 }
 function downloadAll() {

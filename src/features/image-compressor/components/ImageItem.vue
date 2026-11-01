@@ -73,6 +73,13 @@ import { fmtSize } from '../../../shared/lib/format'
 const props = defineProps<{
   item: CompressItem
   t: (key: string, ...args: (string | number)[]) => string
+  /** Run state from the view (queued in the pool / encoding now) and the
+  row's 1-based position in the whole list: running rows read
+  "压缩中 3/19" / "排队中 5/19". */
+  active?: boolean
+  processing?: boolean
+  pos?: number
+  count?: number
 }>()
 const emit = defineEmits<{
   (e: 'remove', item: CompressItem): void
@@ -169,8 +176,23 @@ const fmtTag = computed(() => {
   if (props.item.done && props.item.outType) return map[props.item.outType] ?? props.item.outType
   return props.item.file.name.split('.').pop()?.toUpperCase() ?? ''
 })
-const pillClass = computed(() => props.item.cancelled ? 'cancelled' : props.item.error ? 'fail' : props.item.done ? 'done' : 'processing')
-const pillText = computed(() => props.item.cancelled ? props.t('cancelled') : props.item.error ? props.t('statusFailed') : props.item.done ? props.t('statusDone') : props.t('statusProcessing'))
+// A row in the current run (also a recompress of a finished row) shows its
+// running state with its position; otherwise its result state.
+const running = computed(() => !!(props.processing || props.active) && !props.item.error)
+const pillClass = computed(() => running.value ? 'processing' : props.item.cancelled ? 'cancelled' : props.item.error ? 'fail' : props.item.done ? 'done' : 'processing')
+const pillText = computed(() => {
+  const n = props.count ?? 0
+  const i = props.pos ?? 0
+  const counted = n > 0 && i > 0
+  if (running.value) {
+    if (props.processing) return counted ? props.t('rowCompress', i, n) : props.t('statusProcessing')
+    return counted ? props.t('rowQueued', i, n) : props.t('statusQueued')
+  }
+  if (props.item.cancelled) return props.t('cancelled')
+  if (props.item.error) return props.t('statusFailed')
+  if (props.item.done) return props.t('statusDone')
+  return counted ? props.t('rowCompress', i, n) : props.t('statusProcessing')
+})
 
 const savedPct = computed(() => {
   if (props.item.file.size <= 0) return 0

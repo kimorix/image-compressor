@@ -266,7 +266,8 @@ function onResize() {
 
 const tagFor = (it: PageItem): Pick<PageGridItem, 'tag' | 'tagKind'> => {
   if (it.status === 'error') return { tag: p('tagError'), tagKind: 'bad' }
-  if (it.status === 'loading') return { tag: p('tagLoading') }
+  // Reading/decoding names the image: "读取中 3/19".
+  if (it.status === 'loading') return { tag: t('rowRead', items.value.indexOf(it) + 1, items.value.length) }
   if (it.format === 'heic') return { tag: p('tagHeic'), tagKind: 'warn' }
   if (it.animated) return { tag: p('tagFirstFrame'), tagKind: 'warn' }
   const rot = normRotation(it.rotation) % 180 ? { w: it.h, h: it.w } : { w: it.w, h: it.h }
