@@ -51,7 +51,7 @@
           <div class="cv-list-actions">
             <button type="button" class="cv-link-btn" :class="{ danger: clearConfirm }" @click="onClear">{{ clearConfirm ? p('clearConfirm') : p('clear') }}</button>
             <button type="button" :disabled="!redoable.length" @click="convertAgain">{{ p('reconvert') }}</button>
-            <button type="button" class="primary" :disabled="!doneItems.length || zipping" @click="downloadAll">{{ zipping ? p('zipping') : p('downloadAll') }}</button>
+            <button type="button" class="primary" :disabled="!doneItems.length || zipping" @click="downloadAll">{{ zipping ? zipLabel : p('downloadAll') }}</button>
           </div>
         </div>
         <div class="cv-strip" role="status">
@@ -61,6 +61,7 @@
           <span v-if="counts.unsupported">{{ p('stripUnsupported') }} <b>{{ counts.unsupported }}</b></span>
           <span v-if="counts.done" class="cv-strip-total">{{ p('stripTotal', fmtSize(counts.inBytes), '') }}<b>{{ fmtSize(counts.outBytes) }}</b></span>
         </div>
+        <BatchStatus :text="batchText" :done="batchShown.done" :total="batchShown.total" />
         <ul class="cv-list">
           <li v-for="item in items" :key="item.id" class="cv-item" :class="[`st-${item.status}`, { clickable: isMobile && item.status !== 'unsupported' }]" @click="onCardClick(item)">
             <div class="cv-thumb" :class="{ checker: item.status === 'done' || !!thumbOf(item), plain: !thumbOf(item) }">
@@ -89,7 +90,7 @@
             </div>
             <!-- Desktop actions -->
             <div class="cv-actions desk" @click.stop>
-              <button v-if="item.status === 'done'" type="button" class="primary" @click="downloadOne(item)">{{ p('download', OUT_EXT[item.target]) }}</button>
+              <button v-if="item.status === 'done'" type="button" class="primary cv-dl-btn" :title="p('download', OUT_EXT[item.target])" :aria-label="p('download', OUT_EXT[item.target])" @click="downloadOne(item)"><svg class="cv-dl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0l-4-4m4 4l4-4" /><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg><span class="cv-dl-text">{{ p('download', OUT_EXT[item.target]) }}</span></button>
               <button v-else-if="item.status === 'converting' || item.status === 'queued'" type="button" @click="cancel(item)">{{ p('cancel') }}</button>
               <button v-else-if="item.status === 'error' || item.status === 'cancelled'" type="button" @click="startOne(item)">{{ p('retry') }}</button>
               <button v-if="item.status !== 'converting' && item.status !== 'queued'" type="button" class="cv-icon-btn" :title="p('remove')" :aria-label="p('remove')" @click="removeItem(item)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg></button>
@@ -124,7 +125,7 @@
   </div>
   <div class="cv-sticky" v-show="items.length > 0" :inert="sheetOpen ? true : undefined">
     <button type="button" :disabled="!redoable.length" @click="convertAgain">{{ redoable.length ? p('reconvert') : p('start') }}</button>
-    <button type="button" class="primary" :disabled="!doneItems.length || zipping || sharing" @click="saveAllMobile">{{ zipping ? p('zipping') : p('saveAll') }}</button>
+    <button type="button" class="primary" :disabled="!doneItems.length || zipping || sharing" @click="saveAllMobile">{{ zipping ? zipLabel : p('saveAll') }}</button>
   </div>
   <div class="cv-sticky-spacer" v-show="items.length > 0" aria-hidden="true"></div>
   <TabBar
@@ -168,7 +169,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onActivated, onDeactivated, onMounted, onUnmounted, ref, shallowRef, triggerRef, watch } from 'vue'
+import BatchStatus from '../../shared/components/BatchStatus.vue'
+import { BatchProgress, positionOf } from '../../shared/lib/batch-progress'
+import { isClearingData } from '../../shared/lib/clear-data'
+import { computed, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, shallowRef, triggerRef, watch } from 'vue'
 import AppHeader from '../../shared/components/AppHeader.vue'
 import SideNav from '../../shared/components/SideNav.vue'
 import TabBar from '../../shared/components/TabBar.vue'
@@ -279,8 +283,8 @@ function thumbOf(item: ConvertItem): string | null {
 function statusText(item: ConvertItem): string {
   if (isStale(item)) return p('stStale')
   switch (item.status) {
-    case 'queued': return p('stQueued')
-    case 'converting': return p('stConverting')
+    case 'queued': return t('rowQueued', positionOf(items.value, item), items.value.length)
+    case 'converting': return t('rowConvert', positionOf(items.value, item), items.value.length)
     case 'done': return p('stDone')
     case 'error': return p('stFailed')
     case 'unsupported': return p('stUnsupported')
@@ -476,6 +480,17 @@ const group = (item: ConvertItem) => `convert:${item.id}`
 async function convertOne(item: ConvertItem) {
   if (!item.src || !isSupportedInput(item.src)) return
   const gen = ++item.gen
+  batch.start(item.id)
+  try {
+    await convertRun(item, gen)
+  } finally {
+    // Only the latest run of an image settles it (a superseded run returns
+    // early while the new one is still going); a removed image leaves.
+    if (!items.value.includes(item)) batch.remove(item.id)
+    else if (item.gen === gen || item.status === 'cancelled') batch.settle(item.id)
+  }
+}
+async function convertRun(item: ConvertItem, gen: number) {
   const s = settings.value
   const req = requestedFormat(item, s)
   item.status = 'queued'
@@ -485,7 +500,7 @@ async function convertOne(item: ConvertItem) {
   touch()
   const payload: ConvertJobPayload = {
     file: item.file,
-    src: item.src,
+    src: item.src!,
     format: req,
     quality: { ...s.quality },
     fill: s.fill,
@@ -551,6 +566,7 @@ function convertAgain() {
 function cancel(item: ConvertItem) {
   item.gen++
   getImagePool().cancel(group(item))
+  batch.settle(item.id)
   item.status = 'cancelled'
   touch()
 }
@@ -569,6 +585,7 @@ function release(item: ConvertItem) {
   if (item.outUrl) URL.revokeObjectURL(item.outUrl)
 }
 function removeItem(item: ConvertItem) {
+  batch.remove(item.id)
   release(item)
   items.value = items.value.filter((i) => i !== item)
   if (detailId.value === item.id) detailId.value = null
@@ -583,8 +600,21 @@ function onClear() {
   clearConfirm.value = false
   items.value.forEach(release)
   items.value = []
+  batch.reset()
   detailId.value = null
 }
+
+// ---- batch progress ("正在转换 第 3/19 张", "打包中 12/19") ----
+const batch = reactive(new BatchProgress())
+const zipProgress = ref({ done: 0, total: 0 })
+const batchShown = computed(() => (zipping.value && zipProgress.value.total
+  ? zipProgress.value
+  : { done: batch.done, total: batch.total }))
+const zipLabel = computed(() => (zipProgress.value.total ? t('progZip', zipProgress.value.done, zipProgress.value.total) : p('zipping')))
+const batchText = computed(() => {
+  if (zipping.value && zipProgress.value.total) return t('progZip', zipProgress.value.done, zipProgress.value.total)
+  return batch.total ? t('progConvert', batch.index, batch.total) : ''
+})
 
 // ---- downloading / sharing ----
 const zipping = ref(false)
@@ -609,10 +639,12 @@ async function zipAll() {
   zipping.value = true
   try {
     const names = finalNames(done)
-    const blob = await zipEntries(done.map((i) => ({ name: i.dir ? `${i.dir}/${names.get(i)}` : names.get(i)!, blob: i.outBlob! })))
+    zipProgress.value = { done: 0, total: done.length }
+    const blob = await zipEntries(done.map((i) => ({ name: i.dir ? `${i.dir}/${names.get(i)}` : names.get(i)!, blob: i.outBlob! })), (i, n) => { zipProgress.value = { done: i, total: n } })
     downloadUrl(blob, `convert-${ymd()}.zip`)
   } finally {
     zipping.value = false
+    zipProgress.value = { done: 0, total: 0 }
   }
 }
 function downloadAll() {
@@ -744,6 +776,8 @@ function stopListening() {
   window.removeEventListener('resize', onResize)
 }
 function onBeforeUnload(e: BeforeUnloadEvent) {
+  // Clearing all local data reloads on purpose: no "leave page?" prompt.
+  if (isClearingData()) return
   if (items.value.some((i) => i.status === 'converting' || i.status === 'queued')) {
     e.preventDefault()
     e.returnValue = ''

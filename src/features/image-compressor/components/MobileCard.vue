@@ -14,7 +14,7 @@
       <span v-if="item.isAnimatedGif" class="m-gif">GIF</span>
       <span :class="['m-badge', statusClass]">{{ statusText }}</span>
       <span v-if="hasNote" class="m-note" aria-hidden="true">i</span>
-      <div v-if="processing" class="m-progress" role="progressbar" :aria-label="t('statusProcessing')"><span></span></div>
+      <div v-if="processing" class="m-progress" role="progressbar" :aria-label="statusText"><span></span></div>
       <div v-if="item.error" :class="['m-error', { cancelled: item.cancelled }]" aria-hidden="true"></div>
       <button
         v-if="showRetry"
@@ -59,6 +59,10 @@ const props = defineProps<{
   active: boolean
   processing: boolean
   leaving?: boolean
+  /** 1-based position in the list and the list length: running states
+  read "压缩中 3/19" instead of a bare spinner label. */
+  pos?: number
+  count?: number
 }>()
 defineEmits<{ (e: 'open', item: CompressItem): void; (e: 'retry', item: CompressItem): void }>()
 
@@ -91,8 +95,10 @@ const metaTitle = computed(() => (pctText.value ? `${sizeText.value} ${pctText.v
 const statusText = computed(() => {
   const it = props.item
   if (it.error) return it.cancelled ? props.t('cancelled') : props.t('statusFailed')
-  if (props.processing) return props.t('statusProcessing')
-  if (props.active) return props.t('statusQueued')
+  const n = props.count ?? 0
+  const i = props.pos ?? 0
+  if (props.processing) return n > 0 && i > 0 ? props.t('rowCompress', i, n) : props.t('statusProcessing')
+  if (props.active) return n > 0 && i > 0 ? props.t('rowQueued', i, n) : props.t('statusQueued')
   if (it.done) {
     if (isAlreadyBest.value || savedPct.value <= 0) return props.t('alreadyBest')
     return `−${savedPct.value}%`

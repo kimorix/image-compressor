@@ -1,0 +1,185 @@
+// Compressor result rows between the phone masonry (<720px) and the
+// desktop table (≥1366px): tablets (iPad portrait and landscape) and
+// narrow desktop windows. The middle column there ranges from ~300px
+// (iPad mini portrait, rail nav + settings panel) to ~700px, so the row is
+// sized by the list's own width (container queries), not by the viewport:
+//
+//   wide list   thumb | name … ext [fmt]          | status | actions
+//                     | 1.07 MB → 365 KB −67% · 1080×1350
+//   narrow list thumb | name … ext [fmt]
+//                     | 1.07 MB → 365 KB −67% · 1080×1350
+//                     | status                  actions
+//
+// The old stacked row (84px thumb, every value on its own line, the three
+// buttons on a row of their own) made each row ~200px tall and, with the
+// photo's resized dims, broke into a narrow column on iPad.
+// ID selectors on purpose: the base `.item` rules in style.less and the
+// table rules share class specificity, and the table block already relies
+// on `#list` to win.
+@media (min-width: 720px) and (max-width: 1365px) {
+  #list {
+    container: iclist / inline-size;
+  }
+  #list .item {
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 0 12px;
+    align-items: center;
+    padding: 12px 0;
+  }
+  #list .item .thumb {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+  }
+  #list .item .row-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      'name status actions'
+      'meta status actions'
+      'note note note';
+    column-gap: 12px;
+    row-gap: 2px;
+    align-items: center;
+  }
+  #list .item .cell-name {
+    grid-area: name;
+    flex-direction: row;
+    flex-basis: auto;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  #list .item .name {
+    flex: 0 1 auto;
+    min-width: 0;
+    font-size: 14px;
+    line-height: 1.4;
+  }
+  #list .item .name-tags {
+    flex: none;
+    flex-wrap: nowrap;
+    max-width: none;
+  }
+  #list .item .cell-meta {
+    grid-area: meta;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 6px;
+    row-gap: 0;
+    min-width: 0;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  #list .item .orig-size,
+  #list .item .comp-size,
+  #list .item .save-pct {
+    font-size: 12px;
+  }
+  #list .item .orig-size,
+  #list .item .save-cell {
+    white-space: nowrap;
+  }
+  #list .item .save-cell:empty {
+    display: none;
+  }
+  #list .item .comp-size {
+    min-width: 0;
+  }
+  #list .item .comp-size.done {
+    white-space: nowrap;
+  }
+  #list .item .comp-size.done::before {
+    content: '→ ';
+    color: var(--subtle);
+  }
+  #list .item .comp-size .error {
+    font-size: 12px;
+    margin-top: 0;
+  }
+  #list .item .dims {
+    flex-basis: auto;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 4px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  #list .item .dims::before {
+    content: '·';
+    color: var(--subtle);
+  }
+  // Unchanged dims read once ("1080×1350"), not "A → A": the compact
+  // meta line has no room for a no-op arrow.
+  #list .item .dims-same-out {
+    display: none;
+  }
+  #list .item .dims-arrow {
+    transform: none;
+    font-size: 12px;
+    line-height: inherit;
+  }
+  #list .item .row-bottom {
+    display: contents;
+  }
+  #list .item .cell-status {
+    grid-area: status;
+    flex: none;
+  }
+  #list .item .status-pill {
+    white-space: nowrap;
+  }
+  #list .item .item-actions {
+    grid-area: actions;
+    flex-basis: auto;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+  #list .item .item-actions button,
+  #list .item .item-actions a.dl-icon {
+    min-width: 40px;
+    min-height: 40px;
+  }
+  #list .item .item-actions svg {
+    width: 18px;
+    height: 18px;
+  }
+  #list .item .note-row {
+    grid-area: note;
+    flex-basis: auto;
+    min-width: 0;
+    font-size: 12px;
+  }
+  #list .item .note-row .alpha-note,
+  #list .item .note-row .error {
+    font-size: 12px;
+  }
+  // Narrow list (iPad portrait with the settings panel beside it): the
+  // name and meta get the full width, status + buttons share the last line.
+  @container iclist (max-width: 479px) {
+    #list .item .row-main {
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas:
+        'name name'
+        'meta meta'
+        'status actions'
+        'note note';
+      row-gap: 2px;
+    }
+    #list .item {
+      align-items: start;
+    }
+    #list .item .cell-status {
+      justify-self: start;
+    }
+    // Dims get their own line here instead of wrapping after a separator.
+    #list .item .dims {
+      flex-basis: 100%;
+    }
+    #list .item .dims::before {
+      content: none;
+    }
+  }
+}

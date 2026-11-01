@@ -85,9 +85,10 @@
           <div class="rw-list-actions">
             <button type="button" class="rw-link-btn" :class="{ danger: clearConfirm }" @click="onClear">{{ clearConfirm ? r('clearConfirm') : r('clear') }}</button>
             <button type="button" @click="openPicker">{{ r('addMore') }}</button>
-            <button type="button" class="primary" :disabled="!doneItems.length || zipping" @click="downloadAll">{{ zipping ? r('zipping') : r('downloadZip') }}</button>
+            <button type="button" class="primary" :disabled="!doneItems.length || zipping" @click="downloadAll">{{ zipping ? zipLabel : r('downloadZip') }}</button>
           </div>
         </div>
+        <BatchStatus :text="batchText" :done="batchShown.done" :total="batchShown.total" />
         <ul class="rw-list">
           <li
             v-for="item in items"
@@ -153,7 +154,7 @@
   </div>
   <div class="rw-sticky" v-show="items.length > 0" :inert="sheetOpen ? true : undefined">
     <button type="button" class="rw-sticky-set" @click="openSettings('size')">⚙︎ {{ r('settings') }}</button>
-    <button type="button" class="primary" :disabled="busyAll || zipping || sharing || (!pending.length && !doneItems.length)" @click="processAndSave">{{ pending.length ? r('processSaveN', pending.length) : zipping ? r('zipping') : r('saveAll') }}</button>
+    <button type="button" class="primary" :disabled="busyAll || zipping || sharing || (!pending.length && !doneItems.length)" @click="processAndSave">{{ busyAll && batch.total ? batchText : pending.length ? r('processSaveN', pending.length) : zipping ? zipLabel : r('saveAll') }}</button>
   </div>
   <div class="rw-sticky-spacer" v-show="items.length > 0" aria-hidden="true"></div>
   <TabBar
@@ -232,7 +233,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onActivated, onDeactivated, onMounted, onUnmounted, ref, shallowRef, triggerRef, watch } from 'vue'
+import BatchStatus from '../../shared/components/BatchStatus.vue'
+import { BatchProgress, positionOf } from '../../shared/lib/batch-progress'
+import { isClearingData } from '../../shared/lib/clear-data'
+import { computed, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, shallowRef, triggerRef, watch } from 'vue'
 import AppHeader from '../../shared/components/AppHeader.vue'
 import SideNav from '../../shared/components/SideNav.vue'
 import TabBar from '../../shared/components/TabBar.vue'
@@ -256,6 +260,7 @@ import { computeGeometry, effectiveResize } from './lib/geometry'
 import { findPreset } from './lib/presets'
 import { expandText, textVars } from './lib/watermark'
 import { estimateSize, stageLayout } from './lib/preview'
+import { loadPreviewImage, type LoadedPreview, type PreviewImage } from './lib/preview-bitmap'
 import { clearLogo, loadLogo, prepareLogo, saveLogo } from './lib/logo-store'
 import type { RwJobResult, RwPayload } from './lib/rw-job'
 import './styles/rw.less'
@@ -338,8 +343,8 @@ const currentId = ref<string | null>(null)
 const current = computed(() => (void rev.value, items.value.find((i) => i.id === currentId.value) ?? null))
 const currentIndex = computed(() => Math.max(0, items.value.findIndex((i) => i.id === currentId.value)))
 const view = ref<'effect' | 'original'>('effect')
-const currentBmp = shallowRef<ImageBitmap | null>(null)
-const bmpCache = new Map<string, ImageBitmap>()
+const currentBmp = shallowRef<PreviewImage | null>(null)
+const bmpCache = new Map<string, LoadedPreview>()
 const BMP_CACHE = 4
 let bmpToken = 0
 async function loadBmp(id: string | null) {
@@ -349,23 +354,24 @@ async function loadBmp(id: string | null) {
   if (hit) {
     bmpCache.delete(id)
     bmpCache.set(id, hit)
-    currentBmp.value = hit
+    currentBmp.value = hit.img
     return
   }
   const blob = previews.get(id)
   if (!blob) { currentBmp.value = null; return }
   try {
-    const bmp = await createImageBitmap(blob)
-    if (token !== bmpToken) { bmp.close(); return }
-    bmpCache.set(id, bmp)
+    const loaded = await loadPreviewImage(blob)
+    if (token !== bmpToken) { loaded.close(); return }
+    bmpCache.set(id, loaded)
     while (bmpCache.size > BMP_CACHE) {
-      const [k, v] = bmpCache.entries().next().value as [string, ImageBitmap]
-      if (v === currentBmp.value) break
+      const [k, v] = bmpCache.entries().next().value as [string, LoadedPreview]
+      if (v.img === currentBmp.value) break
       bmpCache.delete(k)
       v.close()
     }
-    currentBmp.value = bmp
-  } catch {
+    currentBmp.value = loaded.img
+  } catch (err) {
+    console.warn('[resize] preview decode failed', err)
     if (token === bmpToken) currentBmp.value = null
   }
 }
@@ -506,9 +512,9 @@ function metaLine(it: RwItem): string {
 }
 function statusTag(it: RwItem): string {
   switch (it.status) {
-    case 'probing': return r('stProbing')
-    case 'queued': return r('stQueued')
-    case 'processing': return r('stProcessing')
+    case 'probing': return t('rowRead', positionOf(items.value, it), items.value.length)
+    case 'queued': return t('rowQueued', positionOf(items.value, it), items.value.length)
+    case 'processing': return t('rowProcess', positionOf(items.value, it), items.value.length)
     case 'done': return r('stDone')
     case 'stale': return r('stStale')
     case 'error': return r('stFailed')
@@ -599,6 +605,15 @@ function addFiles(files: File[]) {
 }
 
 async function probe(item: RwItem) {
+  reading.start(item.id)
+  try {
+    await probeRun(item)
+  } finally {
+    if (items.value.includes(item)) reading.settle(item.id)
+    else reading.remove(item.id)
+  }
+}
+async function probeRun(item: RwItem) {
   const res = await getImagePool().run<RwJobResult>('resize', { op: 'probe', file: item.file } satisfies RwPayload, { group: `${GROUP}:probe` })
   if (!items.value.includes(item)) return
   if (res.ok && res.result.op === 'probe') {
@@ -635,6 +650,15 @@ function processAll() {
 }
 
 async function runOne(item: RwItem) {
+  batch.start(item.id)
+  try {
+    await processRun(item)
+  } finally {
+    if (items.value.includes(item)) batch.settle(item.id)
+    else batch.remove(item.id)
+  }
+}
+async function processRun(item: RwItem) {
   const myGen = gen
   const myFocus = item.focusRev
   const payload: RwPayload = {
@@ -684,10 +708,12 @@ function release(item: RwItem) {
   const b = bmpCache.get(item.id)
   if (b) {
     bmpCache.delete(item.id)
-    if (b !== currentBmp.value) b.close()
+    if (b.img !== currentBmp.value) b.close()
   }
 }
 function removeItem(item: RwItem) {
+  batch.remove(item.id)
+  reading.remove(item.id)
   const idx = items.value.indexOf(item)
   release(item)
   items.value = items.value.filter((i) => i !== item)
@@ -707,9 +733,29 @@ function onClear() {
   clearConfirm.value = false
   items.value.forEach(release)
   items.value = []
+  batch.reset()
+  reading.reset()
   currentId.value = null
   sheetId.value = null
 }
+
+// ---- batch progress: reading ("读取中 3/19"), processing ("正在处理 第
+// 3/19 张") and packing ("打包中 12/19") ----
+const batch = reactive(new BatchProgress())
+const reading = reactive(new BatchProgress())
+const zipProgress = ref({ done: 0, total: 0 })
+const batchShown = computed(() => {
+  if (zipping.value && zipProgress.value.total) return zipProgress.value
+  if (batch.total) return { done: batch.done, total: batch.total }
+  return { done: reading.done, total: reading.total }
+})
+const batchText = computed(() => {
+  if (zipping.value && zipProgress.value.total) return t('progZip', zipProgress.value.done, zipProgress.value.total)
+  if (batch.total) return t('progProcess', batch.index, batch.total)
+  if (reading.total) return t('progRead', reading.index, reading.total)
+  return ''
+})
+const zipLabel = computed(() => (zipProgress.value.total ? t('progZip', zipProgress.value.done, zipProgress.value.total) : r('zipping')))
 
 // ---- downloading / sharing ----
 const zipping = ref(false)
@@ -726,10 +772,12 @@ async function zipAll() {
   if (done.length === 1) { downloadOne(done[0]); return }
   zipping.value = true
   try {
-    const blob = await zipEntries(done.map((i) => ({ name: i.outName, blob: i.outBlob! })))
+    zipProgress.value = { done: 0, total: done.length }
+    const blob = await zipEntries(done.map((i) => ({ name: i.outName, blob: i.outBlob! })), (i, n) => { zipProgress.value = { done: i, total: n } })
     downloadUrl(blob, `resized-${ymd()}.zip`)
   } finally {
     zipping.value = false
+    zipProgress.value = { done: 0, total: 0 }
   }
 }
 function downloadAll() {
@@ -800,7 +848,9 @@ function onLogoRemove() {
 // ---- phone surfaces ----
 function onRowClick(it: RwItem) {
   if (isMobile.value) {
-    if (it.status === 'probing' || !it.w) return
+    // Open even while the row is still reading (the sheet shows "Reading…"
+    // and draws as soon as the probe lands) or failed (it shows why): a
+    // tap that silently did nothing read as "preview doesn't work".
     moreOpen.value = false
     settingsOpen.value = false
     currentId.value = it.id
@@ -908,6 +958,8 @@ function stopListening() {
   window.removeEventListener('resize', onResize)
 }
 function onBeforeUnload(e: BeforeUnloadEvent) {
+  // Clearing all local data reloads on purpose: no "leave page?" prompt.
+  if (isClearingData()) return
   if (busyAll.value) {
     e.preventDefault()
     e.returnValue = ''

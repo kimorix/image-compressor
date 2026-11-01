@@ -1,0 +1,173 @@
+// Collapsible side nav (≥720px): full sidebar, 64px icon rail, and the
+// tablet overlay (an expanded nav over the page below 1080px). The track
+// width itself lives in style.less (--nav-w on <html class="nav-rail">).
+
+.side-toggle,
+.side-scrim {
+  display: none;
+}
+
+@media (min-width: 720px) {
+  .layout {
+    transition: grid-template-columns 0.2s var(--ease);
+  }
+  .side-inner {
+    display: flex;
+    flex-direction: column;
+  }
+  .side-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 40px;
+    margin-bottom: 8px;
+    padding: 8px 12px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--subtle);
+    font-size: 13px;
+    font-weight: 500;
+    text-align: left;
+    svg {
+      width: 18px;
+      height: 18px;
+      flex: none;
+      transition: transform 0.2s var(--ease);
+    }
+    &:hover {
+      color: var(--text);
+      border-color: var(--border);
+    }
+  }
+  .side-text {
+    min-width: 0;
+  }
+
+  // ---- icon rail ----
+  #sideNav.rail {
+    .side-toggle {
+      justify-content: center;
+      padding: 8px 0;
+      svg {
+        transform: scaleX(-1);
+      }
+    }
+    .side-links button {
+      justify-content: center;
+      gap: 0;
+      padding: 10px 0;
+    }
+    // Labels stay in the accessibility tree (aria-label on the buttons,
+    // group titles still label their groups) but are not drawn.
+    .side-text {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+    // Group titles become thin separators.
+    .side-group {
+      height: 1px;
+      margin: 8px 10px;
+      overflow: hidden;
+      font-size: 0;
+      color: transparent;
+      background: var(--border);
+      &:first-child {
+        height: 0;
+        margin: 0;
+      }
+    }
+    .side-sep {
+      margin: 8px 10px;
+    }
+  }
+
+  // ---- tooltips (rail only): hover and keyboard focus ----
+  #sideNav.rail [data-tip] {
+    position: relative;
+  }
+  #sideNav.rail [data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    left: calc(100% + 10px);
+    top: 50%;
+    z-index: 45;
+    transform: translateY(-50%);
+    padding: 5px 9px;
+    border-radius: 6px;
+    background: var(--text);
+    color: var(--bg);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.3;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.12s var(--ease);
+  }
+  #sideNav.rail [data-tip]:hover::after,
+  #sideNav.rail [data-tip]:focus-visible::after {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+// ---- tablet overlay: the expanded nav over the page (<1080px) ----
+@media (min-width: 720px) and (max-width: 1079px) {
+  // The sticky aside is its own stacking context: lift it above the fixed
+  // right panel so the scrim and the panel cover the whole page.
+  #sideNav.overlay {
+    z-index: 45;
+  }
+  #sideNav.overlay .side-inner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 41;
+    width: 260px;
+    padding: 20px 16px;
+    overflow-y: auto;
+    background: var(--bg);
+    border-right: 1px solid var(--border);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
+    animation: side-in 0.2s var(--ease);
+  }
+  #sideNav.overlay .side-toggle svg {
+    transform: none;
+  }
+  .side-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(0, 0, 0, 0.35);
+  }
+}
+@keyframes side-in {
+  from {
+    transform: translateX(-16px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layout,
+  .side-toggle svg,
+  #sideNav.rail [data-tip]::after {
+    transition: none;
+  }
+  #sideNav.overlay .side-inner {
+    animation: none;
+  }
+}

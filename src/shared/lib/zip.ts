@@ -24,7 +24,9 @@ export function uniqueNames(names: string[]): string[] {
   })
 }
 
-export async function zipEntries(entries: ZipEntry[]): Promise<Blob> {
+/** onProgress(i, n) fires as entry i (1-based) of n starts, so a UI can
+say "打包中 12/19" while the archive is built. */
+export async function zipEntries(entries: ZipEntry[], onProgress?: (i: number, n: number) => void): Promise<Blob> {
   const { Zip, ZipPassThrough } = await import('fflate')
   return new Promise<Blob>((resolve, reject) => {
     const parts: BlobPart[] = []
@@ -45,6 +47,7 @@ export async function zipEntries(entries: ZipEntry[]): Promise<Blob> {
         const names = uniqueNames(entries.map((e) => e.name))
         for (let i = 0; i < entries.length; i++) {
           const e = entries[i]
+          onProgress?.(i + 1, entries.length)
           const src = e.blob ?? await (await fetch(e.url!)).blob()
           const buf = new Uint8Array(await src.arrayBuffer())
           const entry = new ZipPassThrough(names[i])

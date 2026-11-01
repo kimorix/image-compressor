@@ -54,6 +54,15 @@
 * {
   box-sizing: border-box;
 }
+// iOS paints a grey flash over a tapped control; on the navigation that
+// switches tools it reads as the page blinking. Those controls show their
+// own active state instead.
+.tab-bar button,
+.more-menu button,
+.seg-track-btn,
+#sideNav button {
+  -webkit-tap-highlight-color: transparent;
+}
 body {
   margin: 0;
   font-family:
@@ -83,6 +92,13 @@ header {
     color: var(--subtle);
     margin: 8px 0 0;
     font-size: 14px;
+  }
+}
+// Tools other than the compressor show the badge on phones only (so every
+// phone header has the same height and switching tools does not jump).
+@media (min-width: 720px) {
+  .badge.badge-phone {
+    display: none;
   }
 }
 .badge {
@@ -634,7 +650,7 @@ html {
   // With 0 minima the columns always share the viewport and the content
   // truncates inside, as .name already does with ellipsis.
   header {
-    padding-right: 376px;
+    padding-right: calc(var(--rp-w) + 36px);
   }
   main {
     display: flex;
@@ -658,8 +674,8 @@ html {
   #rightPanel {
     position: fixed;
     top: 20px;
-    left: calc(50% + min(1400px, 100vw) / 2 - 356px);
-    width: 340px;
+    left: calc(50% + min(1400px, 100vw) / 2 - var(--rp-w) - 16px);
+    width: var(--rp-w);
     height: calc(100vh - 40px);
     display: flex;
     flex-direction: column;
@@ -836,6 +852,11 @@ html {
       clip-path: inset(50%);
       white-space: nowrap;
       border: 0;
+    }
+    // The meta wrapper only groups values for the compact row; the table
+    // keeps every value in its own column.
+    .item .cell-meta {
+      display: contents;
     }
     .item .orig-size {
       grid-column: 2;
@@ -1412,17 +1433,8 @@ footer {
 // of starting at the far-left edge (and running under the fixed panel).
 @media (min-width: 720px) {
   footer {
-    padding-right: 376px;
-  }
-}
-@media (min-width: 1080px) {
-  footer {
-    padding-left: 256px;
-  }
-}
-@media (min-width: 1600px) {
-  footer {
-    padding-right: 436px;
+    padding-left: calc(var(--nav-w) + 36px);
+    padding-right: calc(var(--rp-w) + 36px);
   }
 }
 @media (max-width: 600px) {
@@ -1534,44 +1546,65 @@ footer {
 #sideNav {
   display: none;
 }
-@media (min-width: 720px) {
-  // Two tracks below the sidebar breakpoint: middle column + right panel.
-  // The history view spans both (there is no sidebar track to sit beside).
-  .layout {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 340px;
-    gap: 20px;
-    align-items: start;
-  }
-  #historyView {
-    grid-column: 1 / -1;
+// Right panel width: 340px on desktop, 400px on wide desktops (a compare
+// preview big enough to judge quality), 300px on tablet portrait where the
+// rail nav also takes a track and the list needs the room.
+:root {
+  --rp-w: 340px;
+  --nav-w: 220px;
+}
+html.nav-rail {
+  --nav-w: 64px;
+}
+@media (min-width: 720px) and (max-width: 1079px) {
+  :root {
+    --rp-w: 300px;
   }
 }
-@media (min-width: 1080px) {
+@media (min-width: 1600px) {
+  :root {
+    --rp-w: 400px;
+  }
+}
+// Three tracks from 720px: side nav (full 220px, or the 64px icon rail),
+// middle column, right panel. Below 1080px the nav is always the rail (an
+// expanded nav opens over the page instead, see styles/side-rail.less), so
+// iPad portrait keeps its navigation without losing the middle column.
+@media (min-width: 720px) {
   .layout {
-    grid-template-columns: 220px minmax(0, 1fr) 340px;
+    display: grid;
+    grid-template-columns: var(--nav-w) minmax(0, 1fr) var(--rp-w);
+    gap: 20px;
+    align-items: start;
   }
   #sideNav {
     display: block;
     position: sticky;
     top: 20px;
   }
+  // Tablet: the history view spans the middle column and the empty right
+  // track; from 1080px it keeps the middle column as before.
+  #historyView {
+    grid-column: 2 / -1;
+  }
+}
+@media (min-width: 720px) and (max-width: 1079px) {
+  :root {
+    --nav-w: 64px;
+  }
+}
+@media (min-width: 1080px) {
   #historyView {
     grid-column: auto;
   }
 }
-// Wide desktops: a wider right panel so the compare preview is big
-// enough to judge quality (340px left the picture ~290px wide).
 @media (min-width: 1600px) {
-  .layout {
-    grid-template-columns: 220px minmax(0, 1fr) 400px;
-  }
   header {
-    padding-right: 436px;
+    padding-right: calc(var(--rp-w) + 36px);
   }
   #rightPanel {
-    left: calc(50% + min(1400px, 100vw) / 2 - 416px);
-    width: 400px;
+    left: calc(50% + min(1400px, 100vw) / 2 - var(--rp-w) - 16px);
+    width: var(--rp-w);
   }
 }
 .side-links {
@@ -2231,3 +2264,6 @@ footer {
 
 @import "./styles/nav.less";
 @import "./styles/mobile.less";
+@import "./styles/list-compact.less";
+@import "./styles/side-rail.less";
+@import "./styles/clear-data.less";
