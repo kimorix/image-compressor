@@ -116,7 +116,7 @@
               <p v-else-if="!isMobile && longNotes(item).length" class="rw-sub">{{ longNotes(item).join(' · ') }}</p>
             </div>
             <div class="rw-actions desk" @click.stop>
-              <button v-if="item.status === 'done'" type="button" @click="downloadOne(item)">{{ r('download') }}</button>
+              <button v-if="item.status === 'done' || ((item.status === 'ready' || item.status === 'stale') && item.w)" type="button" :title="item.status === 'done' ? undefined : r('saveOneHint')" @click="saveOne(item)">{{ r('download') }}</button>
               <button v-else-if="item.status === 'processing' || item.status === 'queued'" type="button" @click="cancel(item)">{{ r('cancel') }}</button>
               <button v-else-if="item.status === 'error' && item.file" type="button" @click="enqueue([item])">{{ r('retry') }}</button>
               <button v-if="item.status !== 'processing' && item.status !== 'queued'" type="button" class="rw-icon-btn" :title="r('remove')" :aria-label="r('remove')" @click="removeItem(item)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg></button>
@@ -644,6 +644,17 @@ function enqueue(list: RwItem[]) {
     void runOne(it)
   }
   touch()
+}
+// One image, current settings: process it if needed, then download it.
+async function saveOne(item: RwItem) {
+  if (item.status !== 'done') {
+    if (item.status !== 'ready' && item.status !== 'stale') return
+    item.status = 'queued'
+    item.error = null
+    touch()
+    await runOne(item)
+  }
+  if (item.status === 'done') downloadOne(item)
 }
 function processAll() {
   enqueue(pending.value)

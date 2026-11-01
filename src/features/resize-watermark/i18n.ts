@@ -24,7 +24,7 @@ const zh: Messages = {
   stProbing: '读取中…', stReady: '待处理', stQueued: '排队中', stProcessing: '处理中', stDone: '已完成', stFailed: '失败', stStale: '设置已变更', stCancelled: '已取消',
   noteOriented: '已按 EXIF 方向校正', noteOrientedShort: '已校正方向', noteGifFirstFrame: '动图只处理第一帧', noteGifShort: '只处理第一帧', noteAlphaFlatten: '透明部分已用填充色铺底（JPG 不支持透明）', frames: (n) => `${n} 帧`,
   errTooLarge: (mp) => `图片超过 ${mp} 百万像素，无法处理`, errDecode: '浏览器无法读取这张图片', errHeic: 'HEIC 解码失败（首次使用需联网下载解码器）', errEncode: '这个浏览器无法编码所选格式', errFailed: '处理失败，请重试',
-  download: '下载', remove: '删除', cancel: '取消', retry: '重试', share: '分享 / 存储', adjust: '调整', settingsTitle: '处理设置', tabSize: '尺寸', tabWatermark: '水印', tabOutput: '输出', done: '完成', close: '关闭', addWatermark: '添加水印', on: '开', off: '关闭',
+  saveOneHint: '用当前设置只处理这一张并下载', download: '下载', remove: '删除', cancel: '取消', retry: '重试', share: '分享 / 存储', adjust: '调整', settingsTitle: '处理设置', tabSize: '尺寸', tabWatermark: '水印', tabOutput: '输出', done: '完成', close: '关闭', addWatermark: '添加水印', on: '开', off: '关闭',
   chipSize: '尺寸', chipWm: '水印', chipFormat: '格式', infoOrig: '原图', infoOut: '输出', infoWm: '水印', wmKindText: '文字', wmKindLogo: 'Logo', openPreview: '打开预览',
 }
 
@@ -46,7 +46,7 @@ const en: Messages = {
   stProbing: 'Reading…', stReady: 'Ready', stQueued: 'Queued', stProcessing: 'Processing', stDone: 'Done', stFailed: 'Failed', stStale: 'Settings changed', stCancelled: 'Cancelled',
   noteOriented: 'Rotated upright from EXIF', noteOrientedShort: 'Rotated upright', noteGifFirstFrame: 'Animated: first frame only', noteGifShort: 'First frame only', noteAlphaFlatten: 'Transparency filled with the pad colour (JPG has no alpha)', frames: (n) => `${n} frames`,
   errTooLarge: (mp) => `Image is over ${mp} megapixels and can't be processed`, errDecode: "The browser can't read this image", errHeic: 'HEIC decoding failed (the decoder downloads on first use)', errEncode: "This browser can't encode the chosen format", errFailed: 'Processing failed, try again',
-  download: 'Download', remove: 'Remove', cancel: 'Cancel', retry: 'Retry', share: 'Share / save', adjust: 'Adjust', settingsTitle: 'Settings', tabSize: 'Size', tabWatermark: 'Watermark', tabOutput: 'Output', done: 'Done', close: 'Close', addWatermark: 'Add watermark', on: 'On', off: 'Off',
+  saveOneHint: 'Process just this image with the current settings and download it', download: 'Download', remove: 'Remove', cancel: 'Cancel', retry: 'Retry', share: 'Share / save', adjust: 'Adjust', settingsTitle: 'Settings', tabSize: 'Size', tabWatermark: 'Watermark', tabOutput: 'Output', done: 'Done', close: 'Close', addWatermark: 'Add watermark', on: 'On', off: 'Off',
   chipSize: 'Size', chipWm: 'Watermark', chipFormat: 'Format', infoOrig: 'Original', infoOut: 'Output', infoWm: 'Watermark', wmKindText: 'Text', wmKindLogo: 'Logo', openPreview: 'Open preview',
 }
 
@@ -68,7 +68,7 @@ const ja: Messages = {
   stProbing: '読み込み中…', stReady: '待機中', stQueued: '順番待ち', stProcessing: '処理中', stDone: '完了', stFailed: '失敗', stStale: '設定変更あり', stCancelled: 'キャンセル済み',
   noteOriented: 'EXIF の向きを補正しました', noteOrientedShort: '向きを補正', noteGifFirstFrame: 'アニメーションは最初のフレームのみ', noteGifShort: '最初のフレームのみ', noteAlphaFlatten: '透明部分を塗りつぶし色で埋めました（JPG は透明非対応）', frames: (n) => `${n} フレーム`,
   errTooLarge: (mp) => `${mp} メガピクセルを超えるため処理できません`, errDecode: 'ブラウザがこの画像を読み込めません', errHeic: 'HEIC のデコードに失敗しました（初回はデコーダーのダウンロードが必要）', errEncode: 'このブラウザは選択した形式で保存できません', errFailed: '処理に失敗しました。もう一度お試しください',
-  download: 'ダウンロード', remove: '削除', cancel: 'キャンセル', retry: '再試行', share: '共有 / 保存', adjust: '調整', settingsTitle: '処理設定', tabSize: 'サイズ', tabWatermark: '透かし', tabOutput: '出力', done: '完了', close: '閉じる', addWatermark: '透かしを入れる', on: 'オン', off: 'オフ',
+  saveOneHint: '現在の設定でこの 1 枚だけ処理してダウンロード', download: 'ダウンロード', remove: '削除', cancel: 'キャンセル', retry: '再試行', share: '共有 / 保存', adjust: '調整', settingsTitle: '処理設定', tabSize: 'サイズ', tabWatermark: '透かし', tabOutput: '出力', done: '完了', close: '閉じる', addWatermark: '透かしを入れる', on: 'オン', off: 'オフ',
   chipSize: 'サイズ', chipWm: '透かし', chipFormat: '形式', infoOrig: '元画像', infoOut: '出力', infoWm: '透かし', wmKindText: '文字', wmKindLogo: 'ロゴ', openPreview: 'プレビューを開く',
 }
 
@@ -90,7 +90,7 @@ const ko: Messages = {
   stProbing: '읽는 중…', stReady: '대기', stQueued: '대기열', stProcessing: '처리 중', stDone: '완료', stFailed: '실패', stStale: '설정 변경됨', stCancelled: '취소됨',
   noteOriented: 'EXIF 방향을 바로잡았습니다', noteOrientedShort: '방향 보정됨', noteGifFirstFrame: '움직이는 이미지는 첫 프레임만 처리', noteGifShort: '첫 프레임만', noteAlphaFlatten: '투명 영역을 채우기 색으로 메웠습니다(JPG는 투명 미지원)', frames: (n) => `${n}프레임`,
   errTooLarge: (mp) => `${mp}메가픽셀을 넘어 처리할 수 없습니다`, errDecode: '브라우저가 이 이미지를 읽을 수 없습니다', errHeic: 'HEIC 디코딩 실패(처음 사용 시 디코더 다운로드 필요)', errEncode: '이 브라우저는 선택한 형식으로 저장할 수 없습니다', errFailed: '처리에 실패했습니다. 다시 시도하세요',
-  download: '다운로드', remove: '삭제', cancel: '취소', retry: '다시 시도', share: '공유 / 저장', adjust: '조정', settingsTitle: '처리 설정', tabSize: '크기', tabWatermark: '워터마크', tabOutput: '출력', done: '완료', close: '닫기', addWatermark: '워터마크 넣기', on: '켜기', off: '끔',
+  saveOneHint: '현재 설정으로 이 이미지만 처리해 다운로드', download: '다운로드', remove: '삭제', cancel: '취소', retry: '다시 시도', share: '공유 / 저장', adjust: '조정', settingsTitle: '처리 설정', tabSize: '크기', tabWatermark: '워터마크', tabOutput: '출력', done: '완료', close: '닫기', addWatermark: '워터마크 넣기', on: '켜기', off: '끔',
   chipSize: '크기', chipWm: '워터마크', chipFormat: '형식', infoOrig: '원본', infoOut: '출력', infoWm: '워터마크', wmKindText: '텍스트', wmKindLogo: '로고', openPreview: '미리보기 열기',
 }
 
@@ -112,7 +112,7 @@ const de: Messages = {
   stProbing: 'Lese…', stReady: 'Bereit', stQueued: 'Wartet', stProcessing: 'Verarbeite', stDone: 'Fertig', stFailed: 'Fehler', stStale: 'Einstellungen geändert', stCancelled: 'Abgebrochen',
   noteOriented: 'Nach EXIF aufgerichtet', noteOrientedShort: 'Aufgerichtet', noteGifFirstFrame: 'Animation: nur erstes Bild', noteGifShort: 'Nur erstes Bild', noteAlphaFlatten: 'Transparenz mit der Randfarbe gefüllt (JPG kennt keine Transparenz)', frames: (n) => `${n} Bilder`,
   errTooLarge: (mp) => `Bild hat über ${mp} Megapixel und kann nicht verarbeitet werden`, errDecode: 'Der Browser kann dieses Bild nicht lesen', errHeic: 'HEIC-Dekodierung fehlgeschlagen (Decoder wird beim ersten Mal geladen)', errEncode: 'Dieser Browser kann das gewählte Format nicht schreiben', errFailed: 'Verarbeitung fehlgeschlagen, bitte erneut versuchen',
-  download: 'Herunterladen', remove: 'Entfernen', cancel: 'Abbrechen', retry: 'Erneut', share: 'Teilen / sichern', adjust: 'Anpassen', settingsTitle: 'Einstellungen', tabSize: 'Größe', tabWatermark: 'Wasserzeichen', tabOutput: 'Ausgabe', done: 'Fertig', close: 'Schließen', addWatermark: 'Wasserzeichen hinzufügen', on: 'An', off: 'Aus',
+  saveOneHint: 'Nur dieses Bild mit den aktuellen Einstellungen verarbeiten und herunterladen', download: 'Herunterladen', remove: 'Entfernen', cancel: 'Abbrechen', retry: 'Erneut', share: 'Teilen / sichern', adjust: 'Anpassen', settingsTitle: 'Einstellungen', tabSize: 'Größe', tabWatermark: 'Wasserzeichen', tabOutput: 'Ausgabe', done: 'Fertig', close: 'Schließen', addWatermark: 'Wasserzeichen hinzufügen', on: 'An', off: 'Aus',
   chipSize: 'Größe', chipWm: 'Wasserzeichen', chipFormat: 'Format', infoOrig: 'Original', infoOut: 'Ausgabe', infoWm: 'Wasserzeichen', wmKindText: 'Text', wmKindLogo: 'Logo', openPreview: 'Vorschau öffnen',
 }
 
@@ -134,7 +134,7 @@ const fr: Messages = {
   stProbing: 'Lecture…', stReady: 'Prête', stQueued: 'En attente', stProcessing: 'Traitement', stDone: 'Terminé', stFailed: 'Échec', stStale: 'Réglages modifiés', stCancelled: 'Annulé',
   noteOriented: 'Redressée d’après l’EXIF', noteOrientedShort: 'Redressée', noteGifFirstFrame: 'Animation : première image seulement', noteGifShort: 'Première image seulement', noteAlphaFlatten: 'Transparence remplie avec la couleur de marge (le JPG n’a pas de transparence)', frames: (n) => `${n} images`,
   errTooLarge: (mp) => `L’image dépasse ${mp} mégapixels et ne peut pas être traitée`, errDecode: 'Le navigateur ne peut pas lire cette image', errHeic: 'Échec du décodage HEIC (le décodeur se télécharge la première fois)', errEncode: 'Ce navigateur ne sait pas écrire le format choisi', errFailed: 'Le traitement a échoué, réessayez',
-  download: 'Télécharger', remove: 'Supprimer', cancel: 'Annuler', retry: 'Réessayer', share: 'Partager / enregistrer', adjust: 'Régler', settingsTitle: 'Réglages', tabSize: 'Taille', tabWatermark: 'Filigrane', tabOutput: 'Sortie', done: 'OK', close: 'Fermer', addWatermark: 'Ajouter un filigrane', on: 'Oui', off: 'Non',
+  saveOneHint: 'Traiter uniquement cette image avec les réglages actuels et la télécharger', download: 'Télécharger', remove: 'Supprimer', cancel: 'Annuler', retry: 'Réessayer', share: 'Partager / enregistrer', adjust: 'Régler', settingsTitle: 'Réglages', tabSize: 'Taille', tabWatermark: 'Filigrane', tabOutput: 'Sortie', done: 'OK', close: 'Fermer', addWatermark: 'Ajouter un filigrane', on: 'Oui', off: 'Non',
   chipSize: 'Taille', chipWm: 'Filigrane', chipFormat: 'Format', infoOrig: 'Original', infoOut: 'Sortie', infoWm: 'Filigrane', wmKindText: 'Texte', wmKindLogo: 'Logo', openPreview: 'Ouvrir l’aperçu',
 }
 
