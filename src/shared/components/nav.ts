@@ -45,3 +45,10 @@ side nav lists it under the tool groups). */
 export const MORE_OTHER: { key: NavKey; label: string; desc: string }[] = [
   { key: 'history', label: 'navHistory', desc: 'moreHistoryDesc' },
 ]
+
+/** The side nav shows the active tool's info card (supported formats, tips)
+only on a tool page: History and any other non-tool view get none, even
+though they share a feature view (History lives in the compressor's). */
+export function showsToolCard(active: NavKey | ''): boolean {
+  return active !== '' && active !== 'history'
+}

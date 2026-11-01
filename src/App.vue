@@ -14,11 +14,13 @@
     <component :is="view" v-if="view" :key="shown" v-bind="viewProps" />
   </KeepAlive>
   <div v-if="showProgress" class="view-progress" aria-hidden="true"></div>
+  <ClearDataDialog />
 </template>
 
 <script setup lang="ts">
 import { computed, markRaw, nextTick, ref, shallowReactive, watch, type Component } from 'vue'
 import CompressorView from './features/image-compressor/CompressorView.vue'
+import ClearDataDialog from './shared/components/ClearDataDialog.vue'
 import { useHashRoute, type Feature } from './shared/composables/useHashRoute'
 import { pendingFeature } from './shared/composables/useViewSwitch'
 
