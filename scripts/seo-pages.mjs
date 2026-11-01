@@ -11,32 +11,32 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 
-const BASE = 'https://kimorix.github.io/image-compressor/'
+const BASE = 'https://kimorix.github.io/pixdoc/'
 const PAGES = {
   en: {
     lang: 'en',
-    title: 'Image Compressor - 100% Local Processing',
-    desc: 'Free, open-source image compressor. Everything runs locally in your browser; images are never uploaded to any server.',
+    title: 'Pixdoc - Local Image & PDF Tools',
+    desc: 'Free, open-source image and PDF toolkit: compress, convert, resize and watermark images, PDF to Word, merge and split, images to PDF. Everything runs in your browser; files are never uploaded.',
   },
   ja: {
     lang: 'ja',
-    title: '画像圧縮 - 100% ローカル処理',
-    desc: '無料オープンソースの画像圧縮ツール。すべての処理はブラウザ内で行われ、画像がサーバーに送信されることはありません。',
+    title: 'Pixdoc - ローカル画像・PDF ツール',
+    desc: '無料オープンソースの画像・PDF ツールキット。圧縮、形式変換、リサイズと透かし、PDF→Word、結合・分割、画像→PDF。すべてブラウザ内で処理され、ファイルはアップロードされません。',
   },
   ko: {
     lang: 'ko',
-    title: '이미지 압축 - 100% 로컬 처리',
-    desc: '무료 오픈소스 이미지 압축 도구. 모든 처리는 브라우저 안에서 이루어지며 이미지가 서버로 전송되지 않습니다.',
+    title: 'Pixdoc - 로컬 이미지·PDF 도구',
+    desc: '무료 오픈소스 이미지·PDF 도구 모음. 압축, 형식 변환, 크기 조절과 워터마크, PDF→Word, 병합·분할, 이미지→PDF. 모든 처리는 브라우저에서 이루어지며 파일이 업로드되지 않습니다.',
   },
   fr: {
     lang: 'fr',
-    title: 'Compresseur d’images - 100% local',
-    desc: 'Compresseur d’images gratuit et open source. Tout s’effectue localement dans votre navigateur ; aucune image n’est envoyée à un serveur.',
+    title: 'Pixdoc - Outils images et PDF en local',
+    desc: "Boîte à outils images et PDF, gratuite et open source : compresser, convertir, redimensionner et filigraner, PDF vers Word, fusionner et scinder, images vers PDF. Tout s'exécute dans votre navigateur ; aucun fichier n'est envoyé.",
   },
   de: {
     lang: 'de',
-    title: 'Bildkomprimierung - 100% lokal',
-    desc: 'Kostenloser Open-Source-Bildkompressor. Alles läuft lokal in Ihrem Browser; Bilder werden an keinen Server gesendet.',
+    title: 'Pixdoc - Lokale Bild- und PDF-Tools',
+    desc: 'Kostenloses Open-Source-Toolkit für Bilder und PDFs: komprimieren, konvertieren, skalieren und mit Wasserzeichen versehen, PDF zu Word, zusammenführen und teilen, Bilder zu PDF. Alles läuft im Browser; Dateien werden nie hochgeladen.',
   },
 }
 

@@ -26,7 +26,7 @@
     "vitest": "^3.2.7",
     "vue-tsc": "^2.2.12"
   },
-  "name": "image-compressor",
+  "name": "pixdoc",
   "private": true,
   "scripts": {
     "build": "vite build && node scripts/seo-pages.mjs",

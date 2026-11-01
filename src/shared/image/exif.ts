@@ -58,7 +58,7 @@ export async function restoreExif(original: Blob, compressed: Blob, size?: { w: 
     const outBinary = piexif.insert(exifBytes, toBinary(compBytes))
     return new Blob([fromBinary(outBinary) as BlobPart], { type: 'image/jpeg' })
   } catch (err) {
-    console.warn('[image-compressor] EXIF restore failed, keeping stripped output:', err)
+    console.warn('[pixdoc] EXIF restore failed, keeping stripped output:', err)
     return compressed
   }
 }

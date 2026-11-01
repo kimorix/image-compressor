@@ -12,7 +12,7 @@ import type { EncodePayload, EncodeResult } from './prepare'
 import { encodeParams } from './settings'
 import { layoutPage, placementMatrix } from './layout'
 
-export const PRODUCER = 'Image Compressor (local)'
+export const PRODUCER = 'Pixdoc (local)'
 const GROUP = 'img2pdf-build'
 
 export class BuildCancelled extends Error {
