@@ -34,7 +34,7 @@
           <button type="button" class="primary i2p-pick" tabindex="-1" @click.stop="openPicker">{{ isMobile ? p('pickShort') : p('pick') }}</button>
           <input ref="fileInput" type="file" accept="image/*,.heic,.heif,.avif,.webp,.bmp,.svg" multiple hidden @change="onPick" />
         </div>
-        <p v-if="hint" class="i2p-hint" role="status">{{ hint }}</p>
+        <LiveHint :text="hint" hint-class="i2p-hint" />
       </div>
 
       <section v-if="items.length" class="card i2p-order" :class="{ sorting: sortMode }">
@@ -106,7 +106,7 @@
         />
       </div>
       <div v-if="!isMobile && result" class="card i2p-result-card">
-        <ImgPdfResultSheet :result="result" :name="resultName" variant="card" :stale="stale" :p="p" @preview="preview" @download="download" />
+        <ImgPdfResultSheet :result="result" :name="resultName" variant="card" :stale="stale" :zipping="zipping" :p="p" @preview="preview" @download="download" />
       </div>
     </div>
   </div>
@@ -199,7 +199,7 @@
         :p="p"
         @preview="preview"
         @share="share"
-        @restart="restart"
+        @start-over="startOver"
         @regenerate="regenerate"
       />
     </div>
@@ -211,6 +211,7 @@
 import { isClearingData } from '../../shared/lib/clear-data'
 import { computed, onActivated, onDeactivated, onMounted, onUnmounted, ref, shallowRef, triggerRef, watch } from 'vue'
 import AppHeader from '../../shared/components/AppHeader.vue'
+import LiveHint from '../../shared/components/LiveHint.vue'
 import SideNav from '../../shared/components/SideNav.vue'
 import TabBar from '../../shared/components/TabBar.vue'
 import MoreMenu from '../../shared/components/MoreMenu.vue'
@@ -223,7 +224,7 @@ import { useHashRoute, type NavKey } from '../../shared/composables/useHashRoute
 import { fmtSize } from '../../shared/lib/format'
 import { filesFromDrop } from '../../shared/lib/drop'
 import { shareFilesOr } from '../../shared/lib/share'
-import { downloadUrl, zipEntries } from '../../shared/lib/zip'
+import { downloadUrl, openBlob, zipEntries } from '../../shared/lib/zip'
 import { getImagePool } from '../../shared/image/image-pool'
 import type { Lang } from '../../shared/i18n'
 import ImgPdfSettingsPanel from './components/ImgPdfSettingsPanel.vue'
@@ -600,22 +601,26 @@ function generateFromSheet() {
 // ---- output ----
 const sharing = ref(false)
 const resultOpen = ref(false)
-async function zipBlob(): Promise<Blob> {
-  return zipEntries(result.value!.files.map((f) => ({ name: f.name, blob: f.blob })))
-}
+const zipping = ref(false)
 async function download() {
   const r = result.value
   if (!r) return
-  if (r.files.length === 1) downloadUrl(r.files[0].blob, r.files[0].name)
-  else downloadUrl(await zipBlob(), resultName.value)
+  if (r.files.length === 1) { downloadUrl(r.files[0].blob, r.files[0].name); return }
+  if (zipping.value) return
+  zipping.value = true
+  try {
+    downloadUrl(await zipEntries(r.files.map((f) => ({ name: f.name, blob: f.blob }))), resultName.value)
+  } catch (err) {
+    console.error('[img-to-pdf] zip failed', err)
+    showHint(t('zipFailed'))
+  } finally {
+    zipping.value = false
+  }
 }
 function preview() {
   const r = result.value
   if (!r) return
-  const url = URL.createObjectURL(r.files[0].blob)
-  const w = window.open(url, '_blank', 'noopener')
-  if (!w) downloadUrl(r.files[0].blob, r.files[0].name)
-  setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  openBlob(r.files[0].blob, r.files[0].name)
 }
 async function share() {
   const r = result.value
@@ -628,7 +633,7 @@ async function share() {
     sharing.value = false
   }
 }
-function restart() {
+function startOver() {
   resultOpen.value = false
   clearAll()
 }

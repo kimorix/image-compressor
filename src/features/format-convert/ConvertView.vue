@@ -35,7 +35,7 @@
         <div v-if="!isTouch && !isMobile" class="cv-drop-extra">
           <button type="button" class="cv-link-btn" @click="openFolder">{{ p('pickFolder') }}</button>
         </div>
-        <p v-if="hint" class="cv-hint" role="status">{{ hint }}</p>
+        <LiveHint :text="hint" hint-class="cv-hint" />
       </div>
 
       <button v-if="items.length && isMobile" type="button" class="cv-summary" @click="toggleSettings">
@@ -181,6 +181,7 @@ import { BatchProgress, positionOf } from '../../shared/lib/batch-progress'
 import { isClearingData } from '../../shared/lib/clear-data'
 import { computed, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, shallowRef, triggerRef, watch } from 'vue'
 import AppHeader from '../../shared/components/AppHeader.vue'
+import LiveHint from '../../shared/components/LiveHint.vue'
 import SideNav from '../../shared/components/SideNav.vue'
 import TabBar from '../../shared/components/TabBar.vue'
 import MoreMenu from '../../shared/components/MoreMenu.vue'
@@ -662,6 +663,9 @@ async function zipAll() {
     zipProgress.value = { done: 0, total: done.length }
     const blob = await zipEntries(done.map((i) => ({ name: i.dir ? `${i.dir}/${names.get(i)}` : names.get(i)!, blob: i.outBlob! })), (i, n) => { zipProgress.value = { done: i, total: n } })
     downloadUrl(blob, `convert-${ymd()}.zip`)
+  } catch (err) {
+    console.error('[convert] zip failed', err)
+    showHint(t('zipFailed'))
   } finally {
     zipping.value = false
     zipProgress.value = { done: 0, total: 0 }

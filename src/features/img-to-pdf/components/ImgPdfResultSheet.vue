@@ -23,7 +23,7 @@
       <p v-if="stale" class="i2p-result-stale">{{ p('stale') }}</p>
       <div class="i2p-result-actions">
         <button type="button" @click="emit('preview')">{{ p('preview') }}</button>
-        <button type="button" class="primary" @click="emit('download')">{{ isZip ? p('downloadZip') : p('downloadPdf') }}</button>
+        <button type="button" class="primary" :disabled="zipping" @click="emit('download')">{{ zipping ? p('zipping') : isZip ? p('downloadZip') : p('downloadPdf') }}</button>
       </div>
     </template>
     <template v-else>
@@ -44,7 +44,7 @@
         <button type="button" class="primary" :disabled="sharing" @click="emit('share')">{{ p('sharePdf') }}</button>
       </div>
       <div class="i2p-result-links">
-        <button type="button" class="i2p-link" @click="emit('restart')">{{ p('restart') }}</button>
+        <button type="button" class="i2p-link" @click="emit('start-over')">{{ p('startOver') }}</button>
         <button type="button" class="i2p-link accent" @click="emit('regenerate')">{{ p('regenerate') }}</button>
       </div>
     </template>
@@ -64,13 +64,14 @@ const props = defineProps<{
   variant: 'card' | 'sheet'
   stale?: boolean
   sharing?: boolean
+  zipping?: boolean
   p: (key: string, ...args: (string | number)[]) => string
 }>()
 const emit = defineEmits<{
   (e: 'preview'): void
   (e: 'download'): void
   (e: 'share'): void
-  (e: 'restart'): void
+  (e: 'start-over'): void
   (e: 'regenerate'): void
 }>()
 

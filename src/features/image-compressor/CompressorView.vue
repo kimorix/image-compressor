@@ -12,7 +12,7 @@
     <main :class="{ 'no-result': items.length === 0 }" v-show="view === 'tool'">
     <div class="card" id="uploadCard" :class="{ 'has-items': items.length > 0, 'show-hint': !!fileHint }">
       <DropZone ref="dropzoneRef" :t="t" :compact="items.length > 0" @files="addFiles" />
-      <p v-if="fileHint" class="file-hint">{{ fileHint }}</p>
+      <LiveHint :text="fileHint" hint-class="file-hint" />
     </div>
 
       <div v-if="items.length > 0" class="thumb-strip" ref="thumbStripRef" :class="{ stuck: stripStuck }">
@@ -231,6 +231,7 @@ import MobileCard from './components/MobileCard.vue'
 import MobileDetailSheet from './components/MobileDetailSheet.vue'
 import BottomSheet from '../../shared/components/BottomSheet.vue'
 import AppHeader from '../../shared/components/AppHeader.vue'
+import LiveHint from '../../shared/components/LiveHint.vue'
 import SideNav from '../../shared/components/SideNav.vue'
 import TabBar from '../../shared/components/TabBar.vue'
 import MoreMenu from '../../shared/components/MoreMenu.vue'
@@ -612,6 +613,11 @@ function applyDocMeta() {
 
 // Transient note for files skipped by the addFiles funnel (non-images).
 const fileHint = ref<string | null>(null)
+function showFileHint(msg: string) {
+  fileHint.value = msg
+  if (hintTimer) clearTimeout(hintTimer)
+  hintTimer = setTimeout(() => { fileHint.value = null }, 5000)
+}
 let hintTimer: ReturnType<typeof setTimeout> | null = null
 
 const busyAddBlocked = ref(false)
@@ -663,11 +669,7 @@ function addFiles(files: File[], dirs?: string[]) {
   if (filtered > 0) hints.push(t('filteredNote', filtered))
   if (oversize > 0) hints.push(t('oversizeNote', oversize))
   if (duplicates > 0) hints.push(t('duplicateNote', duplicates))
-  if (hints.length) {
-    fileHint.value = hints.join(' ')
-    if (hintTimer) clearTimeout(hintTimer)
-    hintTimer = setTimeout(() => { fileHint.value = null }, 5000)
-  }
+  if (hints.length) showFileHint(hints.join(' '))
   if (!fresh.length) return
   for (const file of fresh) items.value.push(newItem(file, dirOf.get(file) ?? ''))
   refresh()
@@ -928,10 +930,6 @@ async function goPage(delta: number) {
   if (listRef.value) listRef.value.scrollTop = 0
   document.getElementById('resultCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
-if (typeof window !== 'undefined') {
-  window.addEventListener('resize', onViewportResize)
-  window.addEventListener('scroll', updateStripStuck, { passive: true })
-}
 
 // Shared with the mobile detail sheet: the slider mechanics live in one
 // composable, while both surfaces keep the same .pv-* markup.
@@ -1062,6 +1060,9 @@ async function downloadAllZip() {
       url: item.outUrl!,
     })), (i, n) => { zipProgress.value = { done: i, total: n } })
     downloadUrl(zipped, `images-compressed-${ymd()}-${done.length}.zip`)
+  } catch (err) {
+    console.error('[compress] zip failed', err)
+    showFileHint(t('zipFailed'))
   } finally {
     zipping.value = false
     zipProgress.value = { done: 0, total: 0 }
@@ -1162,6 +1163,12 @@ onActivated(() => {
   if (busy.value || sheetOpen.value) document.body.style.overflow = 'hidden'
   if (listening) return
   listening = true
+  // Viewport listeners too: while another tool is shown, the detached strip
+  // reads top 0 (stuck) and every resize would re-lay the masonry for nothing.
+  window.addEventListener('resize', onViewportResize)
+  window.addEventListener('scroll', updateStripStuck, { passive: true })
+  // The viewport may have changed while this view was hidden.
+  onViewportResize()
   document.addEventListener('paste', onPaste)
   document.addEventListener('dragenter', onDocDragEnter)
   document.addEventListener('dragleave', onDocDragLeave)
@@ -1172,6 +1179,8 @@ onActivated(() => {
 function stopPageListeners() {
   if (!listening) return
   listening = false
+  window.removeEventListener('resize', onViewportResize)
+  window.removeEventListener('scroll', updateStripStuck)
   document.removeEventListener('paste', onPaste)
   document.removeEventListener('dragenter', onDocDragEnter)
   document.removeEventListener('dragleave', onDocDragLeave)
@@ -1190,8 +1199,6 @@ onDeactivated(() => {
 })
 onUnmounted(() => {
   stopPageListeners()
-  window.removeEventListener('resize', onViewportResize)
-  window.removeEventListener('scroll', updateStripStuck)
   window.removeEventListener('beforeunload', onBeforeUnload)
   window.removeEventListener(CLEAR_EVENT, onClearData)
   if (busyAddTimer) clearTimeout(busyAddTimer)

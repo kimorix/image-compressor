@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { defaultOcrLang, fileKey, isPdfFile, loadSettings, OCR_LANGS, ocrDownloadMB, pdfConcurrency, saveSettings } from '../../src/features/pdf-to-word/lib/settings'
+import { defaultOcrLang, fileKey, isStaleOutput, outputKey, isPdfFile, loadSettings, OCR_LANGS, ocrDownloadMB, pdfConcurrency, saveSettings } from '../../src/features/pdf-to-word/lib/settings'
 import { DEFAULT_PDF_SETTINGS } from '../../src/features/pdf-to-word/types'
 import { PDF_MESSAGES, pdfT } from '../../src/features/pdf-to-word/i18n'
 import { docxName } from '../../src/features/pdf-to-word/lib/convert'
@@ -74,5 +74,25 @@ describe('pdf i18n', () => {
     expect(pdfT('de', 'nope')).toBe('nope')
     expect(pdfT('zh', 'ocrSize', 9)).toContain('9 MB')
     for (const lang of Object.keys(PDF_MESSAGES)) expect(pdfT(lang as 'en', 'ocrSize', 7)).toContain('7')
+  })
+})
+
+describe('stale output after a settings change', () => {
+  const base = { ...DEFAULT_PDF_SETTINGS }
+  it('is not stale with no output or the same settings', () => {
+    expect(isStaleOutput(null, base)).toBe(false)
+    expect(isStaleOutput({ ...base }, { ...base, ocrLangPicked: true })).toBe(false)
+    expect(isStaleOutput({ ...base, pageRange: '1-3, 5' }, { ...base, pageRange: '1-3,5' })).toBe(false)
+  })
+  it('is stale when the mode, range, images or OCR change', () => {
+    expect(isStaleOutput(base, { ...base, mode: 'layout' })).toBe(true)
+    expect(isStaleOutput(base, { ...base, pageRange: '2-' })).toBe(true)
+    expect(isStaleOutput(base, { ...base, keepImages: false })).toBe(true)
+    expect(isStaleOutput(base, { ...base, ocr: true })).toBe(true)
+  })
+  it('only counts the OCR language while OCR is on', () => {
+    expect(isStaleOutput(base, { ...base, ocrLang: 'eng' })).toBe(false)
+    expect(isStaleOutput({ ...base, ocr: true }, { ...base, ocr: true, ocrLang: 'eng' })).toBe(true)
+    expect(outputKey({ ...base, ocrLang: 'eng' })).toBe(outputKey(base))
   })
 })

@@ -75,6 +75,28 @@ export function downloadUrl(href: string | Blob, name: string): void {
   if (typeof href !== 'string') setTimeout(() => URL.revokeObjectURL(url), 5000)
 }
 
+/** Path of an output inside a ZIP: the dropped folder it came from, if any. */
+export function zipPath(dir: string | undefined, name: string): string {
+  return dir ? `${dir}/${name}` : name
+}
+
+/**
+ * Open a Blob (a PDF, say) in a new tab; download it instead when the popup
+ * is blocked. window.open with the 'noopener' feature always returns null
+ * (HTML spec), which made the fallback download fire on every click, so the
+ * tab is opened plainly and its opener cut by hand.
+ */
+export function openBlob(blob: Blob, name: string, win: Pick<Window, 'open'> = window): void {
+  const url = URL.createObjectURL(blob)
+  const w = win.open(url, '_blank')
+  if (w) {
+    try { w.opener = null } catch { /* cross-origin: nothing to cut */ }
+  } else {
+    downloadUrl(blob, name)
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
+}
+
 /** yyyymmdd stamp for archive names. */
 export function ymd(d = new Date()): string {
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`

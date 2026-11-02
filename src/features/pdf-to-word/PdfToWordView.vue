@@ -31,7 +31,7 @@
           <p v-if="!items.length || !isMobile">{{ isTouch ? p('dropSubTouch') : p('dropSub') }}</p>
           <input ref="fileInput" id="pdfFileInput" type="file" accept="application/pdf,.pdf" multiple hidden @change="onPick" />
         </div>
-        <p v-if="hint" class="pdf-hint" role="status">{{ hint }}</p>
+        <LiveHint :text="hint" hint-class="pdf-hint" />
       </div>
 
       <div v-if="items.length" class="card pdf-list-card">
@@ -39,7 +39,7 @@
           <h3>{{ p('listTitle') }}</h3>
           <div class="pdf-list-actions">
             <button type="button" class="pdf-link-btn" :class="{ danger: clearConfirm }" @click="onClear">{{ clearConfirm ? p('clearConfirm') : p('clear') }}</button>
-            <button type="button" :disabled="!startable.length" @click="startAll">{{ p('start') }}</button>
+            <button type="button" :disabled="!startable.length" @click="startAll">{{ startLabel }}</button>
             <button type="button" class="primary" :disabled="!doneItems.length || zipping" @click="downloadAll">{{ zipping ? p('zipping') : p('downloadAll') }}</button>
           </div>
         </div>
@@ -79,6 +79,7 @@
             </div>
             <!-- Desktop actions -->
             <div class="pdf-actions desk" @click.stop>
+              <button v-if="isStale(item)" type="button" :title="p('reconvertOneHint')" @click="startOne(item)">{{ p('reconvert') }}</button>
               <button v-if="item.status === 'done'" type="button" class="primary" @click="downloadOne(item)">{{ p('downloadDocx') }}</button>
               <button v-else-if="item.status === 'converting' || item.status === 'queued'" type="button" @click="cancel(item)">{{ p('cancel') }}</button>
               <button v-else-if="item.kind === 'scanned' && !settings.ocr && item.status === 'ready'" type="button" @click="enableOcr">{{ p('enableOcr') }}</button>
@@ -101,7 +102,7 @@
     <div id="rightPanel" class="pdf-right">
       <div v-if="!isMobile" class="card pdf-settings-card">
         <h3>{{ p('settingsTitle') }}</h3>
-        <PdfSettingsPanel :settings="settings" :p="p" :can-start="startable.length > 0" @update="onSettings" @start="startAll" />
+        <PdfSettingsPanel :settings="settings" :p="p" :can-start="startable.length > 0" :start-label="startLabel" @update="onSettings" @start="startAll" />
       </div>
       <div v-if="!isMobile" class="card pdf-cap-card">
         <h3>{{ p('capTitle') }}</h3>
@@ -114,7 +115,7 @@
     </div>
   </div>
   <div class="pdf-sticky" v-show="items.length > 0" :inert="sheetOpen ? true : undefined">
-    <button type="button" :disabled="!startable.length" @click="startAll">{{ p('start') }}</button>
+    <button type="button" :disabled="!startable.length" @click="startAll">{{ startLabel }}</button>
     <button type="button" class="primary" :disabled="!doneItems.length || zipping || sharing" @click="saveAllMobile">{{ zipping ? p('zipping') : p('saveAll') }}</button>
   </div>
   <div class="pdf-sticky-spacer" v-show="items.length > 0" aria-hidden="true"></div>
@@ -141,7 +142,7 @@
     @close="settingsOpen = false"
   >
     <div class="sheet-body">
-      <PdfSettingsPanel :settings="settings" :p="p" :can-start="startable.length > 0" @update="onSettings" @start="startFromSheet" />
+      <PdfSettingsPanel :settings="settings" :p="p" :can-start="startable.length > 0" :start-label="startLabel" @update="onSettings" @start="startFromSheet" />
     </div>
   </BottomSheet>
   <PdfDetailSheet
@@ -163,6 +164,7 @@
 import { isClearingData } from '../../shared/lib/clear-data'
 import { computed, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, shallowRef, triggerRef, watch } from 'vue'
 import AppHeader from '../../shared/components/AppHeader.vue'
+import LiveHint from '../../shared/components/LiveHint.vue'
 import SideNav from '../../shared/components/SideNav.vue'
 import TabBar from '../../shared/components/TabBar.vue'
 import MoreMenu from '../../shared/components/MoreMenu.vue'
@@ -173,13 +175,13 @@ import { useHashRoute, type NavKey } from '../../shared/composables/useHashRoute
 import { fmtSize } from '../../shared/lib/format'
 import { filesFromDrop } from '../../shared/lib/drop'
 import { shareFilesOr } from '../../shared/lib/share'
-import { downloadUrl, ymd, zipEntries } from '../../shared/lib/zip'
+import { downloadUrl, ymd, zipEntries, zipPath } from '../../shared/lib/zip'
 import type { Lang } from '../../shared/i18n'
 import PdfSettingsPanel from './components/PdfSettingsPanel.vue'
 import PdfDetailSheet from './components/PdfDetailSheet.vue'
 import { pdfT } from './i18n'
 import { DEFAULT_PDF_SETTINGS, type PdfItem, type PdfSettings } from './types'
-import { defaultOcrLang, loadSettings, saveSettings, isPdfFile, fileKey, pdfConcurrency } from './lib/settings'
+import { defaultOcrLang, loadSettings, saveSettings, isPdfFile, isStaleOutput, fileKey, pdfConcurrency } from './lib/settings'
 import type { PdfDoc } from '../../shared/pdf/pdf-loader'
 import './styles/pdf.less'
 
@@ -232,7 +234,12 @@ function showHint(s: string) {
 }
 
 const doneItems = computed(() => items.value.filter((i) => i.status === 'done' && i.outBlob))
-const startable = computed(() => items.value.filter((i) => i.status === 'ready' || i.status === 'error' || i.status === 'cancelled'))
+function isStale(item: PdfItem): boolean {
+  return item.status === 'done' && isStaleOutput(item.outSettings, settings.value)
+}
+const startable = computed(() => items.value.filter((i) => i.status === 'ready' || i.status === 'error' || i.status === 'cancelled' || isStale(i)))
+// Only finished files whose settings changed are left: say "convert again".
+const startLabel = computed(() => (startable.value.length && startable.value.every(isStale) ? p('reconvert') : p('start')))
 
 function statusTag(item: PdfItem): string {
   switch (item.status) {
@@ -242,13 +249,14 @@ function statusTag(item: PdfItem): string {
       if (item.phase === 'build') return p('stBuilding')
       if (item.phase === 'ocr') return p('stOcr', item.pageNow, item.pageTotal)
       return p('stConverting', item.pageNow || 1, item.pageTotal || item.pages)
-    case 'done': return p('stDone')
+    case 'done': return isStale(item) ? p('stStale') : p('stDone')
     case 'error': return p('stFailed')
     case 'cancelled': return p('stCancelled')
     default: return ''
   }
 }
 function statusClass(item: PdfItem): string {
+  if (isStale(item)) return 'warn'
   if (item.status === 'done') return 'ok'
   if (item.status === 'error') return 'bad'
   if (item.status === 'converting' || item.status === 'queued') return 'info'
@@ -274,14 +282,15 @@ const dragover = ref(false)
 function onZoneDrop(e: DragEvent) {
   dragover.value = false
   pageDragging.value = false
-  void filesFromDrop(e.dataTransfer).then((d) => addFiles(d.map((x) => x.file)))
+  void filesFromDrop(e.dataTransfer).then((d) => addFiles(d.map((x) => x.file), d.map((x) => x.dir)))
 }
 
 let seq = 0
-function newItem(file: File): PdfItem {
+function newItem(file: File, dir = ''): PdfItem {
   return {
     id: `pdf-${Date.now().toString(36)}-${seq++}`,
     file,
+    dir,
     status: 'probing',
     pages: 0,
     kind: 'unknown',
@@ -297,17 +306,21 @@ function newItem(file: File): PdfItem {
     outName: '',
     stats: null,
     outMode: null,
+    outSettings: null,
     error: null,
     warnings: [],
   }
 }
 
-function addFiles(files: File[]) {
+// dirs[i]: folder of files[i] when a folder was dropped, kept inside the ZIP.
+function addFiles(files: File[], dirs: string[] = []) {
+  const dirOf = new Map(files.map((f, i) => [f, dirs[i] ?? '']))
+  const keyOf = (f: File, dir = '') => `${dir}/${fileKey(f)}`
   const pdfs = files.filter(isPdfFile)
   const skipped = files.length - pdfs.length
-  const have = new Set(items.value.map((i) => fileKey(i.file)))
+  const have = new Set(items.value.map((i) => keyOf(i.file, i.dir)))
   const fresh = pdfs.filter((f) => {
-    const k = fileKey(f)
+    const k = keyOf(f, dirOf.get(f))
     if (have.has(k)) return false
     have.add(k)
     return true
@@ -315,7 +328,7 @@ function addFiles(files: File[]) {
   if (skipped) showHint(p('notPdf', skipped))
   else if (fresh.length < pdfs.length) showHint(p('dupSkipped', pdfs.length - fresh.length))
   if (!fresh.length) return
-  const added = fresh.map(newItem)
+  const added = fresh.map((f) => newItem(f, dirOf.get(f)))
   items.value = [...items.value, ...added]
   for (const it of added) void probe(it)
 }
@@ -426,6 +439,7 @@ async function convertOne(item: PdfItem) {
       item.outName = r.name
       item.stats = r.stats
       item.outMode = snapshot.mode
+      item.outSettings = snapshot
       item.warnings = r.warnings
       item.status = 'done'
       item.progress = 1
@@ -511,8 +525,11 @@ async function zipAll() {
   if (done.length === 1) { downloadOne(done[0]); return }
   zipping.value = true
   try {
-    const blob = await zipEntries(done.map((i) => ({ name: i.outName, blob: i.outBlob! })))
+    const blob = await zipEntries(done.map((i) => ({ name: zipPath(i.dir, i.outName), blob: i.outBlob! })))
     downloadUrl(blob, `pdf-to-word-${ymd()}.zip`)
+  } catch (err) {
+    console.error('[pdf-to-word] zip failed', err)
+    showHint(t('zipFailed'))
   } finally {
     zipping.value = false
   }
@@ -668,7 +685,7 @@ function onDocDrop(e: DragEvent) {
   pageDragging.value = false
   if (!hasFiles(e)) return
   e.preventDefault()
-  void filesFromDrop(e.dataTransfer).then((d) => addFiles(d.map((x) => x.file)))
+  void filesFromDrop(e.dataTransfer).then((d) => addFiles(d.map((x) => x.file), d.map((x) => x.dir)))
 }
 let listening = false
 function startListening() {

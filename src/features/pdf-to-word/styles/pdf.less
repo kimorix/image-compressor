@@ -568,3 +568,23 @@ select.pdf-input {
     height: 58px;
   }
 }
+
+// Narrow desktop/iPad lists (iPad portrait, German): three buttons next to
+// the name squeezed it to a letter per line. Below 560px the row actions
+// move under the file info instead.
+@media (min-width: 720px) {
+  .pdf-list {
+    container: pdflist / inline-size;
+  }
+  @container pdflist (max-width: 559px) {
+    .pdf-item {
+      grid-template-columns: 64px minmax(0, 1fr);
+      row-gap: 10px;
+    }
+    .pdf-actions.desk {
+      grid-column: 2;
+      flex-wrap: wrap;
+      justify-content: flex-start;
+    }
+  }
+}
