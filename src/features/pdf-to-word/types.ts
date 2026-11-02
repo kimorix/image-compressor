@@ -85,6 +85,8 @@ export type ItemStatus = 'probing' | 'ready' | 'locked' | 'queued' | 'converting
 export interface PdfItem {
   id: string
   file: File
+  /** Folder it was dropped from ('' for loose files); kept inside the ZIP. */
+  dir: string
   status: ItemStatus
   pages: number
   kind: PdfKind
@@ -104,6 +106,8 @@ export interface PdfItem {
   stats: ConvertStats | null
   /** Mode used for the output. */
   outMode: ConvertMode | null
+  /** Settings the output was made with (stale detection). */
+  outSettings: PdfSettings | null
   error: string | null
   warnings: string[]
 }

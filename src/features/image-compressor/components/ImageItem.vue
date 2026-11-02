@@ -5,7 +5,16 @@
   line 2, a thin bar while it encodes | right-aligned actions. The meta
   values keep fixed widths with tabular figures on wide lists, so columns
   line up across rows and nothing jumps as statuses change. -->
-  <div class="item" :class="{ current, running: running && processing }" :title="item.file.name" :data-id="item.id" @click="$emit('select', item)">
+  <ResultRow
+    tag="div"
+    class="item"
+    :class="{ current, running: running && processing }"
+    :title="item.file.name"
+    :data-id="item.id"
+    selectable
+    :current="current"
+    @select="$emit('select', item)"
+  >
     <div
       class="thumb"
       :class="{ clickable: item.done }"
@@ -62,13 +71,14 @@
         <div v-if="copyFailed" class="error">{{ t('copyFailed') }}</div>
       </div>
     </div>
-  </div>
+  </ResultRow>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { CompressItem } from '../types'
 import { fmtSize } from '../../../shared/lib/format'
+import ResultRow from '../../../shared/components/ResultRow.vue'
 
 const props = defineProps<{
   item: CompressItem

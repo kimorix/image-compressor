@@ -34,7 +34,7 @@
           <button type="button" class="primary i2p-pick" tabindex="-1" @click.stop="openPicker">{{ isMobile ? p('pickShort') : p('pick') }}</button>
           <input ref="fileInput" type="file" accept="image/*,.heic,.heif,.avif,.webp,.bmp,.svg" multiple hidden @change="onPick" />
         </div>
-        <p v-if="hint" class="i2p-hint" role="status">{{ hint }}</p>
+        <LiveHint :text="hint" hint-class="i2p-hint" />
       </div>
 
       <section v-if="items.length" class="card i2p-order" :class="{ sorting: sortMode }">
@@ -106,7 +106,7 @@
         />
       </div>
       <div v-if="!isMobile && result" class="card i2p-result-card">
-        <ImgPdfResultSheet :result="result" :name="resultName" variant="card" :stale="stale" :p="p" @preview="preview" @download="download" />
+        <ImgPdfResultSheet :result="result" :name="resultName" variant="card" :stale="stale" :zipping="zipping" :p="p" @preview="preview" @download="download" />
       </div>
     </div>
   </div>
@@ -199,7 +199,7 @@
         :p="p"
         @preview="preview"
         @share="share"
-        @restart="restart"
+        @start-over="startOver"
         @regenerate="regenerate"
       />
     </div>
@@ -211,6 +211,7 @@
 import { isClearingData } from '../../shared/lib/clear-data'
 import { computed, onActivated, onDeactivated, onMounted, onUnmounted, ref, shallowRef, triggerRef, watch } from 'vue'
 import AppHeader from '../../shared/components/AppHeader.vue'
+import LiveHint from '../../shared/components/LiveHint.vue'
 import SideNav from '../../shared/components/SideNav.vue'
 import TabBar from '../../shared/components/TabBar.vue'
 import MoreMenu from '../../shared/components/MoreMenu.vue'
@@ -219,11 +220,16 @@ import BottomSheet from '../../shared/components/BottomSheet.vue'
 import PageGrid, { type PageGridMessages } from '../../shared/components/PageGrid.vue'
 import { moveBlock, moveItem, normRotation, type PageAction, type PageGridItem } from '../../shared/components/page-grid'
 import { usePrefs } from '../../shared/composables/usePrefs'
+import { useIsMobile } from '../../shared/composables/useIsMobile'
+import { useHint } from '../../shared/composables/useHint'
+import { useArmedConfirm } from '../../shared/composables/useArmedConfirm'
+import { useBatchExport } from '../../shared/composables/useBatchExport'
+import { useFileIntake } from '../../shared/composables/useFileIntake'
 import { useHashRoute, type NavKey } from '../../shared/composables/useHashRoute'
 import { fmtSize } from '../../shared/lib/format'
 import { filesFromDrop } from '../../shared/lib/drop'
 import { shareFilesOr } from '../../shared/lib/share'
-import { downloadUrl, zipEntries } from '../../shared/lib/zip'
+import { downloadUrl, openBlob } from '../../shared/lib/zip'
 import { getImagePool } from '../../shared/image/image-pool'
 import type { Lang } from '../../shared/i18n'
 import ImgPdfSettingsPanel from './components/ImgPdfSettingsPanel.vue'
@@ -259,10 +265,7 @@ const touch = () => triggerRef(items)
 const byId = computed(() => new Map(items.value.map((i) => [i.id, i])))
 const usable = computed(() => items.value.filter((i) => i.status !== 'error'))
 
-const isMobile = ref(typeof window !== 'undefined' ? window.innerWidth < 720 : false)
-function onResize() {
-  isMobile.value = window.innerWidth < 720
-}
+const isMobile = useIsMobile()
 
 const tagFor = (it: PageItem): Pick<PageGridItem, 'tag' | 'tagKind'> => {
   if (it.status === 'error') return { tag: p('tagError'), tagKind: 'bad' }
@@ -296,13 +299,7 @@ const gridMessages = computed<Partial<PageGridMessages>>(() => ({
 }))
 
 // ---- hints / toast ----
-const hint = ref<string | null>(null)
-let hintTimer: ReturnType<typeof setTimeout> | null = null
-function showHint(s: string) {
-  hint.value = s
-  if (hintTimer) clearTimeout(hintTimer)
-  hintTimer = setTimeout(() => { hint.value = null }, 4000)
-}
+const { hint, showHint } = useHint(4000)
 const toast = ref<string | null>(null)
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 function showToast(s: string) {
@@ -329,7 +326,7 @@ function onPick(e: Event) {
 const dragover = ref(false)
 function onZoneDrop(e: DragEvent) {
   dragover.value = false
-  pageDragging.value = false
+  intake.reset()
   void filesFromDrop(e.dataTransfer).then(addDropped)
 }
 const natural = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
@@ -448,16 +445,9 @@ function sortByName() {
 function reverseOrder() {
   items.value = [...items.value].reverse()
 }
-const clearConfirm = ref(false)
-let clearTimer: ReturnType<typeof setTimeout> | null = null
+const { armed: clearConfirm, confirm: confirmClear } = useArmedConfirm()
 function onClear() {
-  if (!clearConfirm.value) {
-    clearConfirm.value = true
-    if (clearTimer) clearTimeout(clearTimer)
-    clearTimer = setTimeout(() => { clearConfirm.value = false }, 3000)
-    return
-  }
-  clearConfirm.value = false
+  if (!confirmClear()) return
   clearAll()
 }
 function clearAll() {
@@ -600,22 +590,18 @@ function generateFromSheet() {
 // ---- output ----
 const sharing = ref(false)
 const resultOpen = ref(false)
-async function zipBlob(): Promise<Blob> {
-  return zipEntries(result.value!.files.map((f) => ({ name: f.name, blob: f.blob })))
-}
-async function download() {
-  const r = result.value
-  if (!r) return
-  if (r.files.length === 1) downloadUrl(r.files[0].blob, r.files[0].name)
-  else downloadUrl(await zipBlob(), resultName.value)
-}
+// One PDF downloads as itself; one PDF per image comes as a zip.
+const { zipping, zipAll, downloadAll: download } = useBatchExport<OutFile>({
+  done: () => result.value?.files ?? [],
+  entries: (list) => list.map((f) => ({ name: f.name, blob: f.blob })),
+  downloadOne: (f) => downloadUrl(f.blob, f.name),
+  zipName: () => resultName.value,
+  onError: (err) => { console.error('[img-to-pdf] zip failed', err); showHint(t('zipFailed')) },
+})
 function preview() {
   const r = result.value
   if (!r) return
-  const url = URL.createObjectURL(r.files[0].blob)
-  const w = window.open(url, '_blank', 'noopener')
-  if (!w) downloadUrl(r.files[0].blob, r.files[0].name)
-  setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  openBlob(r.files[0].blob, r.files[0].name)
 }
 async function share() {
   const r = result.value
@@ -623,12 +609,12 @@ async function share() {
   sharing.value = true
   try {
     const files = r.files.map((f) => new File([f.blob], f.name, { type: 'application/pdf' }))
-    await shareFilesOr(typeof navigator !== 'undefined' ? navigator : undefined, files, download)
+    await shareFilesOr(typeof navigator !== 'undefined' ? navigator : undefined, files, zipAll)
   } finally {
     sharing.value = false
   }
 }
-function restart() {
+function startOver() {
   resultOpen.value = false
   clearAll()
 }
@@ -684,58 +670,14 @@ function applyDocMeta() {
 }
 
 // ---- page-wide drop and paste while this view is shown ----
-const pageDragging = ref(false)
-let dragDepth = 0
-const hasFiles = (e: DragEvent) => !!e.dataTransfer?.types?.includes('Files')
-function onDocDragEnter(e: DragEvent) {
-  if (!hasFiles(e)) return
-  dragDepth++
-  pageDragging.value = true
-}
-function onDocDragLeave(e: DragEvent) {
-  if (!hasFiles(e)) return
-  dragDepth = Math.max(0, dragDepth - 1)
-  if (!dragDepth) pageDragging.value = false
-}
-function onDocDragOver(e: DragEvent) {
-  if (hasFiles(e)) e.preventDefault()
-}
-function onDocDrop(e: DragEvent) {
-  dragDepth = 0
-  pageDragging.value = false
-  if (!hasFiles(e)) return
-  e.preventDefault()
-  void filesFromDrop(e.dataTransfer).then(addDropped)
-}
-function onPaste(e: ClipboardEvent) {
-  const el = e.target as HTMLElement | null
-  if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return
-  const files = [...(e.clipboardData?.files ?? [])].filter(isImageFile)
-  if (!files.length) return
-  e.preventDefault()
-  addFiles(files, true)
-}
-let listening = false
-function startListening() {
-  if (listening) return
-  listening = true
-  document.addEventListener('dragenter', onDocDragEnter)
-  document.addEventListener('dragleave', onDocDragLeave)
-  document.addEventListener('dragover', onDocDragOver)
-  document.addEventListener('drop', onDocDrop)
-  document.addEventListener('paste', onPaste)
-  window.addEventListener('resize', onResize)
-}
-function stopListening() {
-  if (!listening) return
-  listening = false
-  document.removeEventListener('dragenter', onDocDragEnter)
-  document.removeEventListener('dragleave', onDocDragLeave)
-  document.removeEventListener('dragover', onDocDragOver)
-  document.removeEventListener('drop', onDocDrop)
-  document.removeEventListener('paste', onPaste)
-  window.removeEventListener('resize', onResize)
-}
+const intake = useFileIntake({
+  onFiles: addDropped,
+  onPaste: (pasted) => {
+    const files = pasted.filter(isImageFile)
+    if (files.length) addFiles(files, true)
+  },
+})
+const { pageDragging } = intake
 function onBeforeUnload(e: BeforeUnloadEvent) {
   // Clearing all local data reloads on purpose: no "leave page?" prompt.
   if (isClearingData()) return
@@ -751,25 +693,18 @@ onMounted(() => {
 })
 onActivated(() => {
   applyDocMeta()
-  onResize()
-  startListening()
   if (sheetOpen.value) document.body.style.overflow = 'hidden'
 })
 onDeactivated(() => {
-  stopListening()
   closeSurfaces()
-  pageDragging.value = false
   document.body.style.overflow = ''
 })
 onUnmounted(() => {
-  stopListening()
   window.removeEventListener('beforeunload', onBeforeUnload)
   ctrl?.abort()
   for (const it of items.value) if (it.thumb) URL.revokeObjectURL(it.thumb)
   for (const u of heldThumbs) URL.revokeObjectURL(u)
-  if (hintTimer) clearTimeout(hintTimer)
   if (toastTimer) clearTimeout(toastTimer)
-  if (clearTimer) clearTimeout(clearTimer)
   document.body.style.overflow = ''
 })
 </script>
