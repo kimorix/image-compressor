@@ -241,11 +241,15 @@ import { BatchProgress } from '../../shared/lib/batch-progress'
 import { t as tx, type Lang } from '../../shared/i18n'
 import { applyTheme } from '../../shared/lib/theme'
 import { usePrefs } from '../../shared/composables/usePrefs'
+import { useIsMobile } from '../../shared/composables/useIsMobile'
+import { useHint } from '../../shared/composables/useHint'
+import { useArmedConfirm } from '../../shared/composables/useArmedConfirm'
+import { useBatchExport } from '../../shared/composables/useBatchExport'
+import { useFileIntake } from '../../shared/composables/useFileIntake'
 import { useHashRoute, type Feature, type NavKey } from '../../shared/composables/useHashRoute'
-import { downloadUrl, ymd, zipEntries } from '../../shared/lib/zip'
+import { downloadUrl, ymd, zipPath } from '../../shared/lib/zip'
 import { CompressPool } from './lib/compress-pool'
 import { baseName, extOf, fmtSize, shortName } from '../../shared/lib/format'
-import { filesFromDrop } from '../../shared/lib/drop'
 import { DEFAULT_SETTINGS, matchPreset, PRESETS } from './lib/presets'
 import { loadSavedSettings, saveSettings } from './lib/settings-store'
 import { newItem, type CompressItem, type Settings } from './types'
@@ -270,7 +274,7 @@ const settingsCollapsed = ref(false)
 // The compare preview card is a desktop rail feature. On phones the row tap
 // opens the full-screen lightbox instead, so the card would only load two
 // large images below 20 rows. Do not even mount it there.
-const isMobile = ref(typeof window !== 'undefined' ? window.innerWidth < 720 : false)
+const isMobile = useIsMobile()
 // Shell views: tool (default) vs history. The sidebar and the mobile tab
 // bar switch between them; settings is not a view: on phones the Settings
 // tab opens the settings bottom sheet over the tool page.
@@ -612,13 +616,7 @@ function applyDocMeta() {
 
 
 // Transient note for files skipped by the addFiles funnel (non-images).
-const fileHint = ref<string | null>(null)
-function showFileHint(msg: string) {
-  fileHint.value = msg
-  if (hintTimer) clearTimeout(hintTimer)
-  hintTimer = setTimeout(() => { fileHint.value = null }, 5000)
-}
-let hintTimer: ReturnType<typeof setTimeout> | null = null
+const { hint: fileHint, showHint: showFileHint } = useHint(5000)
 
 const busyAddBlocked = ref(false)
 let busyAddTimer: ReturnType<typeof setTimeout> | null = null
@@ -906,7 +904,6 @@ function updateStripStuck() {
   else if (top > 2) stripStuck.value = false
 }
 function onViewportResize() {
-  isMobile.value = window.innerWidth < 720
   updateStripNav()
   updateStripStuck()
 }
@@ -970,7 +967,7 @@ async function downloadAll() {
   if (!done.length) return
   const nav = typeof navigator !== 'undefined' ? navigator : undefined
   if (!isMobile.value || typeof nav?.canShare !== 'function') {
-    downloadAllFiles(done)
+    void zipAll()
     return
   }
   if (sharing.value) return
@@ -980,30 +977,26 @@ async function downloadAll() {
       const blob = await (await fetch(it.outUrl!)).blob()
       return new File([blob], it.outName ?? it.file.name, { type: blob.type })
     }))
-    await shareFilesOr(nav, files, () => downloadAllFiles(done))
+    await shareFilesOr(nav, files, zipAll)
   } catch (err) {
     console.warn('[image-compressor] Share failed, downloading instead:', err)
-    downloadAllFiles(done)
+    void zipAll()
   } finally {
     sharing.value = false
   }
 }
 
-// One finished image downloads as itself; a zip is only for two or more.
-function downloadAllFiles(done: CompressItem[]) {
-  if (done.length === 1) {
-    const a = document.createElement('a')
-    a.href = done[0].outUrl!
-    a.download = done[0].outName ?? done[0].file.name
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    return
-  }
-  void downloadAllZip()
-}
-
-const zipping = ref(false)
+// One finished image downloads as itself; a zip is only for two or more
+// (browsers, especially Safari/iOS, block many downloads in a row). Store, no
+// deflate: the files are already compressed. Dropped folders keep their
+// structure inside the zip.
+const { zipping, zipProgress, zipAll } = useBatchExport<CompressItem>({
+  done: () => items.value.filter((i) => i.done && i.outUrl),
+  entries: (list) => list.map((item) => ({ name: zipPath(item.relDir, item.outName ?? item.file.name), url: item.outUrl! })),
+  downloadOne: (item) => downloadUrl(item.outUrl!, item.outName ?? item.file.name),
+  zipName: (list) => `images-compressed-${ymd()}-${list.length}.zip`,
+  onError: (err) => { console.error('[compress] zip failed', err); showFileHint(t('zipFailed')) },
+})
 // Any asynchronous user operation that must lock the UI: compression runs and
 // ZIP packaging. The blocking scrim/inert attributes use this; the status pill
 // is the single visible indicator.
@@ -1013,7 +1006,6 @@ const busy = computed(() => activeRuns.value > 0 || zipping.value)
 // Every busy state names the image it is on: packing the ZIP
 // ("打包中 12/19") or the run ("正在压缩 第 3/19 张"; a recompress counts the
 // images it re-encodes).
-const zipProgress = ref({ done: 0, total: 0 })
 const busyText = computed(() => {
   if (zipping.value && zipProgress.value.total > 0) return t('progZip', zipProgress.value.done, zipProgress.value.total)
   if (batch.total > 0) return t('progCompress', batch.index, batch.total)
@@ -1044,31 +1036,6 @@ watch([busy, sheetOpen], ([isBusy, isSheet]) => {
   document.body.style.overflow = isBusy || isSheet ? 'hidden' : ''
   if (!isBusy) busyAddBlocked.value = false
 })
-async function downloadAllZip() {
-  const done = items.value.filter((i) => i.done && i.outUrl)
-  if (!done.length || zipping.value) return
-  // One zip download instead of many consecutive downloads: browsers,
-  // especially Safari/iOS, block the latter. Store (no deflate) — the files
-  // are already compressed. Stream the entries through fflate instead of
-  // collecting a files object and then zipSync-ing a second full copy.
-  zipping.value = true
-  try {
-    // Dropped folders keep their structure inside the zip.
-    zipProgress.value = { done: 0, total: done.length }
-    const zipped = await zipEntries(done.map((item) => ({
-      name: (item.relDir ? item.relDir + '/' : '') + (item.outName ?? item.file.name),
-      url: item.outUrl!,
-    })), (i, n) => { zipProgress.value = { done: i, total: n } })
-    downloadUrl(zipped, `images-compressed-${ymd()}-${done.length}.zip`)
-  } catch (err) {
-    console.error('[compress] zip failed', err)
-    showFileHint(t('zipFailed'))
-  } finally {
-    zipping.value = false
-    zipProgress.value = { done: 0, total: 0 }
-  }
-}
-
 function clearAll() {
   batch.reset()
   removalTimers.forEach((t) => clearTimeout(t))
@@ -1086,64 +1053,25 @@ function clearAll() {
 // Clearing is destructive and the button sits next to the primary action,
 // so the first click only arms it ("confirm?") and the second clears.
 // The armed state expires after 3s.
-const clearConfirm = ref(false)
-let clearTimer: ReturnType<typeof setTimeout> | null = null
+const { armed: clearConfirm, confirm: confirmClear } = useArmedConfirm()
 function onClearClick() {
-  if (!clearConfirm.value) {
-    clearConfirm.value = true
-    if (clearTimer) clearTimeout(clearTimer)
-    clearTimer = setTimeout(() => { clearConfirm.value = false }, 3000)
-    return
-  }
-  if (clearTimer) clearTimeout(clearTimer)
-  clearConfirm.value = false
+  if (!confirmClear()) return
   page.value = 1
   clearAll()
 }
 
-function onPaste(e: ClipboardEvent) {
-  const files = [...(e.clipboardData?.files ?? [])]
-  if (files.length) addFiles(files)
-}
-
-// Full-page drop: files dropped anywhere on the page are accepted, not
-// just on the dropzone. dragenter/dragleave balance via a counter (child
-// boundaries fire both, so a boolean would flicker); the hint only shows
-// for real file drags (types includes 'Files'), not for dragged images
-// or text. Drops on the dropzone itself are left to its own handler.
-const pageDragging = ref(false)
-let dragDepth = 0
-function onDocDragEnter(e: DragEvent) {
-  if (busy.value || !e.dataTransfer?.types.includes('Files')) return
-  dragDepth++
-  pageDragging.value = true
-}
-function onDocDragLeave(e: DragEvent) {
-  if (!e.dataTransfer?.types.includes('Files')) return
-  dragDepth = Math.max(0, dragDepth - 1)
-  if (dragDepth === 0) pageDragging.value = false
-}
-function onDocDragEnd() {
-  dragDepth = 0
-  pageDragging.value = false
-}
-function onDocDragOver(e: DragEvent) {
-  // Allow drops anywhere on the page (the drop handler decides).
-  e.preventDefault()
-}
-function onDocDrop(e: DragEvent) {
-  dragDepth = 0
-  pageDragging.value = false
-  if (busy.value) { noteBusyAddBlocked(); e.preventDefault(); return }
-  const target = e.target as HTMLElement | null
-  if (target?.closest?.('#dropzone')) return
-  if (!e.dataTransfer?.types.includes('Files')) return
-  e.preventDefault()
-  // filesFromDrop grabs the entries synchronously, before its first await.
-  void filesFromDrop(e.dataTransfer).then((dropped) => {
-    if (dropped.length) addFiles(dropped.map((d) => d.file), dropped.map((d) => d.dir))
-  })
-}
+// Page-wide intake: files dropped anywhere on the page (drops on the
+// dropzone are its own) and Ctrl+V / ⌘V. While a run or ZIP holds the
+// page, a drop only explains why nothing was added.
+const intake = useFileIntake({
+  onFiles: (dropped) => addFiles(dropped.map((d) => d.file), dropped.map((d) => d.dir)),
+  onPaste: (files) => addFiles(files),
+  pasteInFields: true,
+  blocked: () => busy.value,
+  onBlocked: noteBusyAddBlocked,
+  ignoreDropIn: '#dropzone',
+})
+const { pageDragging } = intake
 
 onMounted(() => {
   // Apply the stored or detected prefs without writing them: storage only
@@ -1169,24 +1097,12 @@ onActivated(() => {
   window.addEventListener('scroll', updateStripStuck, { passive: true })
   // The viewport may have changed while this view was hidden.
   onViewportResize()
-  document.addEventListener('paste', onPaste)
-  document.addEventListener('dragenter', onDocDragEnter)
-  document.addEventListener('dragleave', onDocDragLeave)
-  document.addEventListener('dragend', onDocDragEnd)
-  document.addEventListener('dragover', onDocDragOver)
-  document.addEventListener('drop', onDocDrop)
 })
 function stopPageListeners() {
   if (!listening) return
   listening = false
   window.removeEventListener('resize', onViewportResize)
   window.removeEventListener('scroll', updateStripStuck)
-  document.removeEventListener('paste', onPaste)
-  document.removeEventListener('dragenter', onDocDragEnter)
-  document.removeEventListener('dragleave', onDocDragLeave)
-  document.removeEventListener('dragend', onDocDragEnd)
-  document.removeEventListener('dragover', onDocDragOver)
-  document.removeEventListener('drop', onDocDrop)
 }
 onDeactivated(() => {
   stopPageListeners()
@@ -1194,7 +1110,6 @@ onDeactivated(() => {
   settingsOpen.value = false
   detailId.value = null
   lightboxId.value = null
-  pageDragging.value = false
   document.body.style.overflow = ''
 })
 onUnmounted(() => {

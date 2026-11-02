@@ -64,7 +64,7 @@
         </div>
         <BatchStatus :text="batchText" :done="batchShown.done" :total="batchShown.total" />
         <ul class="cv-list list-scroll">
-          <li v-for="item in items" :key="item.id" class="cv-item" :class="[`st-${item.status}`, { clickable: isMobile && item.status !== 'unsupported' }]" @click="onCardClick(item)">
+          <ResultRow v-for="item in items" :key="item.id" class="cv-item" :class="[`st-${item.status}`, { clickable: isMobile && item.status !== 'unsupported' }]" :selectable="isMobile && item.status !== 'unsupported'" @select="onCardClick(item)">
             <div class="cv-thumb" :class="{ checker: item.status === 'done' || !!thumbOf(item), plain: !thumbOf(item) }">
               <img v-if="thumbOf(item)" :src="thumbOf(item)!" alt="" loading="lazy" @error="dropPreview(item)" />
               <span v-else-if="item.status === 'error'" class="cv-thumb-bad" aria-hidden="true">!</span>
@@ -109,7 +109,7 @@
               <button v-else-if="item.status === 'error' || item.status === 'cancelled'" type="button" class="cv-round accent text" @click="startOne(item)">{{ p('retry') }}</button>
               <button v-else type="button" class="cv-round" :title="p('remove')" :aria-label="p('remove')" @click="removeItem(item)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg></button>
             </div>
-          </li>
+          </ResultRow>
         </ul>
       </div>
     </main>
@@ -182,16 +182,22 @@ import { isClearingData } from '../../shared/lib/clear-data'
 import { computed, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, shallowRef, triggerRef, watch } from 'vue'
 import AppHeader from '../../shared/components/AppHeader.vue'
 import LiveHint from '../../shared/components/LiveHint.vue'
+import ResultRow from '../../shared/components/ResultRow.vue'
 import SideNav from '../../shared/components/SideNav.vue'
 import TabBar from '../../shared/components/TabBar.vue'
 import MoreMenu from '../../shared/components/MoreMenu.vue'
 import BottomSheet from '../../shared/components/BottomSheet.vue'
 import { usePrefs } from '../../shared/composables/usePrefs'
+import { useIsMobile } from '../../shared/composables/useIsMobile'
+import { useHint } from '../../shared/composables/useHint'
+import { useArmedConfirm } from '../../shared/composables/useArmedConfirm'
+import { useBatchExport } from '../../shared/composables/useBatchExport'
+import { useFileIntake } from '../../shared/composables/useFileIntake'
 import { useHashRoute, type Feature, type NavKey } from '../../shared/composables/useHashRoute'
 import { fmtSize, fmtSizeShort } from '../../shared/lib/format'
 import { filesFromDrop, type DroppedFile } from '../../shared/lib/drop'
 import { shareFilesOr } from '../../shared/lib/share'
-import { downloadUrl, ymd, zipEntries } from '../../shared/lib/zip'
+import { downloadUrl, ymd, zipPath } from '../../shared/lib/zip'
 import { getImagePool } from '../../shared/image/image-pool'
 import { sniffAny } from '../../shared/image/sniff'
 import type { Lang } from '../../shared/i18n'
@@ -239,10 +245,7 @@ const rev = ref(0)
 const touch = () => { rev.value++; triggerRef(items) }
 
 const isTouch = typeof window !== 'undefined' && (window.matchMedia?.('(pointer: coarse)').matches || 'ontouchstart' in window)
-const isMobile = ref(typeof window !== 'undefined' ? window.innerWidth < 720 : false)
-function onResize() {
-  isMobile.value = window.innerWidth < 720
-}
+const isMobile = useIsMobile()
 
 const settingsOpen = ref(false)
 const moreOpen = ref(false)
@@ -252,13 +255,7 @@ const sheetOpen = computed(() => isMobile.value && (settingsOpen.value || !!deta
 watch(sheetOpen, (open) => { document.body.style.overflow = open ? 'hidden' : '' })
 watch(isMobile, (m) => { if (!m) { settingsOpen.value = false; detailId.value = null } })
 
-const hint = ref<string | null>(null)
-let hintTimer: ReturnType<typeof setTimeout> | null = null
-function showHint(s: string) {
-  hint.value = s
-  if (hintTimer) clearTimeout(hintTimer)
-  hintTimer = setTimeout(() => { hint.value = null }, 3500)
-}
+const { hint, showHint } = useHint(3500)
 
 const counts = computed(() => (void rev.value, countItems(items.value)))
 const doneItems = computed(() => (void rev.value, items.value.filter((i) => i.status === 'done' && i.outBlob)))
@@ -375,7 +372,7 @@ function onPick(e: Event) {
 const dragover = ref(false)
 function onZoneDrop(e: DragEvent) {
   dragover.value = false
-  pageDragging.value = false
+  intake.reset()
   void filesFromDrop(e.dataTransfer).then(addFiles)
 }
 
@@ -597,8 +594,7 @@ function changeFormat(item: ConvertItem, fmt: OutFormat) {
 }
 
 // ---- removing ----
-const clearConfirm = ref(false)
-let clearTimer: ReturnType<typeof setTimeout> | null = null
+const { armed: clearConfirm, confirm: confirmClear } = useArmedConfirm()
 function release(item: ConvertItem) {
   if (item.status === 'queued' || item.status === 'converting') getImagePool().cancel(group(item))
   item.gen++
@@ -612,13 +608,7 @@ function removeItem(item: ConvertItem) {
   if (detailId.value === item.id) detailId.value = null
 }
 function onClear() {
-  if (!clearConfirm.value) {
-    clearConfirm.value = true
-    if (clearTimer) clearTimeout(clearTimer)
-    clearTimer = setTimeout(() => { clearConfirm.value = false }, 3000)
-    return
-  }
-  clearConfirm.value = false
+  if (!confirmClear()) return
   items.value.forEach(release)
   items.value = []
   batch.reset()
@@ -627,7 +617,21 @@ function onClear() {
 
 // ---- batch progress ("正在转换 第 3/19 张", "打包中 12/19") ----
 const batch = reactive(new BatchProgress())
-const zipProgress = ref({ done: 0, total: 0 })
+const { zipping, sharing, zipProgress, downloadAll, saveAll: saveAllMobile } = useBatchExport<ConvertItem>({
+  done: () => doneItems.value,
+  // Same-folder clashes get "(1)", "(2)"; dropped folders stay folders.
+  entries: (list) => {
+    const names = finalNames(list)
+    return list.map((i) => ({ name: zipPath(i.dir, names.get(i)!), blob: i.outBlob! }))
+  },
+  downloadOne,
+  zipName: () => `convert-${ymd()}.zip`,
+  files: (list) => {
+    const names = finalNames(list)
+    return list.map((i) => outFile(i, names.get(i)))
+  },
+  onError: (err) => { console.error('[convert] zip failed', err); showHint(t('zipFailed')) },
+})
 const batchShown = computed(() => (zipping.value && zipProgress.value.total
   ? zipProgress.value
   : { done: batch.done, total: batch.total }))
@@ -638,8 +642,6 @@ const batchText = computed(() => {
 })
 
 // ---- downloading / sharing ----
-const zipping = ref(false)
-const sharing = ref(false)
 /** Final names for the done items: same-folder clashes get "(1)", "(2)". */
 function finalNames(list: ConvertItem[]): Map<ConvertItem, string> {
   const names = uniqueOutNames(list.map((i) => ({ dir: i.dir, name: i.outName })))
@@ -653,37 +655,6 @@ function outFile(item: ConvertItem, name = nameOf(item)): File {
 }
 function downloadOne(item: ConvertItem) {
   if (item.outBlob) downloadUrl(item.outBlob, nameOf(item))
-}
-async function zipAll() {
-  const done = doneItems.value
-  if (done.length === 1) { downloadOne(done[0]); return }
-  zipping.value = true
-  try {
-    const names = finalNames(done)
-    zipProgress.value = { done: 0, total: done.length }
-    const blob = await zipEntries(done.map((i) => ({ name: i.dir ? `${i.dir}/${names.get(i)}` : names.get(i)!, blob: i.outBlob! })), (i, n) => { zipProgress.value = { done: i, total: n } })
-    downloadUrl(blob, `convert-${ymd()}.zip`)
-  } catch (err) {
-    console.error('[convert] zip failed', err)
-    showHint(t('zipFailed'))
-  } finally {
-    zipping.value = false
-    zipProgress.value = { done: 0, total: 0 }
-  }
-}
-function downloadAll() {
-  void zipAll()
-}
-async function saveAllMobile() {
-  const done = doneItems.value
-  if (!done.length) return
-  sharing.value = true
-  try {
-    const names = finalNames(done)
-    await shareFilesOr(typeof navigator !== 'undefined' ? navigator : undefined, done.map((i) => outFile(i, names.get(i))), zipAll)
-  } finally {
-    sharing.value = false
-  }
 }
 async function shareOne(item: ConvertItem) {
   if (!item.outBlob) return
@@ -738,67 +709,13 @@ function applyDocMeta() {
 }
 
 // ---- page-wide drop and paste while this view is shown ----
-const pageDragging = ref(false)
-let dragDepth = 0
-function hasFiles(e: DragEvent) {
-  return !!e.dataTransfer?.types?.includes('Files')
-}
-function onDocDragEnter(e: DragEvent) {
-  if (!hasFiles(e)) return
-  dragDepth++
-  pageDragging.value = true
-}
-function onDocDragLeave(e: DragEvent) {
-  if (!hasFiles(e)) return
-  dragDepth = Math.max(0, dragDepth - 1)
-  if (!dragDepth) pageDragging.value = false
-}
-function onDocDragOver(e: DragEvent) {
-  if (hasFiles(e)) e.preventDefault()
-}
-function onDocDrop(e: DragEvent) {
-  dragDepth = 0
-  pageDragging.value = false
-  if (!hasFiles(e)) return
-  e.preventDefault()
-  void filesFromDrop(e.dataTransfer).then(addFiles)
-}
-function onPaste(e: ClipboardEvent) {
-  const target = e.target as HTMLElement | null
-  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
-  const files = [...(e.clipboardData?.files ?? [])]
-  if (!files.length) {
-    if (e.clipboardData?.types?.includes('Files')) showHint(p('pasteEmpty'))
-    return
-  }
-  e.preventDefault()
-  // Pasted screenshots are all called "image.png": stamp them apart.
-  void addFiles(files.map((file, i) => ({
-    file: file.name === 'image.png' ? new File([file], `paste-${Date.now()}-${i}.png`, { type: file.type, lastModified: Date.now() }) : file,
-    dir: '',
-  })))
-}
-let listening = false
-function startListening() {
-  if (listening) return
-  listening = true
-  document.addEventListener('dragenter', onDocDragEnter)
-  document.addEventListener('dragleave', onDocDragLeave)
-  document.addEventListener('dragover', onDocDragOver)
-  document.addEventListener('drop', onDocDrop)
-  document.addEventListener('paste', onPaste)
-  window.addEventListener('resize', onResize)
-}
-function stopListening() {
-  if (!listening) return
-  listening = false
-  document.removeEventListener('dragenter', onDocDragEnter)
-  document.removeEventListener('dragleave', onDocDragLeave)
-  document.removeEventListener('dragover', onDocDragOver)
-  document.removeEventListener('drop', onDocDrop)
-  document.removeEventListener('paste', onPaste)
-  window.removeEventListener('resize', onResize)
-}
+const intake = useFileIntake({
+  onFiles: (d) => { void addFiles(d) },
+  onPaste: (files) => { void addFiles(files.map((file) => ({ file, dir: '' }))) },
+  onPasteEmpty: () => showHint(p('pasteEmpty')),
+  stampPasteNames: true,
+})
+const { pageDragging } = intake
 function onBeforeUnload(e: BeforeUnloadEvent) {
   // Clearing all local data reloads on purpose: no "leave page?" prompt.
   if (isClearingData()) return
@@ -815,24 +732,17 @@ onMounted(() => {
 })
 onActivated(() => {
   applyDocMeta()
-  onResize()
-  startListening()
   if (sheetOpen.value) document.body.style.overflow = 'hidden'
 })
 onDeactivated(() => {
-  stopListening()
   settingsOpen.value = false
   moreOpen.value = false
   detailId.value = null
-  pageDragging.value = false
   document.body.style.overflow = ''
 })
 onUnmounted(() => {
-  stopListening()
   window.removeEventListener('beforeunload', onBeforeUnload)
   items.value.forEach(release)
-  if (hintTimer) clearTimeout(hintTimer)
-  if (clearTimer) clearTimeout(clearTimer)
   document.body.style.overflow = ''
 })
 </script>

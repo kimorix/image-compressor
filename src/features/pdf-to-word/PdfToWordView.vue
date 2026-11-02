@@ -44,7 +44,7 @@
           </div>
         </div>
         <ul class="pdf-list">
-          <li v-for="item in items" :key="item.id" class="pdf-item" :class="[`st-${item.status}`, { clickable: isMobile && item.status !== 'locked' }]" @click="onCardClick(item)">
+          <ResultRow v-for="item in items" :key="item.id" class="pdf-item" :class="[`st-${item.status}`, { clickable: isMobile && item.status !== 'locked' }]" :selectable="isMobile && item.status !== 'locked' && item.status !== 'probing'" @select="onCardClick(item)">
             <div class="pdf-thumb" :class="{ scanned: item.kind === 'scanned', locked: item.status === 'locked' }">
               <img v-if="item.thumb" :src="item.thumb" alt="" />
               <span v-else-if="item.status === 'locked'" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 018 0v4" /></svg></span>
@@ -95,7 +95,7 @@
               <button v-else-if="item.status === 'error' || item.status === 'cancelled'" type="button" class="pdf-round text" @click="startOne(item)">{{ p('retry') }}</button>
               <button v-else type="button" class="pdf-round" :title="p('remove')" :aria-label="p('remove')" @click="removeItem(item)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg></button>
             </div>
-          </li>
+          </ResultRow>
         </ul>
       </div>
     </main>
@@ -165,17 +165,23 @@ import { isClearingData } from '../../shared/lib/clear-data'
 import { computed, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, shallowRef, triggerRef, watch } from 'vue'
 import AppHeader from '../../shared/components/AppHeader.vue'
 import LiveHint from '../../shared/components/LiveHint.vue'
+import ResultRow from '../../shared/components/ResultRow.vue'
 import SideNav from '../../shared/components/SideNav.vue'
 import TabBar from '../../shared/components/TabBar.vue'
 import MoreMenu from '../../shared/components/MoreMenu.vue'
 import PdfHubSwitch from '../../shared/components/PdfHubSwitch.vue'
 import BottomSheet from '../../shared/components/BottomSheet.vue'
 import { usePrefs } from '../../shared/composables/usePrefs'
+import { useIsMobile } from '../../shared/composables/useIsMobile'
+import { useHint } from '../../shared/composables/useHint'
+import { useArmedConfirm } from '../../shared/composables/useArmedConfirm'
+import { useBatchExport } from '../../shared/composables/useBatchExport'
+import { useFileIntake } from '../../shared/composables/useFileIntake'
 import { useHashRoute, type NavKey } from '../../shared/composables/useHashRoute'
 import { fmtSize } from '../../shared/lib/format'
 import { filesFromDrop } from '../../shared/lib/drop'
 import { shareFilesOr } from '../../shared/lib/share'
-import { downloadUrl, ymd, zipEntries, zipPath } from '../../shared/lib/zip'
+import { downloadUrl, ymd, zipPath } from '../../shared/lib/zip'
 import type { Lang } from '../../shared/i18n'
 import PdfSettingsPanel from './components/PdfSettingsPanel.vue'
 import PdfDetailSheet from './components/PdfDetailSheet.vue'
@@ -209,10 +215,7 @@ const rev = ref(0)
 const touch = () => { rev.value++; triggerRef(items) }
 
 const isTouch = typeof window !== 'undefined' && (window.matchMedia?.('(pointer: coarse)').matches || 'ontouchstart' in window)
-const isMobile = ref(typeof window !== 'undefined' ? window.innerWidth < 720 : false)
-function onResize() {
-  isMobile.value = window.innerWidth < 720
-}
+const isMobile = useIsMobile()
 
 const settingsOpen = ref(false)
 const moreOpen = ref(false)
@@ -225,13 +228,7 @@ watch(isMobile, (m) => { if (!m) { settingsOpen.value = false; detailId.value = 
 
 const pwDraft = reactive<Record<string, string>>({})
 const pwOpen = ref<string | null>(null)
-const hint = ref<string | null>(null)
-let hintTimer: ReturnType<typeof setTimeout> | null = null
-function showHint(s: string) {
-  hint.value = s
-  if (hintTimer) clearTimeout(hintTimer)
-  hintTimer = setTimeout(() => { hint.value = null }, 3500)
-}
+const { hint, showHint } = useHint(3500)
 
 const doneItems = computed(() => items.value.filter((i) => i.status === 'done' && i.outBlob))
 function isStale(item: PdfItem): boolean {
@@ -281,7 +278,7 @@ function onPick(e: Event) {
 const dragover = ref(false)
 function onZoneDrop(e: DragEvent) {
   dragover.value = false
-  pageDragging.value = false
+  intake.reset()
   void filesFromDrop(e.dataTransfer).then((d) => addFiles(d.map((x) => x.file), d.map((x) => x.dir)))
 }
 
@@ -481,8 +478,7 @@ function enableOcr() {
 }
 
 // ---- removing ----
-const clearConfirm = ref(false)
-let clearTimer: ReturnType<typeof setTimeout> | null = null
+const { armed: clearConfirm, confirm: confirmClear } = useArmedConfirm()
 function release(item: PdfItem) {
   controllers.get(item.id)?.abort()
   dropPreviewDoc(item.id)
@@ -499,54 +495,27 @@ function removeItem(item: PdfItem) {
   if (detailId.value === item.id) detailId.value = null
 }
 function onClear() {
-  if (!clearConfirm.value) {
-    clearConfirm.value = true
-    if (clearTimer) clearTimeout(clearTimer)
-    clearTimer = setTimeout(() => { clearConfirm.value = false }, 3000)
-    return
-  }
-  clearConfirm.value = false
+  if (!confirmClear()) return
   items.value.forEach(release)
   items.value = []
   detailId.value = null
 }
 
 // ---- downloading / sharing ----
-const zipping = ref(false)
-const sharing = ref(false)
 function docxFile(item: PdfItem): File {
   return new File([item.outBlob!], item.outName, { type: item.outBlob!.type || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
 }
 function downloadOne(item: PdfItem) {
   if (item.outBlob) downloadUrl(item.outBlob, item.outName)
 }
-async function zipAll() {
-  const done = doneItems.value
-  if (done.length === 1) { downloadOne(done[0]); return }
-  zipping.value = true
-  try {
-    const blob = await zipEntries(done.map((i) => ({ name: zipPath(i.dir, i.outName), blob: i.outBlob! })))
-    downloadUrl(blob, `pdf-to-word-${ymd()}.zip`)
-  } catch (err) {
-    console.error('[pdf-to-word] zip failed', err)
-    showHint(t('zipFailed'))
-  } finally {
-    zipping.value = false
-  }
-}
-function downloadAll() {
-  void zipAll()
-}
-async function saveAllMobile() {
-  const done = doneItems.value
-  if (!done.length) return
-  sharing.value = true
-  try {
-    await shareFilesOr(typeof navigator !== 'undefined' ? navigator : undefined, done.map(docxFile), zipAll)
-  } finally {
-    sharing.value = false
-  }
-}
+const { zipping, sharing, downloadAll, saveAll: saveAllMobile } = useBatchExport<PdfItem>({
+  done: () => doneItems.value,
+  entries: (list) => list.map((i) => ({ name: zipPath(i.dir, i.outName), blob: i.outBlob! })),
+  downloadOne,
+  zipName: () => `pdf-to-word-${ymd()}.zip`,
+  files: (list) => list.map(docxFile),
+  onError: (err) => { console.error('[pdf-to-word] zip failed', err); showHint(t('zipFailed')) },
+})
 async function shareOne(item: PdfItem) {
   if (!item.outBlob) return
   await shareFilesOr(typeof navigator !== 'undefined' ? navigator : undefined, [docxFile(item)], () => downloadOne(item))
@@ -662,50 +631,8 @@ function applyDocMeta() {
 }
 
 // Page-wide drop while this view is shown.
-const pageDragging = ref(false)
-let dragDepth = 0
-function hasFiles(e: DragEvent) {
-  return !!e.dataTransfer?.types?.includes('Files')
-}
-function onDocDragEnter(e: DragEvent) {
-  if (!hasFiles(e)) return
-  dragDepth++
-  pageDragging.value = true
-}
-function onDocDragLeave(e: DragEvent) {
-  if (!hasFiles(e)) return
-  dragDepth = Math.max(0, dragDepth - 1)
-  if (!dragDepth) pageDragging.value = false
-}
-function onDocDragOver(e: DragEvent) {
-  if (hasFiles(e)) e.preventDefault()
-}
-function onDocDrop(e: DragEvent) {
-  dragDepth = 0
-  pageDragging.value = false
-  if (!hasFiles(e)) return
-  e.preventDefault()
-  void filesFromDrop(e.dataTransfer).then((d) => addFiles(d.map((x) => x.file), d.map((x) => x.dir)))
-}
-let listening = false
-function startListening() {
-  if (listening) return
-  listening = true
-  document.addEventListener('dragenter', onDocDragEnter)
-  document.addEventListener('dragleave', onDocDragLeave)
-  document.addEventListener('dragover', onDocDragOver)
-  document.addEventListener('drop', onDocDrop)
-  window.addEventListener('resize', onResize)
-}
-function stopListening() {
-  if (!listening) return
-  listening = false
-  document.removeEventListener('dragenter', onDocDragEnter)
-  document.removeEventListener('dragleave', onDocDragLeave)
-  document.removeEventListener('dragover', onDocDragOver)
-  document.removeEventListener('drop', onDocDrop)
-  window.removeEventListener('resize', onResize)
-}
+const intake = useFileIntake({ onFiles: (d) => addFiles(d.map((x) => x.file), d.map((x) => x.dir)) })
+const { pageDragging } = intake
 function onBeforeUnload(e: BeforeUnloadEvent) {
   // Clearing all local data reloads on purpose: no "leave page?" prompt.
   if (isClearingData()) return
@@ -721,24 +648,17 @@ onMounted(() => {
 })
 onActivated(() => {
   applyDocMeta()
-  onResize()
-  startListening()
   if (sheetOpen.value) document.body.style.overflow = 'hidden'
 })
 onDeactivated(() => {
-  stopListening()
   settingsOpen.value = false
   moreOpen.value = false
   detailId.value = null
-  pageDragging.value = false
   document.body.style.overflow = ''
 })
 onUnmounted(() => {
-  stopListening()
   window.removeEventListener('beforeunload', onBeforeUnload)
   items.value.forEach(release)
-  if (hintTimer) clearTimeout(hintTimer)
-  if (clearTimer) clearTimeout(clearTimer)
   document.body.style.overflow = ''
 })
 </script>
